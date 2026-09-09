@@ -70,10 +70,15 @@ class Settings(BaseSettings):
     MINIO_PUBLIC_URL: str = "http://localhost:9000"  # Public URL for permanent links (internal Docker network)
     LOG_LEVEL: str = "DEBUG"
 
-    # Gmail API Configuration
-    GMAIL_CLIENT_ID: str = ""
-    GMAIL_CLIENT_SECRET: str = ""
-    GMAIL_REFRESH_TOKEN: str = ""
+    # LLM / GraphRAG Configuration (Gemini via google-genai)
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_CLOUD_PROJECT: str = ""
+    GOOGLE_CLOUD_LOCATION: str = ""
+    GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"
+
+    # Outbound proxy (optional, used by the Gemini client)
+    PROXY_HOST: str | None = None
+    PROXY_PORT: int | None = None
 
     # Admin Configuration
     ADMIN_USER_IDS: list = [2, 20]  # Default admin is user_id=1; override via ADMIN_USER_IDS env var (comma-separated)
@@ -103,8 +108,10 @@ class Settings(BaseSettings):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def PROXY_URL(self) -> str:
-        """Construct proxy URL from PROXY_HOST and PROXY_PORT."""
+    def PROXY_URL(self) -> str | None:
+        """Construct proxy URL from PROXY_HOST and PROXY_PORT, or None if not configured."""
+        if not self.PROXY_HOST or not self.PROXY_PORT:
+            return None
         return f"http://{self.PROXY_HOST}:{self.PROXY_PORT}"
 
 

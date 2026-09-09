@@ -2,7 +2,7 @@
 
 Backend for the **Student Discovery Agent (SDA)** — the single API layer over a Neo4j knowledge graph of local knowledge, built to serve GraphRAG: vector search in Neo4j → Cypher traversal → LLM answer with cited sources.
 
-> **Status: scaffold.** The base is in place — auth, users, admin, versioning, and shared infrastructure (Postgres, Redis, Neo4j, TaskIQ). Product modules (GraphRAG, AI Local Guide, itinerary, discovery) are built on top of this.
+> **Status: scaffold.** The base is in place — auth, users, admin, versioning, and shared infrastructure (Postgres, Redis, Neo4j, TaskIQ). Product modules for the Student Discovery Agent (GraphRAG-based knowledge search & Q&A) are built on top of this.
 
 ---
 
@@ -49,6 +49,7 @@ Backend for the **Student Discovery Agent (SDA)** — the single API layer over 
 │       └── version/
 ├── docs/openapi/           # OpenAPI 3.0.3 specs
 ├── templates/              # Coding/API standards
+├── sda-ui/                 # Frontend (Next.js) — see sda-ui/README.md
 ├── main.py
 ├── docker-compose.local.yml
 ├── Dockerfile
@@ -70,6 +71,14 @@ docker-compose -f docker-compose.local.yml up --build
 ```
 
 Brings up: `api`, `db` (Postgres), `redis`, `neo4j`, `minio`, `adminer`.
+
+For the LLM/GraphRAG module (Gemini via `google-genai`), set `GOOGLE_API_KEY` in `.env` (or `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION` to use Vertex AI instead).
+
+---
+
+## Frontend
+
+Next.js app lives in [`sda-ui/`](sda-ui/README.md) — separate `package.json`, run independently (see its README for dev/Docker instructions).
 
 ---
 
