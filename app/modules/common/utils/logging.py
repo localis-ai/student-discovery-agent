@@ -1,5 +1,5 @@
 """
-Logging Utility for LKP Backend using Loguru
+Logging Utility for SDA Backend using Loguru
 
 This module provides simple, powerful logging using loguru with OpenTelemetry integration.
 Features include:

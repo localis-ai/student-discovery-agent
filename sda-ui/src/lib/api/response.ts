@@ -4,7 +4,7 @@ import { mapErrorMessage } from './error-map';
 /**
  * Envelope chuẩn của backend. Viết phòng thủ: chấp nhận cả `error` (guideline)
  * lẫn `errors` (error_codes.md). Xác minh shape thật ở
- * `lkp-backend/app/modules/common/utils/response.py` khi tích hợp.
+ * `sda-backend/app/modules/common/utils/response.py` khi tích hợp.
  */
 interface ErrorPayload {
   code: string;

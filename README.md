@@ -1,6 +1,6 @@
-# LKP Backend API
+# SDA Backend API
 
-Backend for the **Local Knowledge Platform (LKP)** — the single API layer over a Neo4j knowledge graph of local knowledge, built to serve GraphRAG: vector search in Neo4j → Cypher traversal → LLM answer with cited sources.
+Backend for the **Student Discovery Agent (SDA)** — the single API layer over a Neo4j knowledge graph of local knowledge, built to serve GraphRAG: vector search in Neo4j → Cypher traversal → LLM answer with cited sources.
 
 > **Status: scaffold.** The base is in place — auth, users, admin, versioning, and shared infrastructure (Postgres, Redis, Neo4j, TaskIQ). Product modules (GraphRAG, AI Local Guide, itinerary, discovery) are built on top of this.
 

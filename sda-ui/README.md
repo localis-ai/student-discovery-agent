@@ -1,6 +1,6 @@
-# LKP Frontend
+# SDA Frontend
 
-Frontend template cho **Local Knowledge Platform**, ghép đôi với backend FastAPI (`../lkp-backend`).
+Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backend FastAPI (`../sda-backend`).
 
 ## Tech stack
 
@@ -57,11 +57,11 @@ Backend chạy riêng (docker expose cổng 8081) → `.env.local` để `API_BA
 ## Chạy bằng Docker (ghép mạng backend)
 
 ```bash
-# 1) Khởi động backend trước (tạo network "lkp-network")
-cd ../lkp-backend && docker compose -f docker-compose.local.yml up -d
+# 1) Khởi động backend trước (tạo network "sda-network")
+cd ../sda-backend && docker compose -f docker-compose.local.yml up -d
 
 # 2) Khởi động frontend
-cd ../lkp-frontend && docker compose -f docker-compose.local.yml up --build
+cd ../sda-ui && docker compose -f docker-compose.local.yml up --build
 ```
 
 ## Convention

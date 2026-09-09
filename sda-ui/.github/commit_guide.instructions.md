@@ -2,7 +2,7 @@
 applyTo: '**'
 ---
 
-# Commit Guideline for LKP Frontend
+# Commit Guideline for SDA Frontend
 
 Purpose:
 Provide a concise, consistent commit message and branch workflow guideline for contributors and automated agents (including AI) to produce clear history and safe changes. Giữ **giống hệt convention của backend** để lịch sử toàn dự án đồng nhất.

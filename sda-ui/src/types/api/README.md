@@ -11,8 +11,8 @@ pnpm gen:api
 
 Lệnh này chạy `openapi-typescript` trên:
 
-- `../lkp-backend/docs/openapi/user-api.yaml` → `user-api.d.ts`
-- `../lkp-backend/docs/openapi/admin-api.yaml` → `admin-api.d.ts`
+- `../sda-backend/docs/openapi/user-api.yaml` → `user-api.d.ts`
+- `../sda-backend/docs/openapi/admin-api.yaml` → `admin-api.d.ts`
 
 Import type trong module, ví dụ:
 

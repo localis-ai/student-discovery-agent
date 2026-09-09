@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
 
     # Server Configuration
-    SERVER_NAME: str = "LKP API"
+    SERVER_NAME: str = "SDA API"
     SERVER_HOST: str = "http://localhost"
     SERVER_PORT: int = 8081
 
@@ -39,14 +39,14 @@ class Settings(BaseSettings):
     ] = []
 
     # Project Configuration
-    PROJECT_NAME: str = "LKP API"
+    PROJECT_NAME: str = "SDA API"
 
     # Database Configuration (Postgres / Supabase)
     POSTGRES_SERVER: str = "db"
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str = "lkp"
-    POSTGRES_PASSWORD: str = "lkp123"
-    POSTGRES_DB: str = "lkp"
+    POSTGRES_USER: str = "sda"
+    POSTGRES_PASSWORD: str = "sda123"
+    POSTGRES_DB: str = "sda"
     # Full connection string override (Supabase). Nếu set, dùng thẳng thay cho POSTGRES_* ở trên.
     DATABASE_URL: str | None = None
 
@@ -58,15 +58,15 @@ class Settings(BaseSettings):
     # Neo4j (Knowledge Graph) Configuration
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: str = "lkp-neo4j"
+    NEO4J_PASSWORD: str = "sda-neo4j"
 
     # MinIO Configuration
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_SECURE: bool = False
-    MINIO_BUCKET_NAME: str = "lkp-files"
-    MINIO_PUBLIC_BUCKET_NAME: str = "lkp-public"
+    MINIO_BUCKET_NAME: str = "sda-files"
+    MINIO_PUBLIC_BUCKET_NAME: str = "sda-public"
     MINIO_PUBLIC_URL: str = "http://localhost:9000"  # Public URL for permanent links (internal Docker network)
     LOG_LEVEL: str = "DEBUG"
 

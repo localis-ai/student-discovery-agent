@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { decodeJwt, isExpired } from '@/lib/auth/jwt';
 
 // Middleware chạy ở edge runtime: chỉ import code thuần (không next/headers).
-const ACCESS = process.env.AUTH_COOKIE_ACCESS ?? 'lkp_access';
+const ACCESS = process.env.AUTH_COOKIE_ACCESS ?? 'sda_access';
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

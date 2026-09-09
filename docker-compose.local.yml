@@ -7,7 +7,7 @@ services:
       - .env
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -23,7 +23,7 @@ services:
       - "5432:5432"
 
   api:
-    image: duynvt-localis-ai-image:backend
+    image: sda-image:backend
     build:
       context: .
       dockerfile: Dockerfile
@@ -31,7 +31,7 @@ services:
       - .env
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     ports:
       - "8081:8000"
     depends_on:
@@ -45,7 +45,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     ports:
       - "6379:6379"
     command: redis-server --save 60 1 --loglevel warning
@@ -56,7 +56,7 @@ services:
       - .env
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -68,7 +68,7 @@ services:
     image: neo4j:5-community
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
     ports:
@@ -83,14 +83,14 @@ services:
       - .env
     restart: unless-stopped
     networks:
-      - lkp-network
+      - sda-network
     ports:
       - "8080:8080"
     depends_on:
       - db
 
 networks:
-  lkp-network:
+  sda-network:
     driver: bridge
 
 volumes:

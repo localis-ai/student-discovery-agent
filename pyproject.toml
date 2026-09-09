@@ -1,7 +1,7 @@
 [project]
-name = "lkp-backend"
+name = "sda-backend"
 version = "0.1.0"
-description = "LKP backend API — Local Knowledge Platform (GraphRAG over Neo4j)."
+description = "SDA backend API — Student Discovery Agent (GraphRAG over Neo4j)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

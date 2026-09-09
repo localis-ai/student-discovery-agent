@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'LKP',
-  description: 'LKP Frontend',
+  title: 'SDA',
+  description: 'SDA Frontend',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

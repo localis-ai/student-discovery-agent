@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 const schema = z.object({
   API_BASE_URL: z.string().url(),
-  AUTH_COOKIE_ACCESS: z.string().default('lkp_access'),
-  AUTH_COOKIE_REFRESH: z.string().default('lkp_refresh'),
+  AUTH_COOKIE_ACCESS: z.string().default('sda_access'),
+  AUTH_COOKIE_REFRESH: z.string().default('sda_refresh'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 

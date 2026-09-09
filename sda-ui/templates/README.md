@@ -1,6 +1,6 @@
-# LKP Frontend — Bộ Standards
+# SDA Frontend — Bộ Standards
 
-Bộ quy ước dùng chung cho team frontend, mirror tinh thần `templates/` bên `lkp-backend`.
+Bộ quy ước dùng chung cho team frontend, mirror tinh thần `templates/` bên `sda-backend`.
 Đọc theo thứ tự khi onboard:
 
 | File | Nội dung |
