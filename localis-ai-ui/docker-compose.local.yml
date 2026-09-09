@@ -1,0 +1,25 @@
+# Chạy frontend ghép chung mạng với backend (lkp-backend/docker-compose.local.yml).
+# Backend đã tạo network external tên "lkp-network" và service "api".
+#
+# Khởi động BE trước (để network tồn tại), rồi:
+#   docker compose -f docker-compose.local.yml up --build
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      # Trong mạng docker, gọi backend qua service name "api" cổng nội bộ 8000.
+      - API_BASE_URL=http://api:8000/api/v1
+      - AUTH_COOKIE_ACCESS=lkp_access
+      - AUTH_COOKIE_REFRESH=lkp_refresh
+      - NODE_ENV=production
+    networks:
+      - lkp-network
+
+networks:
+  lkp-network:
+    external: true

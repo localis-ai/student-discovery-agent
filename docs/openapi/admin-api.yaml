@@ -1,0 +1,817 @@
+openapi: 3.0.3
+info:
+  title: Backend API - Admin Management
+  description: |
+    Admin authentication and user management endpoints for Backend API.
+
+    Supports:
+    - Admin login with JWT authentication
+    - Admin-managed user CRUD operations
+    - Bulk user create, update, and soft delete
+    - User restore after soft delete
+  version: 1.0.0
+  contact:
+    name: Backend API Team
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: Admin-Auth
+    description: Admin authentication and token management
+  - name: Admin-Users
+    description: Admin user management operations
+
+paths:
+  /admin/auth/login:
+    post:
+      tags:
+        - Admin-Auth
+      summary: Authenticate admin user
+      description: Authenticate an admin user with username and password and return a JWT access token.
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: Admin authenticated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users:
+    post:
+      tags:
+        - Admin-Users
+      summary: Create a new user via admin
+      description: Create a new user record with optional profile fields.
+      operationId: adminCreateUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreate'
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Admin-Users
+      summary: Bulk soft delete users
+      description: Soft delete multiple users by their IDs.
+      operationId: adminBulkDeleteUsers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBulkUserDelete'
+      responses:
+        '200':
+          description: Bulk delete completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserBulkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users/bulk/create:
+    post:
+      tags:
+        - Admin-Users
+      summary: Bulk create users
+      description: Create multiple user records in a single request.
+      operationId: adminBulkCreateUsers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBulkUserCreate'
+      responses:
+        '200':
+          description: Bulk create completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserBulkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users/bulk/update:
+    put:
+      tags:
+        - Admin-Users
+      summary: Bulk update users
+      description: Update multiple users in a single request.
+      operationId: adminBulkUpdateUsers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBulkUserUpdate'
+      responses:
+        '200':
+          description: Bulk update completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserBulkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users/{user_id}:
+    get:
+      tags:
+        - Admin-Users
+      summary: Get admin user by ID
+      description: Retrieve a specific user's profile by ID.
+      operationId: adminGetUserById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Admin-Users
+      summary: Update an existing user
+      description: Update a user's profile data and optional status fields.
+      operationId: adminUpdateUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserUpdate'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Admin-Users
+      summary: Soft delete a user
+      description: Soft delete a single user by ID.
+      operationId: adminDeleteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User soft deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users/{user_id}/restore:
+    post:
+      tags:
+        - Admin-Users
+      summary: Restore a soft-deleted user
+      description: Restore a previously soft deleted user by ID.
+      operationId: adminRestoreUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User restored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/users:
+    get:
+      tags:
+        - Admin-Users
+      summary: List admin-managed users
+      description: Retrieve a paginated list of users with filtering and sorting options.
+      operationId: adminListUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Page number (starting from 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: order_by
+          in: query
+          required: false
+          description: Field to order results by
+          schema:
+            type: string
+            default: created_at
+        - name: dir
+          in: query
+          required: false
+          description: Sort direction
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: name
+          in: query
+          required: false
+          description: Filter by user name (partial match)
+          schema:
+            type: string
+        - name: email
+          in: query
+          required: false
+          description: Filter by email address (partial match)
+          schema:
+            type: string
+        - name: position
+          in: query
+          required: false
+          description: Filter by job position
+          schema:
+            type: string
+        - name: is_deleted
+          in: query
+          required: false
+          description: Filter by deleted status
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Users list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPaginatedUsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Admin JWT access token required for protected admin endpoints
+
+  schemas:
+    ApiResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation successful"
+        data:
+          type: object
+          nullable: true
+        errors:
+          type: array
+          items:
+            type: string
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Error message
+        data:
+          type: object
+          nullable: true
+
+    AdminLoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Admin username
+          example: "admin"
+        password:
+          type: string
+          description: Admin password
+          example: "strongpassword123"
+
+    AdminTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT access token for admin
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          example: "bearer"
+        expires_in:
+          type: integer
+          description: Expiration time in seconds
+          example: 3600
+
+    AdminAuthResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Login successful"
+        data:
+          $ref: '#/components/schemas/AdminTokenResponse'
+
+    AdminUserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - is_deleted
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://example.com/avatars/user_1.jpg"
+        bio:
+          type: string
+          nullable: true
+          example: "Software developer"
+        position:
+          type: string
+          nullable: true
+          example: "Senior Developer"
+        is_deleted:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-04-18T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-04-19T09:30:00Z"
+
+    AdminUserCreate:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          nullable: true
+          example: "optionalPassword123"
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://example.com/avatars/user_1.jpg"
+        bio:
+          type: string
+          nullable: true
+          example: "Software developer"
+        position:
+          type: string
+          nullable: true
+          example: "Senior Developer"
+
+    AdminUserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://example.com/avatars/user_1.jpg"
+        bio:
+          type: string
+          nullable: true
+          example: "Software developer"
+        position:
+          type: string
+          nullable: true
+          example: "Senior Developer"
+        password:
+          type: string
+          nullable: true
+          example: "newPassword123"
+        is_deleted:
+          type: boolean
+          nullable: true
+          example: false
+
+    AdminBulkUserCreate:
+      type: object
+      required:
+        - users
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUserCreate'
+
+    AdminBulkUserUpdate:
+      type: object
+      required:
+        - users
+      properties:
+        users:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - updates
+            properties:
+              id:
+                type: integer
+                example: 1
+              updates:
+                $ref: '#/components/schemas/AdminUserUpdate'
+
+    AdminBulkUserDelete:
+      type: object
+      required:
+        - user_ids
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+
+    AdminUserBulkResult:
+      type: object
+      required:
+        - success
+        - user_id
+      properties:
+        success:
+          type: boolean
+          example: true
+        user_id:
+          type: integer
+          example: 1
+        error:
+          type: string
+          nullable: true
+          example: null
+
+    AdminUserBulkResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - total_processed
+        - total_success
+        - total_failed
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation successful"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUserBulkResult'
+        total_processed:
+          type: integer
+          example: 3
+        total_success:
+          type: integer
+          example: 3
+        total_failed:
+          type: integer
+          example: 0
+
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - total_pages
+        - has_next
+        - has_prev
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 123
+        total_pages:
+          type: integer
+          example: 7
+        has_next:
+          type: boolean
+          example: true
+        has_prev:
+          type: boolean
+          example: false
+
+    AdminPaginatedUsersResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - pagination
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Users retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUserResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+  responses:
+    BadRequestError:
+      description: Bad request - Invalid input data or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Invalid input"
+            data: null
+    UnauthorizedError:
+      description: Unauthorized - Invalid, missing, or expired authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Authentication required or token invalid"
+            data: null
+    ForbiddenError:
+      description: Forbidden - Admin access required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Admin access required"
+            data: null
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Resource not found"
+            data: null
+    ValidationError:
+      description: Validation error - Invalid input data format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Input data validation failed"
+            data: null
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "An unexpected error occurred"
+            data: null
