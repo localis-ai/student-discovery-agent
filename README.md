@@ -1,8 +1,10 @@
 # SDA Backend API
 
-Backend for the **Student Discovery Agent (SDA)** — the single API layer over a Neo4j knowledge graph of local knowledge, built to serve GraphRAG: vector search in Neo4j → Cypher traversal → LLM answer with cited sources.
+Backend của **IHRD GenZ Career Agent** (Student Discovery Agent, SDA) — chatbot tư vấn hướng nghiệp cho học sinh THPT lớp 10–12 ở ĐBSCL, nhúng vào `ihrd.vn` dưới dạng widget chat mobile. Agent chỉ tư vấn trong mạng lưới 12 trường liên kết.
 
-> **Status: scaffold.** The base is in place — auth, users, admin, versioning, and shared infrastructure (Postgres, Redis, Neo4j, TaskIQ). Product modules for the Student Discovery Agent (GraphRAG-based knowledge search & Q&A) are built on top of this.
+Thiết kế cốt lõi: **hồ sơ học sinh là trung tâm** (slot có kiểu, append-only, có bằng chứng), LLM chỉ đảm nhận 4 vai trò hẹp (sàng lọc an toàn, thông dịch, diễn đạt, trả lời câu mở), và **mọi con số hiển thị đều đến từ kho sự kiện, không từ LLM** — được chặn bằng cổng kiểm số trước khi phát. Chi tiết: [docs/superpowers/specs/2026-09-23-ihrd-career-agent-architecture.md](docs/superpowers/specs/2026-09-23-ihrd-career-agent-architecture.md).
+
+> **Trạng thái: scaffold.** Đã có phần nền — auth, users, admin, versioning và hạ tầng dùng chung (Postgres, Redis, TaskIQ, MinIO). Phần agent (hồ sơ/slot, resolver, catalog, RAG, cổng kiểm) đang ở giai đoạn thiết kế, chưa triển khai.
 
 ---
 
@@ -24,7 +26,9 @@ Backend for the **Student Discovery Agent (SDA)** — the single API layer over 
 | Framework       | FastAPI + Uvicorn               |
 | ORM             | SQLAlchemy 2.0 / SQLModel       |
 | App DB          | Postgres (Supabase)             |
-| Knowledge Graph | Neo4j + Graphiti (native vector index) |
+| Kho sự kiện + tri thức (thiết kế) | Postgres + pgvector (chưa triển khai) |
+| Agent framework (thiết kế) | Agno SDK, nhúng trong FastAPI (chưa triển khai) |
+| LLM | Gemini qua `google-genai` |
 | Cache / broker  | Redis                           |
 | Task queue      | TaskIQ + Redis                  |
 | Object storage  | MinIO                           |
@@ -44,10 +48,13 @@ Backend for the **Student Discovery Agent (SDA)** — the single API layer over 
 │   ├── models/             # SQLAlchemy / SQLModel models
 │   └── modules/            # Feature modules
 │       ├── admin/
-│       ├── common/         # shared services + utils (redis, neo4j_client, llm, minio, ...)
+│       ├── common/         # shared services + utils (redis, llm, minio, ...)
 │       ├── users/
 │       └── version/
-├── docs/openapi/           # OpenAPI 3.0.3 specs
+├── docs/
+│   ├── openapi/            # OpenAPI 3.0.3 specs
+│   ├── superpowers/specs/  # Thiết kế kiến trúc agent
+│   └── mockup/             # Mockup + steps.json (bản ghi vàng 41 bước)
 ├── templates/              # Coding/API standards
 ├── sda-ui/                 # Frontend (Next.js) — see sda-ui/README.md
 ├── main.py
@@ -70,9 +77,11 @@ cp .env.example .env
 docker-compose -f docker-compose.local.yml up --build
 ```
 
-Brings up: `api`, `db` (Postgres), `redis`, `neo4j`, `minio`, `adminer`.
+Brings up: `api`, `db` (Postgres), `redis`, `minio`, `adminer`, và `neo4j` (còn sót từ scaffold, xem lưu ý bên dưới).
 
-For the LLM/GraphRAG module (Gemini via `google-genai`), set `GOOGLE_API_KEY` in `.env` (or `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION` to use Vertex AI instead).
+For the LLM module (Gemini via `google-genai`), set `GOOGLE_API_KEY` in `.env` (or `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION` to use Vertex AI instead).
+
+> **Lưu ý:** hướng Neo4j/Graphiti/GraphRAG đã bị loại bỏ trong thiết kế (truy vấn nông, quy mô cỡ nghìn bản ghi — không bù nổi chi phí vận hành thêm một hệ). Dependency `neo4j`, `graphiti-core`, `neo4j_client.py` và service `neo4j` trong compose còn sót từ scaffold, sẽ được gỡ.
 
 ---
 
