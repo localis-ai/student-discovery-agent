@@ -204,6 +204,10 @@ __marimo__/
 .clinerules/
 .vscode/
 .kiro/
+# Local Codex workspace and configuration
+codex-setup/
+.codex/
+codex/
 # Firebase service account keys
 config/keys/*.json
 config/*.json
