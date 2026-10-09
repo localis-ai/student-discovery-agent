@@ -41,7 +41,7 @@ numpy==2.4.4
 oauthlib==3.3.1
 packaging==26.1
 passlib==1.7.4
-portalocker==3.2.0
+portalocker==4.4.0
 prompt-toolkit==3.0.52
 proto-plus==1.27.2
 protobuf==7.34.1
