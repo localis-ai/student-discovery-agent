@@ -19,7 +19,7 @@ cryptography==46.0.7
 dnspython==2.8.0
 email-validator==2.3.0
 fastapi==0.136.0
-google-auth==2.49.2
+google-auth==2.56.0
 google-genai==2.22.0
 graphiti-core==0.29.2
 grpcio==1.80.0
@@ -58,7 +58,7 @@ pyparsing==3.3.2
 python-dotenv==1.2.2
 python-multipart==0.0.26
 pytz==2025.2
-redis==7.4.0
+redis==5.3.1
 regex==2026.4.4
 requests==2.33.1
 requests-oauthlib==2.0.0
