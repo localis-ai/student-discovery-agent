@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context: apps/web. Contracts are supplied via the named context "contracts"
 # (compose: build.additional_contexts.contracts = ./contracts).
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 ARG http_proxy
 ARG https_proxy
 # corepack cannot download pnpm through the proxy; install it directly.
@@ -24,7 +24,7 @@ ENV NODE_ENV=production
 USER node
 CMD ["pnpm", "db:migrate"]
 
-FROM node:22-alpine AS runner
+FROM node:25-alpine AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
