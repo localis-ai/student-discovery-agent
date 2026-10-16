@@ -37,7 +37,7 @@
     "@types/pg": "8.23.1",
     "ajv": "8.20.0",
     "drizzle-kit": "0.31.11",
-    "eslint": "^9.17.0",
+    "eslint": "^10.12.0",
     "openapi-typescript": "^7.4.4",
     "testcontainers": "12.2.1",
     "tsx": "4.23.15",
