@@ -8,7 +8,7 @@ charset-normalizer==3.5.2
 chonkie-core==0.10.2
 chonkie[gemini]==1.7.0
 click==8.5.0
-cryptography==46.0.7
+cryptography==50.0.2
 distro==1.9.0
 docstring_parser==0.18.0
 fastapi==0.143.0
