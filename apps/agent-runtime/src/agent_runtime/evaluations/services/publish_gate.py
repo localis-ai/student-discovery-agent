@@ -20,7 +20,10 @@ from agent_runtime.evaluations.schemas.validation import (
     ValidationStatus,
 )
 from agent_runtime.evaluations.services.runner import EvaluationRunner
-from agent_runtime.evaluations.services.validator import ExperienceValidator
+from agent_runtime.evaluations.services.validator import (
+    ExperienceValidator,
+    calculate_content_hash,
+)
 
 
 class ReportStore:
@@ -123,7 +126,7 @@ class PublishGateService:
 
         # Check idempotency replay if possible
         if idempotency_key:
-            content_hash = self._validator.canonical_hash(raw_dict)
+            content_hash = calculate_content_hash(raw_dict)
             cached = self._store.get_validation_by_idempotency(
                 exp_id, idempotency_key, content_hash
             )
@@ -156,7 +159,7 @@ class PublishGateService:
 
         # Check idempotency replay if possible
         if idempotency_key:
-            content_hash = self._validator.canonical_hash(raw_dict)
+            content_hash = calculate_content_hash(raw_dict)
             cached = self._store.get_evaluation_by_idempotency(
                 exp_id, idempotency_key, content_hash
             )
