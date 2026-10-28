@@ -30,7 +30,6 @@ def test_evaluation_runner_valid_v2_success(valid_v2_doc):
     """Happy path: valid definition 2.0 with golden case passes evaluation completely."""
     runner = EvaluationRunner()
     report = runner.run_evaluation(valid_v2_doc, expected_revision=1)
-
     assert report.status == ValidationStatus.PASSED
     assert report.mandatory_passed is True
     assert report.draft_revision == 1

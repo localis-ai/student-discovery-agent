@@ -227,7 +227,7 @@ class EvaluationRunner:
                 prefix = ans_payloads[:step_idx]
                 step_res = self._selector.select_next_question(
                     answers=prefix,
-                    definition=def_doc,
+                    definition=raw_dict,
                     validate_sequence=False,
                     seed=seed,
                 )
@@ -249,7 +249,7 @@ class EvaluationRunner:
 
             final_sel = self._selector.select_next_question(
                 answers=ans_payloads,
-                definition=def_doc,
+                definition=raw_dict,
                 validate_sequence=False,
                 seed=seed,
             )
@@ -276,7 +276,7 @@ class EvaluationRunner:
         try:
             scoring_res = self._scorer.calculate_scores(
                 answers=ans_payloads,
-                definition=def_doc,
+                definition=raw_dict,
                 seed=seed,
             )
             actual_primary_house_id = scoring_res.primary_house_id
