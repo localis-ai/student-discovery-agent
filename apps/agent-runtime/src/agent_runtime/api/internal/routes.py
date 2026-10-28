@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 
+from agent_runtime.evaluations.schemas.validation import PublishReportInput
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
@@ -162,3 +163,34 @@ def validate_agent_snapshot(request: Request):
         raise RuntimeSessionError(422, "INVALID_INPUT")
     result = _service(request, "agent_validation").validate(data["content"])
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/experience-evaluations:run", operation_id="internalRunExperienceEvaluation")
+def run_experience_evaluation(request: Request):
+    _query(request, ())
+    data = read_strict_json(request.state.raw_body)
+    if not isinstance(data, dict):
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    definition = data.get("definition")
+    if not isinstance(definition, dict):
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    expected_revision = data.get("expected_revision", 1)
+    expected_hash = data.get("expected_hash")
+    idempotency_key = data.get("idempotency_key")
+    experience_id = data.get("experience_id")
+    result = _service(request, "evaluations").evaluate_and_store(
+        definition=definition,
+        expected_revision=_integer(expected_revision),
+        expected_hash=expected_hash,
+        idempotency_key=idempotency_key,
+        experience_id=experience_id,
+    )
+    return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/experience-reports:verify", operation_id="internalVerifyExperienceReports")
+def verify_experience_reports(request: Request):
+    _query(request, ())
+    data = _input(request, PublishReportInput)
+    verified, reason = _service(request, "evaluations").verify_publish_gate(data)
+    return success(ServiceResponse(status=200, data={"verified": verified, "reason": reason}), *request.state.meta)

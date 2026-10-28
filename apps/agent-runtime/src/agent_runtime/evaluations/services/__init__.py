@@ -3,6 +3,10 @@ from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
     EngineProfile,
 )
+from agent_runtime.evaluations.services.publish_gate import (
+    PublishGateService,
+    ReportStore,
+)
 from agent_runtime.evaluations.services.runner import EvaluationRunner
 from agent_runtime.evaluations.services.validator import (
     ExperienceValidator,
@@ -18,4 +22,6 @@ __all__ = [
     "calculate_content_hash",
     "validate_experience_definition",
     "EvaluationRunner",
+    "PublishGateService",
+    "ReportStore",
 ]
