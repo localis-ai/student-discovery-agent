@@ -94,8 +94,19 @@ function Chip({
     <motion.li {...trackProps('chips', index, count)} style={style} className="min-w-0 flex-auto">
       <div
         data-paint="box"
-        className="flex h-[42px] items-center justify-center gap-[6px] overflow-hidden rounded-full border border-[var(--card-chip-border)] bg-[var(--card-chip)] px-2 backdrop-blur-[6px]"
+        className="relative flex h-[42px] items-center justify-center gap-[6px] overflow-hidden rounded-full px-2 shadow-[0_0_18px_var(--card-glow)]"
       >
+        {/* Gradient rim only: a masked layer that keeps the border ring and clears the inside, so the chip fill stays transparent. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-full p-[1.5px]"
+          style={{
+            background: 'var(--card-chip-border)',
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            WebkitMaskComposite: 'xor',
+            mask: 'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)',
+          }}
+        />
         {Icon ? (
           <span
             data-paint="svg"
@@ -116,7 +127,7 @@ function Chip({
         <span
           data-paint="text"
           data-chip-label
-          className="truncate font-sans text-[13px] leading-[16px] font-semibold text-[var(--card-text)]"
+          className="truncate font-sans text-[13px] leading-[16px] font-normal text-[var(--card-text)]"
         >
           {strength.label}
         </span>

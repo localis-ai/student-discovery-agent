@@ -25,6 +25,8 @@ export interface TimelineConfig {
     sweep: Range;
     floatIn: Range;
     ambientIn: Range;
+    /** Prism pulse: crystal facets start flashing on the beat right after the aura sweep. */
+    prism: Range;
     /** Halo builds during the aura sweep and flares as the identity appears. */
     halo: { rise: Range; flare: number };
   };
@@ -67,6 +69,7 @@ export const timelineConfig: TimelineConfig = {
     sweep: [1350, 2450],
     floatIn: [1200, 2600],
     ambientIn: [3300, 4600],
+    prism: [2400, 3600],
     halo: { rise: [1500, 2500], flare: 2850 },
   },
   overlay: {

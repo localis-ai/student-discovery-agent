@@ -15,7 +15,8 @@ export interface RatioLayout {
   title: { max: number; min: number };
   /** Top of the brand header, and the space kept below the identity block. */
   header: { top: number };
-  identity: { bottom: number };
+  /** `lift` raises only the chips and footer, in card units, leaving the name and title in place. */
+  identity: { bottom: number; lift?: number; offsetX?: number };
   /**
    * Story-safe band (card units): platform UI (progress bar and avatar on top, reply bar at the
    * bottom) covers what lies outside it. Meta recommends ~14% clear at top and bottom of 9:16.
@@ -27,10 +28,11 @@ export const layouts: Record<CardRatio, RatioLayout> = {
   '9:16': {
     ratio: '9:16',
     height: 711,
-    art: { x: -24, y: 56, size: 448 },
-    veil: { start: 340, solid: 425 },
+    // Full-bleed butterfly: the artwork square spans the card height instead of its upper half.
+    art: { x: -110, y: -40, size: 640 },
+    veil: { start: 330, solid: 470 },
     heroScale: 1,
-    title: { max: 46, min: 28 },
+    title: { max: 38, min: 28 },
     // Deliberately above `safe.top`: the brand sits near the top edge (Story UI may overlap it).
     header: { top: 38 },
     identity: { bottom: 100 },

@@ -311,14 +311,16 @@ export function paintButterfly(
   asset: ArtworkAsset,
 ) {
   const { sample, layout, pointer, theme } = frame;
-  const { art: box } = layout;
+  const box = theme.artwork.box ?? layout.art;
   // Fit the artwork to the layout square (or its width, for portrait masters), preserving aspect.
   const byWidth = asset.fit === 'width';
-  const fit = box.size / (byWidth ? art.width : Math.max(art.width, art.height));
-  const w = art.width * fit;
-  const h = art.height * fit;
+  // `fill` stretches the artwork to the box, using the declared aspect instead of the file's own.
+  const fill = asset.fit === 'fill';
+  const fit = box.size / (byWidth || fill ? art.width : Math.max(art.width, art.height));
+  const w = fill ? box.size : art.width * fit;
+  const h = fill ? box.size * (asset.aspect ?? 1) : art.height * fit;
   const x0 = box.x + (box.size - w) / 2;
-  const y0 = byWidth ? box.y : box.y + (box.size - h) / 2;
+  const y0 = byWidth || fill ? box.y : box.y + (box.size - h) / 2;
   const fx = x0 + asset.focal.x * w;
   const fy = y0 + asset.focal.y * h;
   const revealStyle = theme.motion?.reveal ?? 'radial';
@@ -666,18 +668,44 @@ export function paintShards(
 
 /* -------------------------------------------------------------------- chrome */
 
-/** Legibility veils, holographic sheen, the aura sweep and the inset frame. */
 export function paintChrome(ctx: CanvasRenderingContext2D, frame: FrameState) {
   const { layout, theme, sample, pointer } = frame;
   const h = layout.height;
   const { veil } = theme.palette;
 
-  const bottom = ctx.createLinearGradient(0, layout.veil.start, 0, layout.veil.solid);
+  const bv = theme.veil ?? layout.veil;
+  const bottom = ctx.createLinearGradient(0, bv.start, 0, bv.solid);
   bottom.addColorStop(0, rgba(veil, 0));
   bottom.addColorStop(0.6, rgba(veil, 0.78));
   bottom.addColorStop(1, rgba(veil, 0.96));
   ctx.fillStyle = bottom;
-  ctx.fillRect(0, layout.veil.start, CARD_WIDTH, h - layout.veil.start);
+  const inset = theme.veil?.inset ?? 0;
+  if (inset > 0) {
+    // Inside the frame: a rounded block stopping `inset` short of the left, right and bottom edges.
+    ctx.beginPath();
+    ctx.roundRect(inset, bv.start, CARD_WIDTH - 2 * inset, h - bv.start - inset, 30);
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, bv.start, CARD_WIDTH, h - bv.start);
+  }
+
+  // Soft dark pool behind the identity text: an elliptical gradient that fades into the artwork,
+  // so the shadow follows the artwork's light rather than sitting on it as a hard block.
+  const panel = theme.panel;
+  if (panel) {
+    ctx.globalAlpha = sample.atmosphere;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.save();
+    ctx.translate(CARD_WIDTH / 2, panel.y);
+    ctx.scale(1, panel.ry / panel.rx);
+    const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, panel.rx);
+    pool.addColorStop(0, rgba(veil, panel.alpha));
+    pool.addColorStop(0.55, rgba(veil, panel.alpha * 0.8));
+    pool.addColorStop(1, rgba(veil, 0));
+    ctx.fillStyle = pool;
+    ctx.fillRect(-panel.rx, -panel.rx, panel.rx * 2, panel.rx * 2);
+    ctx.restore();
+  }
 
   // Keeps the brand header legible wherever it sits (lower in the Story-safe 9:16 layout).
   const headerEnd = layout.header.top + 86;
@@ -714,11 +742,48 @@ export function paintChrome(ctx: CanvasRenderingContext2D, frame: FrameState) {
     ctx.fillRect(0, 0, CARD_WIDTH, h);
   }
 
-  // Inset hairline frame: the only decorative border.
+  // Floor glow: light pooling along the bottom edge, as if reflected off the artwork's base.
+  const floorR = CARD_WIDTH * 0.62;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = sample.reveal;
+  const floor = ctx.createRadialGradient(CARD_WIDTH / 2, h, 0, CARD_WIDTH / 2, h, floorR);
+  floor.addColorStop(0, rgba(theme.palette.accent, 0.42));
+  floor.addColorStop(0.5, rgba(theme.palette.blue, 0.14));
+  floor.addColorStop(1, rgba(theme.palette.blue, 0));
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, h - floorR, CARD_WIDTH, floorR);
+
+}
+
+/** Glass-frame edge: neon rim and hairline. Sits under the butterfly so the artwork overlaps it. */
+export function paintFrame(ctx: CanvasRenderingContext2D, frame: FrameState) {
+  const { layout, theme, sample } = frame;
+  if (theme.frame === false) return;
+  const h = layout.height;
+  // Neon rim on the card edge: a soft wide glow with a brighter core line. Canvas, not CSS,
+  // so the exported PNG and video carry it too.
+  const glow = theme.palette.glow ?? theme.palette.accent;
+  const unit = ctx.getTransform().a;
+  ctx.globalAlpha = sample.atmosphere;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.beginPath();
+  // Frame drawn inside the artwork, inset from the card edge.
+  ctx.roundRect(26, 26, CARD_WIDTH - 52, h - 52, 30);
+  ctx.shadowColor = rgba(glow, 0.95);
+  ctx.shadowBlur = 16 * unit;
+  ctx.strokeStyle = rgba(glow, 0.55);
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = rgba('#ffffff', 0.85);
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // Inset hairline frame.
   ctx.globalCompositeOperation = 'source-over';
   const frameGrad = ctx.createLinearGradient(0, 0, CARD_WIDTH, h);
   theme.palette.frame.forEach((color, i, all) =>
-    frameGrad.addColorStop(i / (all.length - 1), rgba(color, 0.5)),
+    frameGrad.addColorStop(i / (all.length - 1), rgba(color, 0.8)),
   );
   ctx.globalAlpha = sample.atmosphere;
   ctx.strokeStyle = frameGrad;

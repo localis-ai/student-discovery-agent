@@ -1,4 +1,5 @@
 import otterUrl from '../../assets/archetypes/temper/temper.webp';
+import otter45Url from '../../assets/archetypes/temper/temper-45.webp';
 import type { ArchetypeTheme, ShareCardData } from '../types';
 
 export const temperContent: ShareCardData = {
@@ -23,20 +24,61 @@ export const temperTheme: ArchetypeTheme = {
     src: otterUrl,
     alt: 'Rái cá vươn mình giữa dòng nước xoáy, bọt nước và tinh thể xanh ngọc',
     provenance: 'Digital Aura otter master (1254×1254), served as WebP.',
-    focal: { x: 0.55, y: 0.45 },
-    // On the beat, these light up one after another.
+    // Full-bleed 9:16 master (941×1672): fitted to the card, as for creator.
+    aspect: 711 / 400,
+    fit: 'fill',
+    box: { x: 0, y: 0, size: 400 },
+    focal: { x: 0.6, y: 0.37 },
+    bodyAxis: [
+      { x: 0.659, y: 0.251 },
+      { x: 0.446, y: 0.478 },
+    ],
     facets: [
-      { x: 0.535, y: 0.19, size: 0.5 }, // eye
-      { x: 0.83, y: 0.15, size: 0.65 }, // upper-right crystal
-      { x: 0.74, y: 0.8, size: 0.75 }, // lower-right crystal
-      { x: 0.39, y: 0.62, size: 0.7 }, // centre crystal
-      { x: 0.11, y: 0.43, size: 0.6 }, // left crystal
-      { x: 0.3, y: 0.18, size: 0.65 }, // upper-left crystal
-      { x: 0.54, y: 0.78, size: 0.45 }, // bubble
-      { x: 0.2, y: 0.81, size: 0.45 }, // bubble
+      { x: 0.627, y: 0.269, size: 0.6 }, // eye
+      { x: 0.17, y: 0.179, size: 0.65 }, // upper-left crystal
+      { x: 0.818, y: 0.144, size: 0.7 }, // upper-right crystal
+      { x: 0.903, y: 0.383, size: 0.65 }, // right crystal
+      { x: 0.213, y: 0.478, size: 0.8 }, // large left crystal
+      { x: 0.34, y: 0.574, size: 0.55 }, // centre crystal
+      { x: 0.159, y: 0.281, size: 0.6 }, // left orb
+      { x: 0.893, y: 0.496, size: 0.6 }, // right orb
+      { x: 0.159, y: 0.849, size: 0.5 }, // bottom-left orb
     ],
     erase: [],
     feather: { top: 0.05, bottom: 0.2, side: 0.04 },
+  },
+  // Dark block under the identity text, as for creator.
+  // Off: the identity text sits on its own dark zones (name, chips, footer).
+  veil: { start: 711, solid: 711 },
+  identity: { bottom: 5, lift: 30 },
+  header: { top: 40, inset: 55, labelInset: 40 },
+  // 4:5 card (400×500) uses the -45 master, with its own points and no baked-in frame.
+  landscape: {
+    artwork: {
+      src: otter45Url,
+      aspect: 1,
+      box: { x: 23, y: -20, size: 340 },
+      fit: 'width',
+      focal: { x: 0.52, y: 0.45 },
+      bodyAxis: [
+        { x: 0.51, y: 0.2 },
+        { x: 0.45, y: 0.55 },
+      ],
+      facets: [
+        { x: 0.526, y: 0.191, size: 0.6 }, // eye
+        { x: 0.136, y: 0.08, size: 0.65 }, // upper-left crystal
+        { x: 0.586, y: 0.076, size: 0.5 }, // top crystal
+        { x: 0.829, y: 0.136, size: 0.7 }, // upper-right crystal
+        { x: 0.104, y: 0.399, size: 0.6 }, // left crystal
+        { x: 0.391, y: 0.606, size: 0.65 }, // centre crystal
+        { x: 0.742, y: 0.79, size: 0.75 }, // lower-right crystal
+        { x: 0.534, y: 0.774, size: 0.45 }, // bubble
+        { x: 0.199, y: 0.813, size: 0.45 }, // lower-left bubble
+      ],
+    },
+    veil: { start: 250, solid: 320 },
+    identity: { bottom: 22 },
+    header: { top: 26, inset: 28, labelInset: 28 },
   },
   palette: {
     backdrop: ['#1d5868', '#0b2530', '#04121a'],

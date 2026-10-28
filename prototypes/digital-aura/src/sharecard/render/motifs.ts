@@ -164,7 +164,7 @@ function dataRain(ctx: CanvasRenderingContext2D, frame: FrameState) {
     offset: rand() * (H + 120),
     length: 5 + Math.floor(rand() * 6),
   }));
-  ctx.font = '600 10px Inter, ui-monospace, monospace';
+  ctx.font = '400 10px Montserrat, ui-monospace, monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const tick = Math.floor(sample.t / 90);
@@ -461,7 +461,7 @@ function cipher(ctx: CanvasRenderingContext2D, frame: FrameState) {
   }
 
   // Rotating hex labels on the outer ring.
-  ctx.font = '600 7.5px Inter, ui-monospace, monospace';
+  ctx.font = '400 7.5px Montserrat, ui-monospace, monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ['0x3F', 'A7·1', '0110', 'C·42'].forEach((label, i) => {

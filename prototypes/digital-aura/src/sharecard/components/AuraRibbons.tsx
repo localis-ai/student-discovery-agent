@@ -13,10 +13,15 @@ export function AuraRibbons() {
   useSceneLayer(Z.ribbonsBack, (ctx, frame) => {
     if ((frame.theme.motion?.aura ?? 'orbit') === 'orbit') paintRibbons(ctx, frame, 'back');
   });
-  useSceneLayer(Z.ribbonsFront, (ctx, frame) => {
-    const aura = frame.theme.motion?.aura ?? 'orbit';
-    if (aura === 'orbit') paintRibbons(ctx, frame, 'front');
-    else paintAura(ctx, frame, aura);
-  });
+  // Front strands draw on the halo canvas so they can cross the card edge and wrap outside it.
+  useSceneLayer(
+    Z.ribbonsFront,
+    (ctx, frame) => {
+      const aura = frame.theme.motion?.aura ?? 'orbit';
+      if (aura === 'orbit') paintRibbons(ctx, frame, 'front');
+      else paintAura(ctx, frame, aura);
+    },
+    'halo',
+  );
   return null;
 }

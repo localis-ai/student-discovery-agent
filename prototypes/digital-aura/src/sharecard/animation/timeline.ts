@@ -34,6 +34,8 @@ export interface SceneSample {
   /** Wing foreshortening, 0 = flat open wings. */
   wing: number;
   pulse: number;
+  /** Rises through the prism pulse and stays at 1 for the loop; drives the beat flashes. */
+  prism: number;
   float: number;
   ambient: number;
 }
@@ -64,6 +66,7 @@ export function sampleScene(
     sweep: t >= s.sweep[0] && t <= s.sweep[1] && !reduced ? gentle(progress(t, s.sweep)) : null,
     wing: a.wingAmplitude * ambient * wave(t - s.ambientIn[0], a.wingPeriod),
     pulse,
+    prism: reduced ? 0 : smooth(progress(t, s.prism)),
     float: Math.sin(((t - s.floatIn[0]) / a.floatPeriod) * TAU) * a.floatAmplitude * floatIn,
     ambient,
   };
@@ -91,14 +94,14 @@ export function haloGlow(sample: SceneSample, config = timelineConfig) {
 
 /**
  * Rhythmic facet flash: on each beat one facet (cycling through `count`) flashes with a sharp
- * attack and exponential decay. Only during the ambient loop, never in reduced motion.
+ * attack and exponential decay. Starts with the prism pulse, never in reduced motion.
  */
 export function beatGlow(sample: SceneSample, index: number, count: number, bpm: number) {
-  if (sample.reduced || sample.ambient <= 0 || count <= 0) return 0;
+  if (sample.reduced || sample.prism <= 0 || count <= 0) return 0;
   const beat = 60000 / bpm;
   const n = Math.floor(sample.t / beat);
   if (n % count !== index) return 0;
-  return Math.exp(-((sample.t - n * beat) / beat) * 4) * sample.ambient;
+  return Math.exp(-((sample.t - n * beat) / beat) * 4) * sample.prism;
 }
 
 export type OverlayTrack = 'header' | 'name' | 'title' | 'subtitle' | 'chips' | 'footer';

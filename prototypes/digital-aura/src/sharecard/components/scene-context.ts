@@ -18,6 +18,7 @@ export const SceneContext = createContext<SceneRegistry | null>(null);
 export function useSceneLayer(
   z: number,
   paint: ((ctx: CanvasRenderingContext2D, frame: FrameState) => void) | null,
+  channel: 'card' | 'halo' = 'card',
 ) {
   const scene = useContext(SceneContext);
   if (!scene) throw new Error('useSceneLayer must be used inside <ShareCard>');
@@ -27,8 +28,8 @@ export function useSceneLayer(
 
   useLayoutEffect(() => {
     if (!active) return;
-    return scene.register({ z, paint: (ctx, frame) => latest.current?.(ctx, frame) });
-  }, [scene, z, active]);
+    return scene.register({ z, channel, paint: (ctx, frame) => latest.current?.(ctx, frame) });
+  }, [scene, z, active, channel]);
 
   useLayoutEffect(() => scene.invalidate());
 }

@@ -1,4 +1,5 @@
 import butterflyUrl from '../../assets/archetypes/creator/creator.webp';
+import butterfly45Url from '../../assets/archetypes/creator/creator-45.webp';
 import type { ArchetypeTheme, ShareCardData } from '../types';
 
 export const creatorContent: ShareCardData = {
@@ -7,13 +8,14 @@ export const creatorContent: ShareCardData = {
     id: 'creator',
     title: 'Người Sáng Tạo',
     subtitle: 'The Creator',
-    edition: '04/06',
   },
   strengths: [
-    { label: 'Sáng tạo', glyph: '✦' },
-    { label: 'Tinh tế', glyph: '◇' },
-    { label: 'Cảm hứng', glyph: '✧' },
+    { label: 'Sáng tạo', icon: 'lightbulb' },
+    { label: 'Tinh tế', icon: 'leaf' },
+    { label: 'Cảm hứng', icon: 'sparkles' },
   ],
+  // Footer line under the chips; takes the place of the tagline when set.
+  fields: ['Thiết kế', 'Nghệ thuật', 'Truyền thông'],
   tagline: 'Mỗi người một hành trình riêng',
 };
 
@@ -22,24 +24,30 @@ export const creatorTheme: ArchetypeTheme = {
   artwork: {
     src: butterflyUrl,
     alt: 'Bướm pha lê phát sáng tím lam với thân tinh thể',
-    provenance: 'Digital Aura butterfly master (1254×1254), served as WebP.',
-    focal: { x: 0.515, y: 0.45 },
+    provenance: 'Digital Aura butterfly master (844×1264), served as WebP; portrait, fills the card height.',
+    // Portrait master, full-bleed: it covers the card height. The wings span ~13%–99.5% of the
+    // master's width, so the box is shifted to centre the span and put the wing tips on the card edges.
+    // Stretched to the full 400×711 card, so the artwork's proportions are distorted.
+    aspect: 711 / 400,
+    fit: 'fill',
+    box: { x: 0, y: 0, size: 400 },
+    focal: { x: 0.578, y: 0.41 },
     bodyAxis: [
-      { x: 0.535, y: 0.35 },
-      { x: 0.46, y: 0.62 },
+      { x: 0.578, y: 0.34 },
+      { x: 0.521, y: 0.554 },
     ],
     facets: [
-      { x: 0.515, y: 0.42, size: 1 }, // thorax crystal
-      { x: 0.53, y: 0.355, size: 0.6 }, // head
-      { x: 0.385, y: 0.475, size: 0.55 }, // left wing eye
-      { x: 0.59, y: 0.565, size: 0.55 }, // right wing eye
-      { x: 0.89, y: 0.22, size: 0.7 }, // upper-right crystal
-      { x: 0.26, y: 0.77, size: 0.7 }, // lower-left crystal
-      { x: 0.19, y: 0.6, size: 0.5 }, // left orb
-      { x: 0.76, y: 0.71, size: 0.45 }, // right orb
+      { x: 0.578, y: 0.41, size: 1 }, // thorax crystal
+      { x: 0.578, y: 0.345, size: 0.6 }, // head
+      { x: 0.409, y: 0.44, size: 0.55 }, // left wing eye
+      { x: 0.643, y: 0.498, size: 0.55 }, // right wing eye
+      { x: 0.9, y: 0.277, size: 0.45 }, // upper-right crystal
+      { x: 0.231, y: 0.546, size: 0.7 }, // left orb
+      { x: 0.871, y: 0.554, size: 0.5 }, // right crystal
+      { x: 0.746, y: 0.617, size: 0.45 }, // lower-right orb
     ],
     erase: [],
-    feather: { top: 0.06, bottom: 0.2, side: 0.04 },
+    feather: { top: 0.02, bottom: 0.04, side: 0.03 },
   },
   palette: {
     backdrop: ['#4a3873', '#1a1533', '#0a0a20'],
@@ -49,46 +57,68 @@ export const creatorTheme: ArchetypeTheme = {
     blue: '#8fd8ff',
     text: '#fbf8ff',
     muted: '#b3abd0',
-    chip: 'rgba(83, 64, 139, 0.55)',
-    chipBorder: 'rgba(183, 157, 250, 0.7)',
+    chip: 'transparent',
+    chipBorder: 'linear-gradient(135deg, rgba(200, 170, 255, 0.95), rgba(110, 190, 255, 0.9))',
     frame: ['#e4d2ff', '#8f7cf5', '#8fd8ff', '#c79bff'],
     particles: ['#efe6ff', '#bfa3ff', '#9fdcff'],
   },
-  ribbons: [
-    {
-      rx: 214,
-      ry: 62,
-      tilt: -18,
-      colors: ['#f0faff', '#91e9ff', '#b98bff', '#f2a9ff'],
-      width: 3.4,
-      speed: 0.62,
-      phase: -0.4,
-      length: 3.9,
-      offsetY: 115,
+  // No orbit ribbons: the artwork carries the light on its own.
+  ribbons: [],
+  // Full-bleed artwork: the bottom veil only starts where the identity text sits.
+  // Dark block under the identity text (name, title, chips, footer): fades in from y≈370 and is
+  // near-solid from y≈440, so the text reads clearly over the artwork.
+  // Off: the identity text sits on its own dark zones (name, chips, footer).
+  veil: { start: 711, solid: 711 },
+  // Identity block sits low, so the name, title, chips and footer land on the artwork's lower band.
+  // `lift` raises only the chips and footer; the name, title and subtitle keep their place.
+  identity: { bottom: 5, lift: 30 },
+  // Logo and label sit inside the artwork's frame, clear of its corners.
+  header: { top: 40, inset: 55, labelInset: 40 },
+  // 4:5 card (400×500): the artwork is stretched to the card, and the identity block and header
+  // sit at the layout's own positions so the name, title, chips and footer stack without overlap.
+  landscape: {
+    // Artwork keeps its proportions and is cropped: the top of the master fills the card, and
+    // a near-solid dark block covers the lower part where the identity text sits.
+    // 4:5 design: no frame. The butterfly fills the upper part of the card at full width, and a
+    // dark gradient (from y≈250, solid from y≈320) carries the name, title, chips and footer.
+    // Square master (1254×1254), fitted to the top of the card. Points are normalised to this image.
+    artwork: {
+      src: butterfly45Url,
+      alt: 'Bướm pha lê tím lam với thân tinh thể, nền ánh sáng vũ trụ',
+      provenance: 'Digital Aura butterfly 4:5 master (1254×1254), served as WebP.',
+      aspect: 1,
+      box: { x: 23, y: -20, size: 340 },
+      fit: 'width',
+      focal: { x: 0.53, y: 0.43 },
+      bodyAxis: [
+        { x: 0.538, y: 0.35 },
+        { x: 0.49, y: 0.606 },
+      ],
+      facets: [
+        { x: 0.53, y: 0.43, size: 1 }, // thorax crystal
+        { x: 0.538, y: 0.35, size: 0.6 }, // head
+        { x: 0.383, y: 0.478, size: 0.55 }, // left wing eye
+        { x: 0.59, y: 0.562, size: 0.55 }, // right wing eye
+        { x: 0.745, y: 0.136, size: 0.7 }, // upper-right crystal
+        { x: 0.889, y: 0.231, size: 0.7 }, // right crystal
+        { x: 0.263, y: 0.757, size: 0.7 }, // lower-left crystal
+        { x: 0.187, y: 0.602, size: 0.5 }, // left orb
+        { x: 0.761, y: 0.706, size: 0.45 }, // lower-right orb
+        { x: 0.889, y: 0.55, size: 0.5 }, // right crystal, lower
+      ],
     },
-    {
-      rx: 190,
-      ry: 76,
-      tilt: 24,
-      colors: ['#fff4ff', '#e3b4ff', '#8e8cff', '#76bfff'],
-      width: 2.6,
-      speed: -0.48,
-      phase: 2.4,
-      length: 3.3,
-      offsetY: 145,
+    veil: { start: 250, solid: 320 },
+    // Frame in the decoder's style: blue-violet rim and hairline.
+    frame: true,
+    palette: {
+      frame: ['#e0ecff', '#7f9cff', '#8fe3ff', '#b8a6ff'],
+      glow: '#4f6dff',
     },
-    {
-      rx: 150,
-      ry: 40,
-      tilt: -4,
-      colors: ['#ffffff', '#c9b6ff', '#7fd0ff'],
-      width: 1.8,
-      speed: 0.9,
-      phase: 4.1,
-      length: 2.2,
-      offsetY: 125,
-    },
-  ],
+    identity: { bottom: 10 },
+    header: { top: 26, inset: 28, labelInset: 28 },
+  },
   // Chrysalis: opens from the body as the wings unfold; letters bloom.
-  motion: { intro: 'pollen', aura: 'flight', reveal: 'unfold', title: 'bloom' },
+  motion: { intro: 'pollen', aura: 'orbit', reveal: 'unfold', title: 'bloom' },
+  // Prism pulse: facets flash on the beat once the aura sweep settles.
+  rhythm: { bpm: 80 },
 };

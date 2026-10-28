@@ -1,4 +1,5 @@
 import heronUrl from '../../assets/archetypes/healer/healer.webp';
+import heron45Url from '../../assets/archetypes/healer/healer-45.webp';
 import type { ArchetypeTheme, ShareCardData } from '../types';
 
 export const healerContent: ShareCardData = {
@@ -23,19 +24,62 @@ export const healerTheme: ArchetypeTheme = {
     src: heronUrl,
     alt: 'Diệc trắng sải cánh trong vầng hào quang ngọc lục bảo, đeo mặt dây ngọc',
     provenance: 'Digital Aura heron master (1254×1254), served as WebP.',
-    focal: { x: 0.52, y: 0.45 },
-    facets: [
-      { x: 0.445, y: 0.465, size: 1 }, // emerald pendant
-      { x: 0.47, y: 0.228, size: 0.45 }, // eye
-      { x: 0.275, y: 0.105, size: 0.6 }, // upper-left crystal
-      { x: 0.185, y: 0.44, size: 0.65 }, // left crystal
-      { x: 0.865, y: 0.155, size: 0.65 }, // upper-right crystal
-      { x: 0.81, y: 0.78, size: 0.5 }, // lower-right crystal
+    // Full-bleed 9:16 master (941×1672): fitted to the card, as for creator.
+    aspect: 711 / 400,
+    fit: 'fill',
+    box: { x: 0, y: 0, size: 400 },
+    focal: { x: 0.6, y: 0.45 },
+    bodyAxis: [
+      { x: 0.68, y: 0.281 },
+      { x: 0.595, y: 0.538 },
     ],
-    halo: { x: 0.475, y: 0.245, radius: 0.095 },
-    ripples: { x: 0.5, y: 0.855, rx: 0.3, ry: 0.05 },
+    facets: [
+      { x: 0.707, y: 0.293, size: 0.6 }, // eye
+      { x: 0.808, y: 0.43, size: 0.5 }, // lotus right
+      { x: 0.244, y: 0.55, size: 0.75 }, // lower-left crystal
+      { x: 0.181, y: 0.155, size: 0.6 }, // upper-left crystal
+      { x: 0.872, y: 0.317, size: 0.7 }, // right crystal
+      { x: 0.914, y: 0.508, size: 0.5 }, // right bubble
+      { x: 0.117, y: 0.628, size: 0.45 }, // lotus left
+      { x: 0.149, y: 0.849, size: 0.4 }, // bottom-left bubble
+    ],
+    halo: { x: 0.7, y: 0.29, radius: 0.12 },
+    ripples: { x: 0.5, y: 0.6, rx: 0.34, ry: 0.04 },
     erase: [],
     feather: { top: 0.05, bottom: 0.12, side: 0.05 },
+  },
+  // Dark block under the identity text, as for creator.
+  // Off: the identity text sits on its own dark zones (name, chips, footer).
+  veil: { start: 711, solid: 711 },
+  identity: { bottom: 5, lift: 30 },
+  header: { top: 40, inset: 55, labelInset: 40 },
+  // 4:5 card (400×500) uses the -45 master, with its own points and no baked-in frame.
+  landscape: {
+    artwork: {
+      src: heron45Url,
+      aspect: 1,
+      box: { x: 23, y: -20, size: 340 },
+      fit: 'width',
+      focal: { x: 0.5, y: 0.45 },
+      bodyAxis: [
+        { x: 0.47, y: 0.239 },
+        { x: 0.494, y: 0.718 },
+      ],
+      facets: [
+        { x: 0.478, y: 0.478, size: 1 }, // emerald pendant
+        { x: 0.466, y: 0.231, size: 0.6 }, // eye
+        { x: 0.279, y: 0.112, size: 0.6 }, // upper-left crystal
+        { x: 0.183, y: 0.478, size: 0.65 }, // left crystal
+        { x: 0.861, y: 0.136, size: 0.65 }, // upper-right crystal
+        { x: 0.845, y: 0.566, size: 0.5 }, // right crystal
+        { x: 0.494, y: 0.845, size: 0.5 }, // base glow
+      ],
+        halo: { x: 0.494, y: 0.255, radius: 0.11 },
+        ripples: { x: 0.5, y: 0.85, rx: 0.3, ry: 0.05 },
+    },
+    veil: { start: 250, solid: 320 },
+    identity: { bottom: 22 },
+    header: { top: 26, inset: 28, labelInset: 28 },
   },
   palette: {
     backdrop: ['#1d5a4c', '#0c2a25', '#051412'],

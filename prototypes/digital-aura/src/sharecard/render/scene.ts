@@ -13,8 +13,16 @@ export interface FrameState {
 
 export interface SceneLayer {
   z: number;
+  /**
+   * `card` paints inside the card and is clipped by it. `halo` paints on a canvas that
+   * extends `HALO_PAD` units beyond the card, so light can wrap around its edges.
+   */
+  channel?: 'card' | 'halo';
   paint(ctx: CanvasRenderingContext2D, frame: FrameState): void;
 }
+
+/** Extra room, in card units, around the card for the halo canvas. */
+export const HALO_PAD = 150;
 
 /** Paint order. Ribbons straddle the butterfly so they visibly orbit it. */
 export const Z = {
@@ -22,6 +30,8 @@ export const Z = {
   farParticles: 10,
   ribbonsBack: 20,
   shardsBack: 25,
+  /** Frame edge: under the butterfly, so the artwork overlaps the frame. */
+  frame: 28,
   hero: 30,
   ribbonsFront: 40,
   shardsFront: 45,
@@ -31,11 +41,7 @@ export const Z = {
 
 /** Artwork focal point in card units. */
 export function heroCenter({ layout, theme }: Pick<FrameState, 'layout' | 'theme'>) {
-  const { art } = layout;
-  return {
-    x: art.x + theme.artwork.focal.x * art.size,
-    y: art.y + theme.artwork.focal.y * art.size,
-  };
+  return artToCard({ layout, theme }, theme.artwork.focal);
 }
 
 /**
@@ -46,12 +52,13 @@ export function artToCard(
   { layout, theme }: Pick<FrameState, 'layout' | 'theme'>,
   p: { x: number; y: number },
 ) {
-  const { art: box } = layout;
   const asset = theme.artwork;
+  const box = asset.box ?? layout.art;
   const aspect = asset.aspect ?? 1;
   let w: number;
   let h: number;
-  if (asset.fit === 'width' || aspect < 1) {
+  const fill = asset.fit === 'fill';
+  if (asset.fit === 'width' || fill || aspect < 1) {
     w = box.size;
     h = w * aspect;
   } else {
@@ -59,7 +66,7 @@ export function artToCard(
     w = h / aspect;
   }
   const x0 = box.x + (box.size - w) / 2;
-  const y0 = asset.fit === 'width' ? box.y : box.y + (box.size - h) / 2;
+  const y0 = asset.fit === 'width' || fill ? box.y : box.y + (box.size - h) / 2;
   return { x: x0 + p.x * w, y: y0 + p.y * h, w, h, x0, y0 };
 }
 
@@ -72,6 +79,8 @@ export function paintScene(
   layers: readonly SceneLayer[],
   frame: FrameState,
   unit: number,
+  /** Card-unit offset of the card's top-left corner inside this canvas. */
+  origin = { x: 0, y: 0 },
 ) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
@@ -79,7 +88,7 @@ export function paintScene(
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   for (const layer of [...layers].sort((a, b) => a.z - b.z)) {
     ctx.save();
-    ctx.setTransform(unit, 0, 0, unit, 0, 0);
+    ctx.setTransform(unit, 0, 0, unit, origin.x * unit, origin.y * unit);
     layer.paint(ctx, frame);
     ctx.restore();
   }

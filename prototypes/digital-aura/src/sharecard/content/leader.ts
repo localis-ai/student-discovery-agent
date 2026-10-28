@@ -1,4 +1,5 @@
 import deerUrl from '../../assets/archetypes/leader/leader.webp';
+import deer45Url from '../../assets/archetypes/leader/leader-45.webp';
 import type { ArchetypeTheme, ShareCardData } from '../types';
 
 export const leaderContent: ShareCardData = {
@@ -23,22 +24,61 @@ export const leaderTheme: ArchetypeTheme = {
     src: deerUrl,
     alt: 'Hươu vàng sừng ánh kim ngẩng đầu trước mặt trời bình minh trên núi',
     provenance: 'Digital Aura deer master (1086×1448, portrait), served as WebP.',
-    fit: 'width',
-    aspect: 1448 / 1086,
-    focal: { x: 0.55, y: 0.45 },
-    facets: [
-      { x: 0.62, y: 0.27, size: 0.6 }, // eye
-      { x: 0.85, y: 0.08, size: 0.7 }, // upper-right crystal
-      { x: 0.12, y: 0.22, size: 0.6 }, // upper-left crystal
-      { x: 0.25, y: 0.29, size: 0.5 }, // left orb
-      { x: 0.86, y: 0.43, size: 0.55 }, // right orb
-      { x: 0.13, y: 0.52, size: 0.75 }, // large left crystal
-      { x: 0.37, y: 0.77, size: 0.5 }, // lower orb
+    // Full-bleed 9:16 master (941×1672): fitted to the card, as for creator.
+    aspect: 711 / 400,
+    fit: 'fill',
+    box: { x: 0, y: 0, size: 400 },
+    focal: { x: 0.55, y: 0.5 },
+    bodyAxis: [
+      { x: 0.691, y: 0.359 },
+      { x: 0.553, y: 0.598 },
     ],
-    // The sun disc behind the head: a sunrise that flares as the identity appears.
-    halo: { x: 0.53, y: 0.31, radius: 0.2 },
+    facets: [
+      { x: 0.648, y: 0.389, size: 0.6 }, // eye
+      { x: 0.085, y: 0.072, size: 0.5 }, // upper-left crystal
+      { x: 0.914, y: 0.072, size: 0.5 }, // upper-right crystal
+      { x: 0.893, y: 0.311, size: 0.6 }, // right crystal
+      { x: 0.893, y: 0.556, size: 0.6 }, // right orb
+      { x: 0.191, y: 0.526, size: 0.75 }, // left crystal
+      { x: 0.064, y: 0.634, size: 0.5 }, // lower-left crystal
+      { x: 0.351, y: 0.61, size: 0.5 }, // centre crystal
+    ],
+    halo: { x: 0.55, y: 0.3, radius: 0.27 },
     erase: [],
     feather: { top: 0.04, bottom: 0.18, side: 0.04 },
+  },
+  // Dark block under the identity text, as for creator.
+  // Off: the identity text sits on its own dark zones (name, chips, footer).
+  veil: { start: 711, solid: 711 },
+  identity: { bottom: 5, lift: 30 },
+  header: { top: 40, inset: 55, labelInset: 40 },
+  // 4:5 card (400×500) uses the -45 master, with its own points and no baked-in frame.
+  landscape: {
+    artwork: {
+      src: deer45Url,
+      aspect: 1.333333,
+      box: { x: 23, y: -20, size: 340 },
+      fit: 'width',
+      focal: { x: 0.55, y: 0.5 },
+      bodyAxis: [
+        { x: 0.635, y: 0.29 },
+        { x: 0.497, y: 0.69 },
+      ],
+      facets: [
+        { x: 0.612, y: 0.276, size: 0.6 }, // eye
+        { x: 0.12, y: 0.228, size: 0.5 }, // upper-left crystal
+        { x: 0.847, y: 0.097, size: 0.6 }, // upper-right crystal
+        { x: 0.866, y: 0.304, size: 0.5 }, // right crystal
+        { x: 0.856, y: 0.435, size: 0.6 }, // right orb
+        { x: 0.12, y: 0.497, size: 0.75 }, // left crystal
+        { x: 0.249, y: 0.283, size: 0.5 }, // left orb
+        { x: 0.378, y: 0.773, size: 0.5 }, // lower orb
+      ],
+        halo: { x: 0.63, y: 0.3, radius: 0.27 },
+    },
+    veil: { start: 250, solid: 320 },
+    identity: { bottom: 22 },
+    header: { top: 26, inset: 28, labelInset: 28 },
   },
   palette: {
     backdrop: ['#6b4a1c', '#2a1a0c', '#0e0905'],

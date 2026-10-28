@@ -73,6 +73,8 @@ export interface ArtErase {
 export interface ArtworkAsset {
   src: string;
   alt: string;
+  /** Overrides the ratio layout's artwork box for this theme only, in card units. */
+  box?: { x: number; y: number; size: number };
   /** Where the asset came from; surfaced in the studio so fidelity claims stay honest. */
   provenance: string;
   /** Centre of the creature (reveal origin, glow centre). */
@@ -92,7 +94,8 @@ export interface ArtworkAsset {
    * `contain` (default) fits the whole image inside the layout square. `width` fills the
    * square's width and aligns to its top, letting a portrait image run down behind the title.
    */
-  fit?: 'contain' | 'width';
+  /** `fill` stretches the image to the box at `aspect` (no crop, but the artwork is distorted). */
+  fit?: 'contain' | 'width' | 'fill';
   /** Height / width of the image (default 1). Lets motifs place art points without decoding it. */
   aspect?: number;
   /** Glowing halo ring (with rays) that flares in the identity phase, then breathes. */
@@ -189,6 +192,41 @@ export interface ArchetypeMotion {
 export interface ArchetypeTheme {
   id: ArchetypeId;
   artwork: ArtworkAsset;
+  /** Overrides the ratio layout's bottom veil for this theme, in card units. */
+  /**
+   * Dark gradient under the identity text. `inset` (card units) keeps it inside the frame: it
+   * stops that far from the left, right and bottom edges. Default 0 runs full width.
+   */
+  veil?: { start: number; solid: number; inset?: number };
+  /**
+   * Soft dark pool behind the identity text, in card units (9:16): centre height, horizontal and
+   * vertical radius, and opacity at the centre.
+   */
+  panel?: { y: number; rx: number; ry: number; alpha: number };
+  /** Overrides where the identity block (name, title, chips, footer) sits, in card units. */
+  identity?: { bottom: number; lift?: number; offsetX?: number };
+  /**
+   * Replaces the overrides above for the 4:5 card. Set every field the 9:16 overrides touch,
+   * so a 9:16-only position does not carry over into the shorter card.
+   */
+  landscape?: {
+    artwork?: Partial<ArtworkAsset>;
+    veil?: { start: number; solid: number; inset?: number };
+    identity?: { bottom: number; lift?: number; offsetX?: number };
+    header?: { top: number; inset: number; labelInset?: number };
+    frame?: boolean;
+    palette?: Partial<ArchetypeTheme['palette']>;
+  };
+  /** Set to false to hide the neon rim and hairline frame for this theme. Default: shown. */
+  frame?: boolean;
+  /** Overrides the brand header (logo and label) position, in card units. */
+  header?: {
+    top: number;
+    /** Left margin of the logo, and the default right margin of the label. */
+    inset: number;
+    /** Right margin of the label alone; defaults to `inset`. */
+    labelInset?: number;
+  };
   palette: {
     /** Card atmosphere, centre to edge. */
     backdrop: readonly [string, string, string];
