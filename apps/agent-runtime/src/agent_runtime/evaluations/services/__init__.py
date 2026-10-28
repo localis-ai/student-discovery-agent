@@ -3,6 +3,7 @@ from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
     EngineProfile,
 )
+from agent_runtime.evaluations.services.runner import EvaluationRunner
 from agent_runtime.evaluations.services.validator import (
     ExperienceValidator,
     calculate_content_hash,
@@ -16,4 +17,5 @@ __all__ = [
     "ExperienceValidator",
     "calculate_content_hash",
     "validate_experience_definition",
+    "EvaluationRunner",
 ]
