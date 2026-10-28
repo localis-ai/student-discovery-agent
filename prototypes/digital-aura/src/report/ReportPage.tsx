@@ -47,16 +47,16 @@ export function ReportPage() {
           onChange={(v) => setPhone(v === 'phone')}
           options={[
             { value: 'fluid', label: 'Theo cửa sổ' },
-            { value: 'phone', label: 'Điện thoại 390px' },
+            { value: 'phone', label: 'Điện thoại' },
           ]}
         />
       </div>
 
       {phone ? (
         <div className="flex justify-center px-4">
-          {/* A phone-sized scroll container: the report's container queries pick the mobile layout. */}
-          <div className="h-[min(844px,calc(100dvh-140px))] w-[390px] max-w-full overflow-y-auto overscroll-contain rounded-[40px] border-[6px] border-white/15 shadow-2xl">
-            <ReportView archetypeId={archetypeId} mode={mode} />
+          {/* A phone-sized frame with no scrolling: taps page through the report. */}
+          <div className="h-[min(844px,calc(100dvh-140px))] w-full max-w-[390px] overflow-hidden rounded-[40px] border-[6px] border-white/15 shadow-2xl">
+            <ReportView archetypeId={archetypeId} mode={mode} paged />
           </div>
         </div>
       ) : (

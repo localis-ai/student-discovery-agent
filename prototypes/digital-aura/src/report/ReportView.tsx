@@ -1,4 +1,4 @@
-import { ArrowDown, FileDown, Info, Share2 } from 'lucide-react';
+import { ArrowDown, ChevronLeft, ChevronRight, FileDown, Info, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { usePlayback, usePointerParallax } from '../sharecard/animation/use-playback';
 import { ShareCard } from '../sharecard/components/ShareCard';
@@ -11,6 +11,11 @@ import { ShareSheet } from './ShareSheet';
 interface ReportViewProps {
   archetypeId: string;
   mode: ScoreMode;
+  /**
+   * Phone frame: no scrolling. The content is moved one section at a time, on each tap,
+   * and the frame clips anything beyond its height.
+   */
+  paged?: boolean;
 }
 
 const formatDate = (iso: string) => iso.split('-').reverse().join('.');
@@ -20,7 +25,7 @@ const formatDate = (iso: string) => iso.split('-').reverse().join('.');
  * fit, and the next step (share). Layout follows the container width, not the viewport, so the
  * same component renders the desktop and the mobile design.
  */
-export function ReportView({ archetypeId, mode }: ReportViewProps) {
+export function ReportView({ archetypeId, mode, paged = false }: ReportViewProps) {
   const entry = archetypes[archetypeId]!;
   const { content, theme } = entry;
   const report = mockReports[archetypeId]!;
@@ -32,6 +37,17 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
   const { pointer, handlers } = usePointerParallax(!playback.reduced);
   const cardColumn = useRef<HTMLDivElement>(null);
   const reportStart = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  // Paged mode (phone frame): which page is showing, and how far the content has moved up.
+  const [page, setPage] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
+  useEffect(() => {
+    setPage(0);
+    setOffset(0);
+  }, [archetypeId]);
   const cardWidth = useColumnWidth(cardColumn);
 
   // A new result starts collapsed except the best match (its reveal starts once its art is ready).
@@ -55,8 +71,61 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
 
   const share = () => setSharing(true);
 
+  // Widest card that still fits the phone frame's height, so the whole card shows on screen.
+  // The frame is min(844px, viewport − 140px); the hint, paddings and frame border take ~90px.
+  function cardFitWidth() {
+    const frameHeight = Math.min(844, window.innerHeight - 140);
+    return Math.floor(((frameHeight - 90) * CARD_WIDTH) / layouts['9:16'].height);
+  }
+
+  // Page starts, in the content's own coordinates (so the current offset cancels out). Each
+  // element marked data-page begins a page; the card is the first.
+  function pageStarts() {
+    const inner = innerRef.current;
+    if (!inner) return [0];
+    const base = inner.getBoundingClientRect().top;
+    return Array.from(inner.querySelectorAll<HTMLElement>('[data-page]')).map(
+      (el) => el.getBoundingClientRect().top - base,
+    );
+  }
+
+  function goTo(index: number) {
+    const inner = innerRef.current;
+    const viewport = viewportRef.current;
+    if (!inner || !viewport) return;
+    const starts = pageStarts();
+    const i = Math.min(Math.max(index, 0), starts.length - 1);
+    const max = Math.max(0, inner.offsetHeight - viewport.clientHeight);
+    setPage(i);
+    setOffset(Math.min(starts[i] ?? 0, max));
+  }
+
+  // Count the pages once the content is laid out, and again when the report changes.
+  useEffect(() => {
+    if (paged) setPageCount(pageStarts().length);
+  }, [archetypeId, mode, paged]);
+
+  const prev = () => goTo(page - 1);
+  const next = () => goTo(page + 1);
+
+  // Tapping the card moves to the next page (narrow layouts only, where the hint is shown).
+  function advance() {
+    const hint = hintRef.current;
+    if (!hint || getComputedStyle(hint).display === 'none') return;
+    if (page < pageCount - 1) next();
+  }
+
   return (
-    <div style={vars} className="@container/report min-h-full text-[var(--r-text)]">
+    <div
+      ref={viewportRef}
+      style={vars}
+      className={`@container/report text-[var(--r-text)] ${paged ? 'relative h-full overflow-hidden' : 'min-h-full'}`}
+    >
+      <div
+        ref={innerRef}
+        className="relative transition-transform duration-500 ease-out"
+        style={{ transform: `translateY(${-offset}px)` }}
+      >
       <div className="mx-auto max-w-[1180px] px-4 pt-5 pb-28 @4xl/report:px-8 @4xl/report:pt-8 @4xl/report:pb-12">
         {/* Product bar: the owner brand first. */}
         <div className="mb-5 hidden items-center justify-between gap-3 @4xl/report:flex">
@@ -71,6 +140,8 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
           <div
             ref={cardColumn}
             {...handlers}
+            onClick={advance}
+            data-page
             className="flex touch-pan-y flex-col items-center gap-3 @4xl/report:sticky @4xl/report:top-6 @4xl/report:self-start"
           >
             <ShareCard
@@ -80,20 +151,20 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
               time={playback.time}
               reduced={playback.reduced}
               pointer={pointer}
-              displayWidth={cardWidth}
+              displayWidth={paged ? Math.min(cardWidth, cardFitWidth()) : cardWidth}
               onHeroReady={replay}
             />
-            <button
-              type="button"
-              onClick={() => reportStart.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[var(--r-muted)] @4xl/report:hidden"
+            <div
+              ref={hintRef}
+              className="flex h-11 items-center gap-2 px-4 text-sm font-semibold text-[var(--r-muted)] @4xl/report:hidden"
             >
-              Xem báo cáo của bạn <ArrowDown size={16} aria-hidden />
-            </button>
+              Chạm để xem tiếp <ArrowDown size={16} aria-hidden />
+            </div>
           </div>
 
           <section
             ref={reportStart}
+            data-page
             aria-labelledby="report-title"
             className="scroll-mt-4 rounded-3xl border border-white/10 bg-black/25 p-4 backdrop-blur-md @xl/report:p-6"
           >
@@ -128,19 +199,24 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
             </h2>
             <div className="space-y-3">
               {report.majors.map((major, i) => (
-                <MajorCard
-                  key={`${archetypeId}-${i}`}
-                  rank={i + 1}
-                  major={major}
-                  strengths={content.strengths}
-                  mode={mode}
-                  open={open[i] ?? false}
-                  onToggle={() => setOpen((o) => o.map((v, j) => (j === i ? !v : v)))}
-                />
+                // Each major after the first starts its own page in paged mode.
+                <div key={`${archetypeId}-${i}`} data-page={i > 0 ? true : undefined}>
+                  <MajorCard
+                    rank={i + 1}
+                    major={major}
+                    strengths={content.strengths}
+                    mode={mode}
+                    open={open[i] ?? false}
+                    onToggle={() => setOpen((o) => o.map((v, j) => (j === i ? !v : v)))}
+                  />
+                </div>
               ))}
             </div>
 
-            <h2 className="mt-7 mb-3 text-xs font-semibold tracking-[0.16em] text-[var(--r-muted)] uppercase">
+            <h2
+              data-page
+              className="mt-7 mb-3 text-xs font-semibold tracking-[0.16em] text-[var(--r-muted)] uppercase"
+            >
               Các ngành khác có thể phù hợp
             </h2>
             <ol className="divide-y divide-white/8 rounded-2xl border border-white/10 bg-[var(--r-surface)]">
@@ -153,7 +229,7 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
               ))}
             </ol>
 
-            <details className="group mt-6 rounded-2xl border border-white/10 bg-[var(--r-surface)] px-4 py-3 text-sm text-[var(--r-body)]">
+            <details data-page className="group mt-6 rounded-2xl border border-white/10 bg-[var(--r-surface)] px-4 py-3 text-sm text-[var(--r-body)]">
               <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold text-[var(--r-text)]">
                 <Info size={16} aria-hidden className="text-[var(--r-accent)]" />
                 Kết quả này được tính thế nào?
@@ -178,6 +254,31 @@ export function ReportView({ archetypeId, mode }: ReportViewProps) {
           <ShareButton onClick={share} grow />
         </div>
       </div>
+
+      </div>
+
+      {paged && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-between px-2 @4xl/report:hidden">
+          <button
+            type="button"
+            aria-label="Trang trước"
+            disabled={page === 0}
+            onClick={prev}
+            className="pointer-events-auto grid size-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur-md disabled:opacity-30"
+          >
+            <ChevronLeft size={22} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Trang sau"
+            disabled={page >= pageCount - 1}
+            onClick={next}
+            className="pointer-events-auto grid size-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur-md disabled:opacity-30"
+          >
+            <ChevronRight size={22} aria-hidden />
+          </button>
+        </div>
+      )}
 
       <ShareSheet open={sharing} onClose={() => setSharing(false)} data={content} theme={theme} />
     </div>
