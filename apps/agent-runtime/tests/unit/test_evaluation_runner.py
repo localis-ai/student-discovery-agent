@@ -15,8 +15,6 @@ Verifies:
 
 import copy
 
-import pytest
-
 from agent_runtime.evaluations.schemas.validation import (
     PublishReportInput,
     ValidationStatus,
