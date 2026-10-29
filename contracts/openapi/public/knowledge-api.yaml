@@ -289,6 +289,12 @@ paths:
       operationId: runKnowledgeIndex
       tags: [Studio Knowledge]
       summary: Yêu cầu runtime index các revision đang chờ (không chờ hoàn tất)
+      description: >-
+        Trước khi gọi runtime, gửi lại vào hàng đợi revision mới nhất bị lỗi (`error`) của các tài liệu active
+        trong knowledge base này (`requeued` = số revision đã gửi lại). Một lượt index của runtime xử lý hàng đợi
+        của mọi knowledge base, không chỉ KB trong path. 503 `details.kind=runtime_starting` khi runtime không trả
+        lời kịp (đang khởi động sau khi ngủ; nó tự index khi dậy), `not_configured` khi chưa cấu hình,
+        `dependency_down` cho lỗi khác.
       responses:
         "202": {description: Accepted, content: {application/json: {schema: {$ref: "#/components/schemas/IndexRunEnvelope"}}}}
         "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
@@ -733,9 +739,10 @@ components:
     IndexRunResult:
       type: object
       additionalProperties: false
-      required: [status]
+      required: [status, requeued]
       properties:
         status: {type: string, enum: [started, already_running]}
+        requeued: {type: integer, minimum: 0, description: Số revision lỗi vừa được gửi lại hàng đợi}
     IndexRunEnvelope:
       oneOf:
         - allOf:

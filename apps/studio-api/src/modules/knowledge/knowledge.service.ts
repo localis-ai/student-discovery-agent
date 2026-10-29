@@ -8,7 +8,7 @@ import type {
   PatchKnowledgeBaseInput, SearchInput,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
-  countDocumentsUsingField, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
+  countDocumentsUsingField, findFailedLatestRevisionIds, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
   insertField, insertKnowledgeBase, listDocumentRows, listFieldRows, listKnowledgeBaseRows, lockDocument, lockField,
   retryRevision, setDocumentStatus, updateField, updateKnowledgeBase,
   type DocumentRow, type DocumentSummaryRow, type FieldRow, type KnowledgeBaseRow,
@@ -213,7 +213,7 @@ export function writeOutcomeError(outcome: Exclude<PutOutcome, { status: 'writte
 }
 
 export async function saveDocument(
-  kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }, ctx?: RequestContext,
+  kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }, ctx: RequestContext,
 ) {
   const { expected_revision, ...content } = input;
   const saved = await inKnowledgeTransaction(async client => {
@@ -230,7 +230,7 @@ export async function saveDocument(
       data: { document_id: documentId, revision: outcome.revision, outcome: outcome.outcome },
     };
   });
-  if (ctx && saved.data.outcome !== 'unchanged') kickIndexing(ctx);
+  if (saved.data.outcome !== 'unchanged') kickIndexing(ctx);
   return saved;
 }
 
@@ -247,7 +247,7 @@ export async function changeDocumentStatus(kbId: string, documentId: string, sta
   });
 }
 
-export async function retryDocumentRevision(kbId: string, documentId: string, revision: number, ctx?: RequestContext) {
+export async function retryDocumentRevision(kbId: string, documentId: string, revision: number, ctx: RequestContext) {
   const detail = await inKnowledgeTransaction(async client => {
     await requireKnowledgeBase(client, kbId);
     const current = await lockDocument(client, documentId);
@@ -261,13 +261,24 @@ export async function retryDocumentRevision(kbId: string, documentId: string, re
     }
     return documentDetail(client, kbId, documentId);
   });
-  if (ctx) kickIndexing(ctx);
+  kickIndexing(ctx);
   return detail;
 }
 
+/**
+ * The admin button: first sends this KB's failed latest revisions back to the queue (the runtime only claims
+ * pending ones), then asks the runtime to run. The run itself drains every knowledge base.
+ */
 export async function requestKnowledgeIndexRun(kbId: string, ctx: RequestContext) {
-  await withKnowledgeClient(client => requireKnowledgeBase(client, kbId));
-  return runIndexNow(ctx);
+  const requeued = await inKnowledgeTransaction(async client => {
+    await requireKnowledgeBase(client, kbId);
+    let count = 0;
+    for (const revisionId of await findFailedLatestRevisionIds(client, kbId)) {
+      if (await retryRevision(client, revisionId)) count += 1;
+    }
+    return count;
+  });
+  return { ...await runIndexNow(ctx), requeued };
 }
 
 export async function searchKnowledgeBase(kbId: string, input: SearchInput, ctx: { requestId: string; traceId: string }) {

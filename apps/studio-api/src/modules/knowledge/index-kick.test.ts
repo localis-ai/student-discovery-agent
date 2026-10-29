@@ -34,6 +34,15 @@ describe('requestIndexRun', () => {
     await expect(requestIndexRun(ctx)).rejects.toMatchObject({ status: 503 });
   });
 
+  it('reports runtime_starting when the kick times out (a sleeping runtime is booting)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    await expect(requestIndexRun(ctx)).rejects.toMatchObject({
+      status: 503, code: 'SYS_UNAVAILABLE', retryable: true, details: { kind: 'runtime_starting' },
+    });
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
+    await expect(requestIndexRun(ctx)).rejects.toMatchObject({ details: { kind: 'runtime_starting' } });
+  });
+
   it('is unavailable when the runtime is not configured', async () => {
     vi.stubEnv('RUNTIME_INTERNAL_URL', '');
     await expect(requestIndexRun(ctx)).rejects.toMatchObject({ status: 503 });

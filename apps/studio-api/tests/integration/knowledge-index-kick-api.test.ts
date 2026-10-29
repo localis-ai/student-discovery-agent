@@ -118,9 +118,40 @@ describe('POST index-runs', () => {
     const res = await api('POST', path(kb), admin);
     expect(res.status).toBe(202);
     expectDeclared(res.body, '/admin/knowledge-bases/{kb_id}/index-runs', 'post', 202);
-    expect(res.body.data).toEqual({ status: 'started' });
+    expect(res.body.data).toEqual({ status: 'started', requeued: 0 });
     reply = { status: 202, body: { success: true, data: { status: 'already_running' } } };
-    expect((await api('POST', path(kb), admin)).body.data).toEqual({ status: 'already_running' });
+    expect((await api('POST', path(kb), admin)).body.data).toEqual({ status: 'already_running', requeued: 0 });
+  });
+
+  it('re-queues the latest failed revision of each active document in this knowledge base before the kick', async () => {
+    setIndexKicker(null);
+    const kb = await createKb(admin);
+    const other = await createKb(admin);
+    for (const id of ['e1', 'e2', 'gone']) await api('PUT', doc(kb, id), admin, { ...content, expected_revision: 0 });
+    await api('PUT', doc(kb, 'e1'), admin, { ...content, body: 'v2', expected_revision: 1 });
+    await api('PUT', doc(other, 'x1'), admin, { ...content, expected_revision: 0 });
+    const mine = `document_id IN ('e1', 'e2', 'gone', 'x1')`;
+    await adminSql(db, `UPDATE knowledge.document_revisions SET index_status = 'error', error = 'x' WHERE ${mine}`);
+    await adminSql(db, `UPDATE knowledge.documents SET status = 'archived' WHERE id = 'gone'`);
+    const res = await api('POST', path(kb), admin);
+    expect(res.status).toBe(202);
+    expectDeclared(res.body, '/admin/knowledge-bases/{kb_id}/index-runs', 'post', 202);
+    expect(res.body.data).toEqual({ status: 'started', requeued: 2 });
+    const rows = await adminSql(db, `SELECT d.id, r.revision, r.index_status FROM knowledge.document_revisions r
+      JOIN knowledge.documents d ON d.id = r.document_id WHERE ${mine} ORDER BY d.id, r.revision`);
+    expect(rows.map((row: { id: string; revision: number; index_status: string }) => `${row.id}@${row.revision}:${row.index_status}`))
+      .toEqual(['e1@1:error', 'e1@2:pending', 'e2@1:pending', 'gone@1:error', 'x1@1:error']);
+  });
+
+  it('503 runtime_starting when the runtime does not answer in time', async () => {
+    setIndexKicker(null);
+    const kb = await createKb(admin);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = await api('POST', path(kb), admin);
+    expect(res.status).toBe(503);
+    expect(res.body.error.details).toMatchObject({ kind: 'runtime_starting' });
+    vi.restoreAllMocks();
   });
 
   it('503 when the runtime is down or not configured, 404 unknown kb, 401/403 without admin', async () => {

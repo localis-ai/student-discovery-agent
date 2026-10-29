@@ -34,8 +34,11 @@ export async function signServiceRequest(
     .sign(key);
 }
 
-const unavailable = (kind: string) =>
-  new ProductError(503, 'SYS_UNAVAILABLE', 'Knowledge search is unavailable', kind === 'dependency_down', { kind });
+const unavailable = (kind: string, message = 'Knowledge search is unavailable') =>
+  new ProductError(503, 'SYS_UNAVAILABLE', message, kind === 'dependency_down' || kind === 'runtime_starting', { kind });
+const INDEX_UNAVAILABLE = 'Knowledge indexing is unavailable';
+/** A sleeping free-tier runtime boots for longer than the kick waits; it drains the queue itself on startup. */
+const isTimeout = (error: unknown) => error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
 
 export function signingKey(value: string | undefined): Uint8Array | null {
   if (!value) return null;
@@ -87,7 +90,7 @@ export type IndexRunStatus = 'started' | 'already_running';
 export async function requestIndexRun(ctx: { requestId: string; traceId: string }): Promise<{ status: IndexRunStatus }> {
   const env = getKnowledgeEnv();
   const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
-  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
+  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured', INDEX_UNAVAILABLE);
   const body = '{}';
   const token = await signServiceRequest('POST', INDEX_RUNS_TARGET, body, key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'knowledge.index');
   let response: Response;
@@ -105,12 +108,12 @@ export async function requestIndexRun(ctx: { requestId: string; traceId: string 
         'x-trace-id': ctx.traceId,
       },
     });
-  } catch {
-    throw unavailable('dependency_down');
+  } catch (error) {
+    throw unavailable(isTimeout(error) ? 'runtime_starting' : 'dependency_down', INDEX_UNAVAILABLE);
   }
   const envelope = await response.json().catch(() => null) as { success?: boolean; data?: { status?: string } } | null;
   const status = envelope?.data?.status;
   if (response.status === 202 && envelope?.success && (status === 'started' || status === 'already_running')) return { status };
   console.error('[knowledge] index run request failed', { status: response.status, requestId: ctx.requestId });
-  throw unavailable(response.status === 503 ? 'not_configured' : 'dependency_down');
+  throw unavailable(response.status === 503 ? 'not_configured' : 'dependency_down', INDEX_UNAVAILABLE);
 }
