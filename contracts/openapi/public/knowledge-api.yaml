@@ -503,7 +503,7 @@ components:
     ImportPreviewRow:
       type: object
       additionalProperties: false
-      required: [row, source, document_id, action, expected_revision, errors, payload]
+      required: [row, source, document_id, action, expected_revision, errors, notes, payload]
       properties:
         row: {type: integer, minimum: 1}
         source: {type: string, description: Tên file hoặc "dòng N"}
@@ -511,6 +511,7 @@ components:
         action: {type: string, enum: [create, update, unchanged, invalid]}
         expected_revision: {type: integer, nullable: true}
         errors: {type: array, items: {type: string}}
+        notes: {type: array, items: {type: string}, description: Ghi chú cho admin, ví dụ ID đã được đổi vì trùng ở knowledge base khác}
         payload: {anyOf: [{$ref: "#/components/schemas/DocumentContent"}, {type: object, nullable: true, enum: [null]}]}
     ImportPreview:
       type: object

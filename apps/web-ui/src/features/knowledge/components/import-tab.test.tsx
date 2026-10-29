@@ -8,7 +8,7 @@ import { ImportTab } from './import-tab';
 vi.mock('../api/knowledge', () => ({ knowledgeApi: { listFields: vi.fn(), previewImport: vi.fn(), commitImport: vi.fn() } }));
 const mocked = vi.mocked(knowledgeApi);
 const payload = { title: 'HUTECH', body: '# HUTECH', source_url: null, metadata: {} };
-const createRow = (row: number, id: string) => ({ row, source: `${id}.md`, document_id: id, action: 'create' as const, expected_revision: 0, errors: [], payload });
+const createRow = (row: number, id: string) => ({ row, source: `${id}.md`, document_id: id, action: 'create' as const, expected_revision: 0, errors: [], notes: [], payload });
 const report = (created: number) => ({ import_id: 'imp', created, updated: 0, unchanged: 0, conflict: 0, failed: 0, rows: [] });
 
 // Radix Select needs pointer-capture and scrolling APIs jsdom lacks.
@@ -35,8 +35,8 @@ describe('ImportTab', () => {
   it('previews uploaded Markdown files and commits only rows that write', async () => {
     mocked.previewImport.mockResolvedValue({ rows: [
       createRow(1, 'tuyen-sinh-hutech'),
-      { row: 2, source: 'tuyen-sinh-ptit.md', document_id: 'tuyen-sinh-ptit', action: 'unchanged', expected_revision: 1, errors: [], payload },
-      { row: 3, source: 'scan.md', document_id: null, action: 'invalid', expected_revision: null, errors: ['File rỗng'], payload: null },
+      { row: 2, source: 'tuyen-sinh-ptit.md', document_id: 'tuyen-sinh-ptit', action: 'unchanged', expected_revision: 1, errors: [], notes: [], payload },
+      { row: 3, source: 'scan.md', document_id: null, action: 'invalid', expected_revision: null, errors: ['File rỗng'], notes: [], payload: null },
     ] });
     mocked.commitImport.mockResolvedValue({ ...report(1), rows: [
       { row: 1, document_id: 'tuyen-sinh-hutech', outcome: 'created', revision: 1, error: null },
@@ -143,7 +143,7 @@ describe('ImportTab', () => {
     mocked.previewImport.mockResolvedValue({ rows: [
       createRow(1, 'a'),
       createRow(2, 'b'),
-      { row: 3, source: 'c.md', document_id: 'c', action: 'invalid', expected_revision: null, errors: ['Thiếu nội dung'], payload: null },
+      { row: 3, source: 'c.md', document_id: 'c', action: 'invalid', expected_revision: null, errors: ['Thiếu nội dung'], notes: [], payload: null },
     ] });
     renderImport();
     addFiles(new File(['# A'], 'a.md'));

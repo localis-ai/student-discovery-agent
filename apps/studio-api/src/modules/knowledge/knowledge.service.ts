@@ -19,7 +19,7 @@ import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modul
 import { slugify } from '@/modules/knowledge/slug';
 import { kickIndexing, runIndexNow } from '@/modules/knowledge/index-kick';
 import { retrieveKnowledge } from '@/modules/knowledge/runtime-client';
-import { putDocument, type PutOutcome } from '@/modules/knowledge/writer';
+import { availableDocumentId, putDocument, type PutOutcome } from '@/modules/knowledge/writer';
 
 export interface KnowledgeBaseDTO {
   id: string;
@@ -223,6 +223,11 @@ export async function saveDocument(
       outcome = await putDocument(client, kbId, documentId, content, expected_revision);
     } catch (error) {
       throw error instanceof MetadataValidationError ? invalidMetadata(error) : error;
+    }
+    if (outcome.status === 'wrong_kb') {
+      throw new ProductError(409, 'CONFLICT_ALREADY_EXISTS', 'Document id belongs to another knowledge base', false, {
+        kind: 'document_id_taken', suggested_id: await availableDocumentId(client, kbId, documentId),
+      });
     }
     if (outcome.status !== 'written') throw writeOutcomeError(outcome, expected_revision);
     return {

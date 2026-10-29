@@ -222,6 +222,10 @@ export async function findLatestContent(client: Queryable, documentId: string): 
   )).rows[0] ?? null;
 }
 
+export async function findDocumentOwner(client: Queryable, documentId: string): Promise<string | null> {
+  return (await client.query<{ kb_id: string }>('SELECT kb_id FROM knowledge.documents WHERE id = $1', [documentId])).rows[0]?.kb_id ?? null;
+}
+
 export async function findImport(client: Queryable, kbId: string, key: string): Promise<{ request_hash: string; report: unknown } | null> {
   return (await client.query(
     'SELECT request_hash, report FROM knowledge.imports WHERE kb_id = $1 AND idempotency_key = $2', [kbId, key],
