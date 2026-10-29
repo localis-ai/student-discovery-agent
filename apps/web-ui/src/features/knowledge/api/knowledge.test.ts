@@ -17,8 +17,8 @@ describe('knowledgeApi.listDocuments', () => {
 
 describe('knowledgeApi.runIndex', () => {
   it('posts an empty body to the KB index-runs endpoint', async () => {
-    const spy = vi.spyOn(api, 'post').mockResolvedValue({ status: 'started' });
-    expect(await knowledgeApi.runIndex('kb 1')).toEqual({ status: 'started' });
+    const spy = vi.spyOn(api, 'post').mockResolvedValue({ status: 'started', requeued: 1 });
+    expect(await knowledgeApi.runIndex('kb 1')).toEqual({ status: 'started', requeued: 1 });
     expect(spy).toHaveBeenCalledWith('admin/knowledge-bases/kb%201/index-runs', {});
   });
 });

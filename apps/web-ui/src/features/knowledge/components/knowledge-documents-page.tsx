@@ -6,9 +6,10 @@ import { ChevronDown, FilePlus, Play, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
+import { ApiError } from '@/lib/api/errors';
 import { useDocumentFilters } from '../hooks/use-document-filters';
 import { isIndexPending, useRunIndex } from '../hooks/use-knowledge';
-import type { DocumentSummary } from '../types';
+import type { DocumentSummary, IndexRunResult } from '../types';
 import { DocumentDetailSheet } from './document-detail-sheet';
 import { DocumentsTable } from './documents-table';
 import { DocumentsToolbar } from './documents-toolbar';
@@ -31,13 +32,20 @@ export function AddDocumentMenu({ kb }: { kb: string }) {
   );
 }
 
+const runIndexMessage = ({ status, requeued }: IndexRunResult) =>
+  (status === 'already_running' ? 'Đang index…' : 'Đã bắt đầu index')
+  + (requeued > 0 ? ` (thử lại ${requeued} tài liệu lỗi)` : '');
+
+const isRuntimeStarting = (error: unknown) =>
+  error instanceof ApiError && (error.details as { kind?: unknown } | undefined)?.kind === 'runtime_starting';
+
 /** Shown only while something in the list is waiting, running or failed; the runtime also indexes on its own after writes. */
 function RunIndexButton({ kb }: { kb: string }) {
   const run = useRunIndex();
   return (
     <Button variant="outline" disabled={run.isPending} onClick={() => run.mutate(kb, {
-      onSuccess: ({ status }) => toast.success(status === 'already_running' ? 'Đang index…' : 'Đã bắt đầu index'),
-      onError: error => toast.error(errorMessage(error)),
+      onSuccess: result => toast.success(runIndexMessage(result)),
+      onError: error => toast.error(isRuntimeStarting(error) ? 'Runtime đang khởi động, thử lại sau ít phút.' : errorMessage(error)),
     })}>
       <Play className="h-4 w-4" aria-hidden />Chạy index
     </Button>

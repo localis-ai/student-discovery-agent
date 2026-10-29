@@ -10,6 +10,7 @@ export type FieldCreate = Schemas['FieldCreate'];
 export type FieldPatch = Schemas['FieldPatch'];
 export type DocumentSummary = Schemas['DocumentSummary'];
 export type IndexStatus = Schemas['IndexStatus'];
+export type IndexRunResult = Schemas['IndexRunResult'];
 export type PaginationMeta = Schemas['PaginationMeta'];
 /** Query params of GET .../documents; `cursor` comes from a previous page's `next_cursor`. */
 export interface DocumentFilters {

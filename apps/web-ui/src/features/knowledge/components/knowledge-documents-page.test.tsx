@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@/lib/api/errors';
 import { renderWithProviders } from '@/test/render';
 import { knowledgeApi } from '../api/knowledge';
 import type { DocumentDetail, DocumentSummary } from '../types';
@@ -138,16 +139,35 @@ describe('KnowledgeDocumentsPage', () => {
 
   it('runs indexing from the toolbar only while a document is waiting or failed', async () => {
     mocked.listDocuments.mockResolvedValue({ items: [doc('hutech'), doc('uel', { index_status: 'pending' })], next_cursor: null });
-    mocked.runIndex.mockResolvedValue({ status: 'started' });
+    mocked.runIndex.mockResolvedValue({ status: 'started', requeued: 0 });
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Chạy index' }));
     await waitFor(() => expect(mocked.runIndex).toHaveBeenCalledWith('kb1'));
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Đã bắt đầu index'));
   });
 
+  it('says how many failed documents were sent back to the queue', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [doc('uel', { index_status: 'error' })], next_cursor: null });
+    mocked.runIndex.mockResolvedValue({ status: 'started', requeued: 2 });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chạy index' }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Đã bắt đầu index (thử lại 2 tài liệu lỗi)'));
+  });
+
+  it('tells the admin to retry later while the runtime is starting', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [doc('uel', { index_status: 'pending' })], next_cursor: null });
+    mocked.runIndex.mockRejectedValue(new ApiError({
+      code: 'SYS_UNAVAILABLE', message: 'Knowledge indexing is unavailable', httpStatus: 503, retryable: true,
+      details: { kind: 'runtime_starting' },
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chạy index' }));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Runtime đang khởi động, thử lại sau ít phút.'));
+  });
+
   it('says indexing is already running and surfaces errors', async () => {
     mocked.listDocuments.mockResolvedValue({ items: [doc('uel', { index_status: 'error' })], next_cursor: null });
-    mocked.runIndex.mockResolvedValueOnce({ status: 'already_running' }).mockRejectedValueOnce(new Error('boom'));
+    mocked.runIndex.mockResolvedValueOnce({ status: 'already_running', requeued: 0 }).mockRejectedValueOnce(new Error('boom'));
     renderPage();
     const button = await screen.findByRole('button', { name: 'Chạy index' });
     fireEvent.click(button);
