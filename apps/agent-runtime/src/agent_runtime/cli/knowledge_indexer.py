@@ -8,7 +8,7 @@ from sqlalchemy.engine import make_url
 
 from agent_runtime.config.settings import Settings
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
-from agent_runtime.knowledge.index_runner import build_embeddings
+from agent_runtime.knowledge.index_runner import build_embeddings, fake_embedding_enabled
 from agent_runtime.knowledge.indexer import IndexerService, drain
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,8 @@ def main(argv=None) -> int:
         return 2
     engine = None
     try:
-        embeddings = build_embeddings(Settings(), args.fake_embedding)
+        settings = Settings()
+        embeddings = build_embeddings(settings, args.fake_embedding or fake_embedding_enabled(settings))
         if not embeddings:
             print("KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED")
             return 2
@@ -51,7 +52,7 @@ def main(argv=None) -> int:
         if args.once:
             report = drain(service, args.batch_size)
             print(f"indexed={report.indexed} failed={report.failed} embedded={report.embedded} "
-                  f"reused={report.reused} reclaimed={report.reclaimed} purged={report.purged}")
+                  f"reused={report.reused} reclaimed={report.reclaimed}")
             return 1 if report.failed else 0
         conninfo = make_url(url).set(drivername="postgresql").render_as_string(hide_password=False)
         with psycopg.connect(conninfo, autocommit=True) as listener:

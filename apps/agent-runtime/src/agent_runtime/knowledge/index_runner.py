@@ -6,6 +6,14 @@ from collections.abc import Callable
 from agent_runtime.knowledge.indexer import IndexReport
 
 logger = logging.getLogger(__name__)
+FAKE_MODEL = "fake-embedding"
+# A run never outlives its process for long on a free host: reclaim a dead run's claims after two minutes.
+AUTO_STALE_AFTER_SECONDS = 120
+
+
+def fake_embedding_enabled(settings) -> bool:
+    """Offline demo embedding: the explicit flag, or `fake-embedding` listed among the knowledge models."""
+    return bool(settings.RUNTIME_KNOWLEDGE_FAKE_EMBEDDING) or FAKE_MODEL in settings.KNOWLEDGE_EMBEDDING_MODEL_IDS
 
 
 def build_embeddings(settings, fake: bool):
@@ -35,8 +43,9 @@ class KnowledgeIndexRunner:
             if self._thread is not None:
                 self._rerun = True
                 return "already_running"
-            self._thread = threading.Thread(target=self._run, name="knowledge-index-run", daemon=True)
-            self._thread.start()
+            thread = threading.Thread(target=self._run, name="knowledge-index-run", daemon=True)
+            thread.start()  # may raise; the runner stays idle so a later request can try again
+            self._thread = thread  # the new thread blocks on the lock until this assignment is done
             return "started"
 
     def join(self, timeout: float | None = None) -> None:

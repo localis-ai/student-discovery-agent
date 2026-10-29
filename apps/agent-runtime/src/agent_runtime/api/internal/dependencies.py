@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -40,6 +41,7 @@ from .envelopes import failure
 if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
 
+logger = logging.getLogger(__name__)
 PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
@@ -128,21 +130,39 @@ def _choose_agent_source(settings: Settings, local, student_keys: dict[str, byte
 
 
 def _build_index_runner(settings: Settings):
-    """(runner, engine) over the separate kb_indexer database; (None, None) when unset or misconfigured."""
+    """(runner, engine) over the separate kb_indexer database; (None, None) when unset or misconfigured.
+
+    Logs one warning with the reason only (never the URL or an exception message) when indexing is disabled.
+    """
     if not settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL:
+        logger.warning("knowledge indexing disabled: RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL is not set")
         return None, None
     engine = None
     try:
-        from agent_runtime.knowledge.index_runner import KnowledgeIndexRunner, build_embeddings
+        from sqlalchemy.pool import NullPool
+
+        from agent_runtime.knowledge.index_runner import (
+            AUTO_STALE_AFTER_SECONDS,
+            KnowledgeIndexRunner,
+            build_embeddings,
+            fake_embedding_enabled,
+        )
         from agent_runtime.knowledge.indexer import IndexerService, drain
-        embeddings = build_embeddings(settings, settings.RUNTIME_KNOWLEDGE_FAKE_EMBEDDING)
+        embeddings = build_embeddings(settings, fake_embedding_enabled(settings))
         if not embeddings:
+            logger.warning("knowledge indexing disabled: no knowledge embedding model is configured with credentials")
             return None, None
-        engine = build_engine(settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL.get_secret_value())
-        service = IndexerService(RuntimeUnitOfWork(engine), embeddings)
+        try:
+            engine = build_engine(settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL.get_secret_value(), NullPool)
+        except Exception as error:
+            logger.warning("knowledge indexing disabled: indexer database engine build failed (%s)",
+                           type(error).__name__)
+            return None, None
+        service = IndexerService(RuntimeUnitOfWork(engine), embeddings, stale_after_seconds=AUTO_STALE_AFTER_SECONDS)
         batch = settings.RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE
         return KnowledgeIndexRunner(lambda: drain(service, batch)), engine
-    except Exception:
+    except Exception as error:
+        logger.warning("knowledge indexing disabled: indexer setup failed (%s)", type(error).__name__)
         if engine is not None:
             engine.dispose()
         return None, None
@@ -296,6 +316,9 @@ class InternalBoundary:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
             if service and SERVICE_ROUTES.get((scope["method"], target)) != caller.purpose:
+                raise RuntimeSessionError(403, "FORBIDDEN")
+            if not service and (scope["method"], target) in SERVICE_ROUTES:
+                # Defence in depth: Studio-only routes never serve a student caller, whatever the route checks.
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 

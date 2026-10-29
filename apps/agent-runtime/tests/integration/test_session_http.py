@@ -177,7 +177,7 @@ def test_no_public_product_routes_or_seed_routes(http, rig):
         PREFIX + "/conversations/{conversation_id}:end",
         PREFIX + "/activities/{activity_id}/result", PREFIX + "/results/{result_id}/share-card",
         PREFIX + "/responses/{response_id}", PREFIX + "/responses/{response_id}/cancel",
-        PREFIX + "/knowledge/retrieval"}
+        PREFIX + "/knowledge/retrieval", PREFIX + "/knowledge/index-runs", PREFIX + "/agent-snapshots:validate"}
     for path in ("/api/v1/conversations", "/auth", "/users", PREFIX + "/seed", PREFIX + "/turns"):
         assert http[0].get(path, headers=headers(rig, "GET", path)).status_code == 404
 

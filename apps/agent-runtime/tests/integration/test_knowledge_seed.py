@@ -24,7 +24,7 @@ def test_seed_then_index_makes_the_demo_searchable(test_database, monkeypatch, c
         assert knowledge_seed.main(["--embedding-model", "fake-embedding"]) == 0
         assert capsys.readouterr().out.splitlines() == ["created=4", "created=0"]
         assert knowledge_indexer.main(["--once", "--fake-embedding"]) == 0
-        assert capsys.readouterr().out.strip() == "indexed=4 failed=0 embedded=8 reused=0 reclaimed=0 purged=0"
+        assert capsys.readouterr().out.strip() == "indexed=4 failed=0 embedded=8 reused=0 reclaimed=0"
         result = PgKnowledge(RuntimeUnitOfWork(engine), by_model(FakeEmbedding())).retrieve(RetrievalRequest.model_validate({
             "knowledge_id": "kb_ihrd_demo", "query": "công tác xã hội Đà Nẵng",
             "metadata_condition": {"conditions": [{"name": "kind", "comparison_operator": "is",

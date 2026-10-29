@@ -1,7 +1,7 @@
 import threading
 
-from agent_runtime.knowledge.indexer import IndexReport, drain
 from agent_runtime.knowledge.index_runner import KnowledgeIndexRunner
+from agent_runtime.knowledge.indexer import IndexReport, drain
 
 
 class Service:
@@ -73,24 +73,63 @@ def test_rerun_flag_forces_one_more_pass_even_when_first_pass_is_empty():
     assert len(passes) == 2
 
 
-def test_never_two_threads_at_once():
+def test_never_two_threads_at_once_and_a_request_after_a_run_starts_a_new_one():
     active, peak, lock = 0, 0, threading.Lock()
-    gate = threading.Event()
+    threads = set()
 
     def run_pass():
         nonlocal active, peak
         with lock:
             active += 1
             peak = max(peak, active)
-        gate.wait(0.05)
+            threads.add(threading.current_thread())
+        threading.Event().wait(0.02)
         with lock:
             active -= 1
         return IndexReport()
 
     runner = KnowledgeIndexRunner(run_pass)
-    results = [runner.request() for _ in range(5)]
+    barrier = threading.Barrier(8)
+    results = []
+
+    def hammer():
+        barrier.wait()
+        results.append(runner.request())
+
+    callers = [threading.Thread(target=hammer) for _ in range(8)]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join(2)
     runner.join(2)
-    assert results.count("started") >= 1 and peak == 1
+    assert results.count("started") == 1 and peak == 1
+    assert not runner.running
+    assert runner.request() == "started"  # a request after a completed run starts a new thread
+    runner.join(2)
+    assert peak == 1 and len(threads) == 2
+
+
+def test_a_thread_that_fails_to_start_does_not_wedge_the_runner(monkeypatch):
+    runner = KnowledgeIndexRunner(lambda: IndexReport())
+    real_start = threading.Thread.start
+    calls = []
+
+    def failing_start(self):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("can't start new thread")
+        return real_start(self)
+
+    monkeypatch.setattr(threading.Thread, "start", failing_start)
+    try:
+        runner.request()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected the start failure to surface")
+    assert not runner.running
+    assert runner.request() == "started"
+    runner.join(2)
 
 
 def test_an_exception_ends_the_run_and_a_later_run_works(caplog):

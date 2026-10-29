@@ -12,7 +12,7 @@ from agent_runtime.knowledge.schemas import KnowledgeUnavailable, Record, Retrie
 from agent_runtime.main import create_app
 from agent_runtime.sessions.schemas.common import RuntimePolicy
 from tests.helpers.clock import FakeClock
-from tests.helpers.signing import sign_request, sign_service_request
+from tests.helpers.signing import sign_service_request
 
 KEY = b"knowledge-test-key-at-least-32-bytes!"
 NOW = datetime(2026, 10, 27, tzinfo=UTC)
@@ -32,13 +32,8 @@ class StubKnowledge:
 
 
 def call(knowledge, payload):
-    runtime = RuntimeContainer(policy=RuntimePolicy(environment="demo"),
-                               verifier=CallerVerifier({"active": KEY}, FakeClock(NOW)), knowledge=knowledge)
-    body = json.dumps(payload).encode()
-    token = sign_request(RawRequestContext("POST", TARGET, body), owner_id="studio", now=NOW, key=KEY, kid="active")
-    with TestClient(create_app(runtime)) as client:
-        return client.post(TARGET, content=body, headers={
-            "X-Internal-Caller": "sda-product-bff", "X-Caller-Context": token, "Content-Type": "application/json"})
+    """Studio is the only caller of retrieval; student (product-bff) tokens are refused at the boundary."""
+    return studio_call(knowledge, payload)
 
 
 def test_records_are_returned_in_the_runtime_envelope():
