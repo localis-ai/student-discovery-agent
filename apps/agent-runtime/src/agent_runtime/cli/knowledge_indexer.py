@@ -6,8 +6,10 @@ import os
 import psycopg
 from sqlalchemy.engine import make_url
 
+from agent_runtime.config.settings import Settings
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
-from agent_runtime.knowledge.indexer import IndexerService, IndexReport
+from agent_runtime.knowledge.index_runner import build_embeddings, fake_embedding_enabled
+from agent_runtime.knowledge.indexer import IndexerService, drain
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 5  # NOTIFY is lost while no worker listens; pending rows are the real queue
@@ -16,26 +18,6 @@ POLL_SECONDS = 5  # NOTIFY is lost while no worker listens; pending rows are the
 class SafeArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         self.exit(2, "KNOWLEDGE_INDEXER_INVALID_ARGUMENTS\n")
-
-
-def drain(service: IndexerService, batch_size: int) -> IndexReport:
-    total = IndexReport()
-    while True:
-        report = service.run_once(batch_size)
-        total += report
-        if report.indexed + report.failed < batch_size:
-            return total
-
-
-def _embeddings(fake: bool):
-    """Ports by model id; empty when real embeddings are required but none is configured."""
-    if fake:
-        from agent_runtime.knowledge.embedding import by_model
-        from agent_runtime.knowledge.fake import FakeEmbedding
-        return by_model(FakeEmbedding())
-    from agent_runtime.config.settings import Settings
-    from agent_runtime.infrastructure.llm.embedding_registry import build_embedding_ports
-    return build_embedding_ports(Settings())
 
 
 def main(argv=None) -> int:
@@ -54,7 +36,8 @@ def main(argv=None) -> int:
         return 2
     engine = None
     try:
-        embeddings = _embeddings(args.fake_embedding)
+        settings = Settings()
+        embeddings = build_embeddings(settings, args.fake_embedding or fake_embedding_enabled(settings))
         if not embeddings:
             print("KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED")
             return 2
@@ -69,7 +52,7 @@ def main(argv=None) -> int:
         if args.once:
             report = drain(service, args.batch_size)
             print(f"indexed={report.indexed} failed={report.failed} embedded={report.embedded} "
-                  f"reused={report.reused} reclaimed={report.reclaimed} purged={report.purged}")
+                  f"reused={report.reused} reclaimed={report.reclaimed}")
             return 1 if report.failed else 0
         conninfo = make_url(url).set(drivername="postgresql").render_as_string(hide_password=False)
         with psycopg.connect(conninfo, autocommit=True) as listener:

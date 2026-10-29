@@ -14,3 +14,11 @@ describe('knowledgeApi.listDocuments', () => {
     expect(spy).toHaveBeenCalledWith('admin/knowledge-bases/kb1/documents?q=h%E1%BB%8Dc+ph%C3%AD&index_status=error&limit=20');
   });
 });
+
+describe('knowledgeApi.runIndex', () => {
+  it('posts an empty body to the KB index-runs endpoint', async () => {
+    const spy = vi.spyOn(api, 'post').mockResolvedValue({ status: 'started', requeued: 1 });
+    expect(await knowledgeApi.runIndex('kb 1')).toEqual({ status: 'started', requeued: 1 });
+    expect(spy).toHaveBeenCalledWith('admin/knowledge-bases/kb%201/index-runs', {});
+  });
+});

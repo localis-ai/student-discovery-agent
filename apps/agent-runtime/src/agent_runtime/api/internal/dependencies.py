@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -41,10 +42,12 @@ if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
     from agent_runtime.evaluations.services.publish_gate import PublishGateService
 
+logger = logging.getLogger(__name__)
 PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
     ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("POST", PREFIX + "/knowledge/index-runs"): "knowledge.index",
     ("POST", PREFIX + "/experience-validations:run"): "experience.validate",
     ("POST", PREFIX + "/experience-evaluations:run"): "experience.evaluate",
     ("POST", PREFIX + "/experience-reports:verify"): "experience.verify",
@@ -71,6 +74,8 @@ class RuntimeContainer:
     engine: object | None = None
     knowledge: object | None = None
     agent_validation: object | None = None
+    knowledge_indexer: object | None = None
+    knowledge_indexer_engine: object | None = None
     evaluations: PublishGateService | None = None
 
 
@@ -129,6 +134,45 @@ def _choose_agent_source(settings: Settings, local, student_keys: dict[str, byte
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 
 
+def _build_index_runner(settings: Settings):
+    """(runner, engine) over the separate kb_indexer database; (None, None) when unset or misconfigured.
+
+    Logs one warning with the reason only (never the URL or an exception message) when indexing is disabled.
+    """
+    if not settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL:
+        logger.warning("knowledge indexing disabled: RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL is not set")
+        return None, None
+    engine = None
+    try:
+        from sqlalchemy.pool import NullPool
+
+        from agent_runtime.knowledge.index_runner import (
+            AUTO_STALE_AFTER_SECONDS,
+            KnowledgeIndexRunner,
+            build_embeddings,
+            fake_embedding_enabled,
+        )
+        from agent_runtime.knowledge.indexer import IndexerService, drain
+        embeddings = build_embeddings(settings, fake_embedding_enabled(settings))
+        if not embeddings:
+            logger.warning("knowledge indexing disabled: no knowledge embedding model is configured with credentials")
+            return None, None
+        try:
+            engine = build_engine(settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL.get_secret_value(), NullPool)
+        except Exception as error:
+            logger.warning("knowledge indexing disabled: indexer database engine build failed (%s)",
+                           type(error).__name__)
+            return None, None
+        service = IndexerService(RuntimeUnitOfWork(engine), embeddings, stale_after_seconds=AUTO_STALE_AFTER_SECONDS)
+        batch = settings.RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE
+        return KnowledgeIndexRunner(lambda: drain(service, batch)), engine
+    except Exception as error:
+        logger.warning("knowledge indexing disabled: indexer setup failed (%s)", type(error).__name__)
+        if engine is not None:
+            engine.dispose()
+        return None, None
+
+
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
     """No connection/migration at startup; malformed secrets fail closed silently.
 
@@ -145,7 +189,9 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     except Exception:
         return None
     service_verifier = _build_service_verifier(settings, keys)
-    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier)
+    indexer, indexer_engine = _build_index_runner(settings)
+    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier,
+                                   knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine)
     engine = None
     try:
         if not settings.RUNTIME_DATABASE_URL:
@@ -194,6 +240,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             knowledge=knowledge, agent_validation=agent_validation, evaluations=evaluations,
+            knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
             product_ready=agent_source is not None)
     except Exception:
         if engine is not None:
@@ -278,6 +325,9 @@ class InternalBoundary:
             # Both directions: a service token reaches only its own route, a student token never a service route.
             route_purpose = SERVICE_ROUTES.get((scope["method"], target))
             if (route_purpose != caller.purpose) if service else route_purpose is not None:
+                raise RuntimeSessionError(403, "FORBIDDEN")
+            if not service and (scope["method"], target) in SERVICE_ROUTES:
+                # Defence in depth: Studio-only routes never serve a student caller, whatever the route checks.
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 

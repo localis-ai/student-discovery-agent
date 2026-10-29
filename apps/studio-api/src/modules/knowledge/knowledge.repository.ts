@@ -192,6 +192,14 @@ export async function findRevisionId(client: Queryable, documentId: string, revi
   )).rows[0]?.id ?? null;
 }
 
+/** Latest revisions that failed indexing, for active documents of one knowledge base. */
+export async function findFailedLatestRevisionIds(client: Queryable, kbId: string): Promise<string[]> {
+  return (await client.query<{ id: string }>(
+    `SELECT r.id FROM knowledge.documents d JOIN knowledge.document_revisions r ON r.id = d.latest_revision_id
+     WHERE d.kb_id = $1 AND d.status = 'active' AND r.index_status = 'error' ORDER BY r.id`, [kbId],
+  )).rows.map(row => row.id);
+}
+
 export async function retryRevision(client: Queryable, revisionId: string): Promise<boolean> {
   return (await client.query<{ retried: boolean }>('SELECT knowledge.retry_revision($1) AS retried', [revisionId])).rows[0]!.retried;
 }
@@ -212,6 +220,10 @@ export async function findLatestContent(client: Queryable, documentId: string): 
      FROM knowledge.documents d JOIN knowledge.document_revisions r ON r.id = d.latest_revision_id WHERE d.id = $1`,
     [documentId],
   )).rows[0] ?? null;
+}
+
+export async function findDocumentOwner(client: Queryable, documentId: string): Promise<string | null> {
+  return (await client.query<{ kb_id: string }>('SELECT kb_id FROM knowledge.documents WHERE id = $1', [documentId])).rows[0]?.kb_id ?? null;
 }
 
 export async function findImport(client: Queryable, kbId: string, key: string): Promise<{ request_hash: string; report: unknown } | null> {

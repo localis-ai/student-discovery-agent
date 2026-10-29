@@ -99,7 +99,9 @@ describe('documents', () => {
     await api('PUT', doc(first, 'shared-id'), admin, { ...content, expected_revision: 0 });
     const res = await api('PUT', doc(second, 'shared-id'), admin, { ...content, expected_revision: 0 });
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('CONFLICT_ALREADY_EXISTS');
+    expect(res.body.error).toMatchObject({
+      code: 'CONFLICT_ALREADY_EXISTS', details: { kind: 'document_id_taken', suggested_id: `${second}-shared-id` },
+    });
   });
 
   it('archives and restores with expected_revision', async () => {

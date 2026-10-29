@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useKnowledgeBase, useUpdateKnowledgeBase } from '../hooks/use-knowledge';
 import type { KnowledgeBase, KnowledgeBasePatch } from '../types';
 import { AgentTab } from './agent-tab';
+import { DeleteKnowledgeBaseDialog } from './delete-knowledge-base-dialog';
 import { ErrorText } from './error-text';
 import { CopyButton } from './shared/copy-button';
 import { PageTitle } from './shared/page-title';
@@ -75,6 +77,22 @@ function SettingsForm({ kb }: { kb: KnowledgeBase }) {
   );
 }
 
+function DangerZone({ kb }: { kb: KnowledgeBase }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section aria-labelledby="kb-danger-heading" className="mt-10">
+      <h2 id="kb-danger-heading" className="mb-3 text-base font-semibold text-destructive">Vùng nguy hiểm</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 p-4">
+        <p className="min-w-[14rem] flex-1 text-13 text-muted-foreground">
+          Xoá knowledge base cùng toàn bộ tài liệu của nó. Không hoàn tác được; không xoá được khi agent đang dùng.
+        </p>
+        <Button type="button" variant="destructive" onClick={() => setOpen(true)}>Xoá knowledge base</Button>
+      </div>
+      <DeleteKnowledgeBaseDialog kb={kb} open={open} onOpenChange={setOpen} />
+    </section>
+  );
+}
+
 export function KnowledgeSettings({ kb }: { kb: string }) {
   const base = useKnowledgeBase(kb);
   return (
@@ -89,6 +107,7 @@ export function KnowledgeSettings({ kb }: { kb: string }) {
         <p className="mb-4 text-13 text-muted-foreground">Agent đọc knowledge base này qua hai tool trong cấu hình release.</p>
         <div className="border-t pt-4"><AgentTab kb={kb} /></div>
       </section>
+      {base.data && <DangerZone kb={base.data} />}
     </div>
   );
 }

@@ -58,7 +58,7 @@ services:
     image: sda-agent-runtime:local
     ports:
       - "127.0.0.1:${SDA_LOCAL_RUNTIME_PORT:-18000}:8000"
-    environment: &runtime-env
+    environment:
       RUNTIME_ENVIRONMENT: demo
       RUNTIME_DATABASE_URL: postgresql+psycopg://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_runtime
       RUNTIME_INTERNAL_KEYRING: '{"local":"${SDA_LOCAL_RUNTIME_INTERNAL_KEY:?Run scripts/local-stack.sh init}"}'
@@ -67,6 +67,9 @@ services:
       # Same list as Studio's KNOWLEDGE_EMBEDDING_MODELS: the runtime embeds with whichever one a KB picked.
       KNOWLEDGE_EMBEDDING_MODELS: ${SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL:-gemini-embedding-2}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      # Studio writes kick indexing inside the runtime (no separate worker); it embeds through this connection.
+      RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_runtime
+      # Offline mode follows the model list: SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL=fake-embedding is enough.
       # OpenAI-compatible vLLM / LiteLLM proxy: chat provider `vllm` and the vLLM embedding models.
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
@@ -85,20 +88,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
-  # Long-running: embeds documents saved in Studio. fake-embedding keeps it offline (keyword search only).
-  knowledge-indexer:
-    extends:
-      file: docker-compose.yaml
-      service: knowledge-indexer
-    image: sda-agent-runtime:local
-    command:
-      - sh
-      - -c
-      - exec python -m agent_runtime.cli.knowledge_indexer $$( [ "$$KNOWLEDGE_EMBEDDING_MODELS" = fake-embedding ] && echo --fake-embedding )
-    environment:
-      <<: *runtime-env
-      RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_runtime
 
   # One-shot (profile tools): runtime database, knowledge roles, migrations/grants and the IHRD demo KB.
   runtime-provision:

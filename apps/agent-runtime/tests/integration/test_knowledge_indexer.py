@@ -93,16 +93,38 @@ def test_claims_skip_locked_rows_and_stale_claims_are_reclaimed(rig):
     assert rig.indexer.reclaim_stale() == 1
 
 
-def test_archived_documents_lose_their_chunks_and_requeue_reindexes(rig):
+def test_an_archived_then_restored_document_keeps_its_chunks(rig):
     rig.writer.put_document("kb1", "doc1", title="T", body=BODY)
     rig.writer.put_document("kb1", "doc2", title="T", body="# B\nz")
     rig.indexer.run_once()
     rig.writer.archive("doc2")
-    assert rig.indexer.run_once().purged == 1
+    rig.indexer.run_once()
+    with rig.engine.begin() as connection:
+        connection.execute(text("UPDATE knowledge.documents SET status = 'active' WHERE id = 'doc2'"))
+    with rig.engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT c.text FROM knowledge.chunks c JOIN knowledge.document_revisions r ON r.id = c.revision_id "
+            "WHERE r.document_id = 'doc2'")).scalars().all() == ["z"]
+
+
+def test_requeue_reindexes_active_documents_reusing_embeddings(rig):
+    rig.writer.put_document("kb1", "doc1", title="T", body=BODY)
+    rig.writer.put_document("kb1", "doc2", title="T", body="# B\nz")
+    rig.indexer.run_once()
+    rig.writer.archive("doc2")
     assert rig.indexer.requeue_knowledge_base("kb1") == 1
     report = rig.indexer.run_once()
     assert (report.indexed, report.embedded, report.reused) == (1, 0, 2)
     assert state(rig)[0] == 1
+
+
+def test_explicit_purge_removes_only_archived_chunks(rig):
+    rig.writer.put_document("kb1", "doc1", title="T", body=BODY)
+    rig.writer.put_document("kb1", "doc2", title="T", body="# B\nz")
+    rig.indexer.run_once()
+    rig.writer.archive("doc2")
+    assert rig.indexer.purge_archived() == 1
+    assert len(state(rig)[2]) == 2
 
 
 def test_a_knowledge_base_on_another_model_fails_loudly(test_database):

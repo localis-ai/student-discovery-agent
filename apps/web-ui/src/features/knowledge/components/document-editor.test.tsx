@@ -105,6 +105,23 @@ describe('DocumentEditor', () => {
     expect(screen.queryByText(/Tải bản mới/)).not.toBeInTheDocument();
   });
 
+  it('offers the suggested id when the id belongs to another knowledge base', async () => {
+    mocked.putDocument.mockRejectedValueOnce(new ApiError({
+      code: 'CONFLICT_ALREADY_EXISTS', message: 'taken', httpStatus: 409,
+      details: { kind: 'document_id_taken', suggested_id: 'kb1-hutech' },
+    }));
+    mocked.putDocument.mockResolvedValue({ document_id: 'kb1-hutech', revision: 1, outcome: 'created' });
+    renderEditor(null);
+    fireEvent.change(await screen.findByLabelText('Tiêu đề'), { target: { value: 'HUTECH' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('ID này đã dùng ở knowledge base khác.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng ID kb1-hutech' }));
+    expect(screen.getByLabelText('ID tài liệu')).toHaveValue('kb1-hutech');
+    await waitFor(() => expect(screen.queryByText('ID này đã dùng ở knowledge base khác.')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    await waitFor(() => expect(mocked.putDocument).toHaveBeenLastCalledWith(expect.objectContaining({ doc: 'kb1-hutech' })));
+  });
+
   it('puts 422 issues under their fields and focuses the error summary', async () => {
     mocked.getDocument.mockResolvedValue(detail(1, 'ready'));
     mocked.putDocument.mockRejectedValue(new ApiError({

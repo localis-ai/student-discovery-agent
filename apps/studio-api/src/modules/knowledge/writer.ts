@@ -2,7 +2,8 @@ import type { Queryable } from '@/infrastructure/db/knowledge-client';
 import { knowledgeContentHash } from '@/modules/knowledge/content-hash';
 import type { DocumentContent } from '@/modules/knowledge/knowledge.schemas';
 import type { FieldRow } from '@/modules/knowledge/knowledge.repository';
-import { newId } from '@/modules/knowledge/ids';
+import { newId, prefixedDocumentIds } from '@/modules/knowledge/ids';
+import { findDocumentOwner } from '@/modules/knowledge/knowledge.repository';
 import { validateMetadata } from '@/modules/knowledge/metadata';
 
 export type PutOutcome =
@@ -59,4 +60,21 @@ export async function putDocument(
     [documentId, revision, revisionId],
   );
   return { status: 'written', outcome: revision === 1 ? 'created' : 'updated', revision };
+}
+
+/**
+ * The id a document should get in `kbId` when `documentId` is already used by another knowledge base
+ * (`knowledge.documents.id` is a global key). Returns `documentId` itself when it is free or already ours.
+ */
+export async function availableDocumentId(
+  client: Queryable, kbId: string, documentId: string, reserved: ReadonlySet<string> = new Set(),
+): Promise<string> {
+  const usable = async (id: string) => {
+    if (reserved.has(id)) return false;
+    const owner = await findDocumentOwner(client, id);
+    return owner === null || owner === kbId;
+  };
+  if (await usable(documentId)) return documentId;
+  for (const candidate of prefixedDocumentIds(kbId, documentId)) if (await usable(candidate)) return candidate;
+  return documentId;
 }

@@ -32,6 +32,7 @@ class StubKnowledge:
 
 
 def call(knowledge, payload):
+    """Studio is the only caller of retrieval; student (product-bff) tokens are refused at the boundary."""
     return studio_call(knowledge, payload)
 
 

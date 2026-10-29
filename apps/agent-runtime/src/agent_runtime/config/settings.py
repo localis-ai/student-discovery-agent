@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # each KB picks one. gemini-embedding-2 ignores GOOGLE_EMBEDDING_MODEL, which belongs to legacy helpers.
     KNOWLEDGE_EMBEDDING_MODELS: str = "gemini-embedding-2"
     KNOWLEDGE_RETRIEVAL_TIMEOUT_MS: int = 1500
+    # On-demand indexing started by Studio: kb_indexer role URL (chunks/embeddings only); unset disables it.
+    RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: SecretStr | None = None
+    RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE: int = 20
+    # Offline demo embedding for on-demand indexing (never production); mirrors the CLI --fake-embedding flag.
+    RUNTIME_KNOWLEDGE_FAKE_EMBEDDING: bool = False
 
     # Optional outbound proxy
     PROXY_HOST: str | None = None

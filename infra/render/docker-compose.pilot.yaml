@@ -5,6 +5,8 @@
 #   docker build -f infra/render/agent-runtime.Dockerfile -t sda-pilot-runtime:local .
 #   PILOT_KEY_A=... PILOT_KEY_B=... PILOT_KEY_C=... PILOT_KEY_D=... \
 #     docker compose -f infra/render/docker-compose.pilot.yaml up -d
+# Every database URL here uses the owner role (pilot_owner), so the rehearsal does NOT test the pilot_* role grants;
+# check those against Neon after scripts provision the least-privilege roles.
 # The web UI runs outside Docker the way Vercel builds it:
 #   cd apps/web-ui && API_PROXY_ORIGIN=http://127.0.0.1:18101 NEXT_PUBLIC_CHAT_MOCK=false pnpm build && pnpm start
 name: sda-pilot-rehearsal
@@ -72,6 +74,7 @@ services:
       RUNTIME_PRODUCT_SIGNING_KID: runtime
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       KNOWLEDGE_EMBEDDING_MODELS: gemini-embedding-2
+      RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://pilot_owner:pilot_owner@db:5432/sda_runtime
     depends_on:
       db:
         condition: service_healthy
