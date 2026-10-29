@@ -62,3 +62,4 @@ export const useRetryRevision = () => useKnowledgeWrite(knowledgeApi.retryRevisi
 export const useCommitImport = () => useKnowledgeWrite(knowledgeApi.commitImport);
 export const usePreviewImport = () => useMutation({ mutationFn: (vars: Parameters<typeof knowledgeApi.previewImport>[0]) => knowledgeApi.previewImport(vars) });
 export const useSearchKnowledge = () => useMutation({ mutationFn: (vars: Parameters<typeof knowledgeApi.search>[0]) => knowledgeApi.search(vars) });
+export const useRunIndex = () => useKnowledgeWrite(knowledgeApi.runIndex);

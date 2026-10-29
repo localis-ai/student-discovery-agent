@@ -43,5 +43,6 @@ export const knowledgeApi = {
     api.post<ImportPreview>(`${base(kb)}/imports/preview`, body),
   commitImport: ({ kb, body }: { kb: string; body: ImportCommitRequest }) => api.post<ImportReport>(`${base(kb)}/imports`, body),
   search: ({ kb, body }: { kb: string; body: SearchRequest }) => api.post<SearchResult>(`${base(kb)}/search`, body),
+  runIndex: (kb: string) => api.post<{ status: 'started' | 'already_running' }>(`${base(kb)}/index-runs`, {}),
   agentParams: (kb: string) => api.get<AgentParams>(`${base(kb)}/agent-params`),
 };

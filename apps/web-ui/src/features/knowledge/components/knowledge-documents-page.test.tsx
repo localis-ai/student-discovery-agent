@@ -14,9 +14,11 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('../api/knowledge', () => ({
   knowledgeApi: {
-    listDocuments: vi.fn(), getDocument: vi.fn(), listFields: vi.fn(), archiveDocument: vi.fn(), restoreDocument: vi.fn(), retryRevision: vi.fn(),
+    listDocuments: vi.fn(), getDocument: vi.fn(), listFields: vi.fn(), archiveDocument: vi.fn(), restoreDocument: vi.fn(), retryRevision: vi.fn(), runIndex: vi.fn(),
   },
 }));
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('@/components/ui/sonner', () => ({ toast: toastMock }));
 const mocked = vi.mocked(knowledgeApi);
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
 
@@ -132,5 +134,32 @@ describe('KnowledgeDocumentsPage', () => {
     renderPage();
     await waitFor(() => expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { status: 'active', index_status: 'indexing', limit: 20 }));
     expect(screen.getByRole('combobox')).toHaveTextContent('Đang index');
+  });
+
+  it('runs indexing from the toolbar only while a document is waiting or failed', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [doc('hutech'), doc('uel', { index_status: 'pending' })], next_cursor: null });
+    mocked.runIndex.mockResolvedValue({ status: 'started' });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chạy index' }));
+    await waitFor(() => expect(mocked.runIndex).toHaveBeenCalledWith('kb1'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Đã bắt đầu index'));
+  });
+
+  it('says indexing is already running and surfaces errors', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [doc('uel', { index_status: 'error' })], next_cursor: null });
+    mocked.runIndex.mockResolvedValueOnce({ status: 'already_running' }).mockRejectedValueOnce(new Error('boom'));
+    renderPage();
+    const button = await screen.findByRole('button', { name: 'Chạy index' });
+    fireEvent.click(button);
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Đang index…'));
+    fireEvent.click(button);
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+  });
+
+  it('hides the index button when every document is ready', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [doc('hutech')], next_cursor: null });
+    renderPage();
+    await screen.findByRole('button', { name: 'HUTECH' });
+    expect(screen.queryByRole('button', { name: 'Chạy index' })).not.toBeInTheDocument();
   });
 });
