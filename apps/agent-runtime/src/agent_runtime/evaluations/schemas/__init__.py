@@ -10,8 +10,8 @@ from agent_runtime.evaluations.schemas.experience import (
 )
 from agent_runtime.evaluations.schemas.validation import (
     EvaluationCaseResult,
-    EvaluationCommandInput,
     EvaluationReport,
+    ExperienceSnapshotCommand,
     PublishReportInput,
     SnapshotCommandInput,
     ValidationDetails,
@@ -28,7 +28,7 @@ __all__ = [
     "ValidationReport",
     "EvaluationCaseResult",
     "EvaluationReport",
-    "EvaluationCommandInput",
+    "ExperienceSnapshotCommand",
     "PublishReportInput",
     "AssessmentDefinitionOption",
     "AssessmentDefinitionQuestion",

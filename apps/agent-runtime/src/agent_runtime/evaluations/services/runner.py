@@ -2,14 +2,14 @@
 
 Conforms to:
 - contracts/openapi/public/experience-validation-api.yaml (EvaluationReport, EvaluationCaseResult)
-- ADR-001 & ADR-002: Exact same behavior version and engine for runtime, preview and evaluation.
-- Deterministic First: 100% deterministic rule replay (AdaptiveQuestionSelector, ScoringEngine,
-  project_summary_from_result).
+- ADR-001 & ADR-002: evaluation replays golden cases on the AdaptiveQuestionSelector and ScoringEngine
+  classes the runtime uses, and applies the runtime's completion check (sessions/services/completion.py).
 - RFC 8785 canonical JSON hashing (via ExperienceValidator canonical hashing).
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Mapping
 from uuid import uuid4
@@ -26,98 +26,95 @@ from agent_runtime.evaluations.schemas.validation import (
     ValidationIssue,
     ValidationStatus,
 )
-from agent_runtime.evaluations.services.compatibility import (
-    PILOT_ENGINE_REGISTRY,
-    CompatibilityChecker,
-)
 from agent_runtime.evaluations.services.validator import ExperienceValidator
 
 if TYPE_CHECKING:
     from agent_runtime.engine.schemas.scoring import AssessmentScoringResult
+    from agent_runtime.engine.services.scorer import ScoringEngine
+    from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
+
+logger = logging.getLogger(__name__)
+
+
+class SnapshotHashMismatch(ValueError):
+    """The definition sent does not hash to the content_hash the caller captured."""
+
+    def __init__(self, expected: str, actual: str) -> None:
+        super().__init__(f"expected {expected}, computed {actual}")
+        self.expected = expected
+        self.actual = actual
 
 
 class EvaluationRunner:
-    """Authoritative evaluation runner using the exact same engine as preview and runtime."""
+    """Replays golden cases on the runtime's selector and scorer."""
 
     def __init__(
         self,
         validator: ExperienceValidator | None = None,
-        compatibility: CompatibilityChecker | None = None,
-        selector: Any | None = None,
-        scorer: Any | None = None,
+        selector: AdaptiveQuestionSelector | None = None,
+        scorer: ScoringEngine | None = None,
     ) -> None:
         from agent_runtime.engine.services.scorer import ScoringEngine
         from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 
-        self._compatibility = compatibility or CompatibilityChecker(PILOT_ENGINE_REGISTRY)
-        self._validator = validator or ExperienceValidator(self._compatibility)
+        # The validator defaults to the production engine registry, as the wired service does.
+        self._validator = validator or ExperienceValidator()
         self._selector = selector or AdaptiveQuestionSelector()
         self._scorer = scorer or ScoringEngine()
 
     def run_evaluation(
         self,
         definition: ExperienceDefinitionDocument | Mapping[str, Any],
-        expected_revision: int = 1,
+        *,
+        experience_id: str,
+        expected_revision: int,
         expected_hash: str | None = None,
-        idempotency_key: str | None = None,
-        experience_id: str | None = None,
     ) -> EvaluationReport:
-        """Run complete golden evaluation cases against the authoritative engine.
+        """Run every golden case of `definition` and aggregate an EvaluationReport.
 
-        Steps:
-        1. Validates structural and rule compatibility using ExperienceValidator.
-        2. Computes the canonical RFC 8785 SHA-256 hash.
-        3. Replays every AssessmentGoldenCase with the exact same AdaptiveQuestionSelector
-           and ScoringEngine as runtime/preview, respecting seed for deterministic order.
-        4. Verifies preview/runtime card projection via summary_v1 without side-effects.
-        5. Aggregates results into an immutable, typed EvaluationReport.
+        1. Validates the definition with ExperienceValidator, which also computes the RFC 8785 hash.
+        2. Raises SnapshotHashMismatch before any replay when `expected_hash` is given and differs.
+        3. Replays each case with its seed, checking the selector order and the runtime completion check.
+        4. Smoke-checks that the summary.v1 projection succeeds; its output is not compared to anything.
+
+        The runtime keeps no drafts, so `expected_revision` is recorded on the report, not checked.
         """
         raw_dict = (
-            definition.model_dump(mode="json")
+            definition.model_dump(mode="json", exclude_unset=True)
             if isinstance(definition, ExperienceDefinitionDocument)
             else dict(definition)
         )
 
-        exp_id = experience_id or str(raw_dict.get("definition_id", "exp_default"))
-
         val_report = self._validator.validate(
             doc_input=raw_dict,
-            experience_id=exp_id,
+            experience_id=experience_id,
             draft_revision=expected_revision,
         )
+        if expected_hash is not None and val_report.content_hash != expected_hash:
+            raise SnapshotHashMismatch(expected_hash, val_report.content_hash)
 
-        content_hash = val_report.content_hash
-        schema_version = str(raw_dict.get("schema_version", "2.0"))
-        engine_version = str(raw_dict.get("engine_version", "unknown"))
-
-        hash_mismatch_issue: ValidationIssue | None = None
-        if expected_hash and content_hash != expected_hash:
-            hash_mismatch_issue = ValidationIssue(
-                path="content_hash",
-                code="EVAL_HASH_MISMATCH",
-                message=f"Provided content_hash '{expected_hash}' does not match computed hash '{content_hash}'.",
-                rule_id="EVALUATION_REPORT_INTEGRITY",
+        def report(status: ValidationStatus, cases: list[EvaluationCaseResult],
+                   issues: list[ValidationIssue], mandatory_passed: bool = False) -> EvaluationReport:
+            # Sanitized by the validator, so building the report cannot fail on caller input.
+            return EvaluationReport(
+                id=f"eval_{uuid4().hex[:16]}",
+                experience_id=val_report.experience_id,
+                draft_revision=val_report.draft_revision,
+                content_hash=val_report.content_hash,
+                definition_schema_version=val_report.definition_schema_version,
+                engine_version=val_report.engine_version,
+                status=status,
+                mandatory_passed=mandatory_passed,
+                cases=cases,
+                issues=issues,
+                created_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
 
         if val_report.status == ValidationStatus.UNSUPPORTED:
-            return self._build_report(
-                report_id=f"eval_{uuid4().hex[:16]}",
-                experience_id=exp_id,
-                draft_revision=expected_revision,
-                content_hash=content_hash,
-                definition_schema_version=schema_version,
-                engine_version=engine_version,
-                status=ValidationStatus.UNSUPPORTED,
-                mandatory_passed=False,
-                cases=[],
-            )
+            return report(ValidationStatus.UNSUPPORTED, [], list(val_report.issues))
 
         try:
-            def_doc = (
-                definition
-                if isinstance(definition, ExperienceDefinitionDocument)
-                else ExperienceDefinitionDocument.model_validate(raw_dict)
-            )
+            def_doc = ExperienceDefinitionDocument.model_validate(raw_dict)
         except ValidationError as parse_err:
             issues = [
                 ValidationIssue(
@@ -128,67 +125,38 @@ class EvaluationRunner:
                 )
                 for err in parse_err.errors()
             ]
-            if hash_mismatch_issue:
-                issues.insert(0, hash_mismatch_issue)
-            return self._build_report(
-                report_id=f"eval_{uuid4().hex[:16]}",
-                experience_id=exp_id,
-                draft_revision=expected_revision,
-                content_hash=content_hash,
-                definition_schema_version=schema_version,
-                engine_version=engine_version,
-                status=ValidationStatus.FAILED,
-                mandatory_passed=False,
-                cases=[
-                    EvaluationCaseResult(
-                        case_id="case_parse_error",
-                        mandatory=True,
-                        passed=False,
-                        expected={},
-                        actual={},
-                        issues=issues,
-                    )
-                ],
+            return report(ValidationStatus.FAILED, [], list(val_report.issues) + issues)
+
+        case_ids = [case.case_id for case in def_doc.evaluation_cases]
+        if len(set(case_ids)) != len(case_ids):
+            duplicate = ValidationIssue(
+                path="evaluation_cases",
+                code="EVAL_DUPLICATE_CASE_ID",
+                message="Evaluation case ids must be unique.",
+                rule_id="EVALUATION_DOCUMENT_PARSE",
             )
+            return report(ValidationStatus.FAILED, [], list(val_report.issues) + [duplicate])
 
-        case_results: list[EvaluationCaseResult] = []
-        for golden_case in def_doc.evaluation_cases:
-            case_result = self._evaluate_case(golden_case, def_doc, raw_dict)
-            case_results.append(case_result)
-
-        if hash_mismatch_issue and case_results:
-            case_results[0].issues.insert(0, hash_mismatch_issue)
-            case_results[0].passed = False
-
-        mandatory_cases = [c for c in case_results if c.mandatory]
+        cases = [self._evaluate_case(case, def_doc, raw_dict) for case in def_doc.evaluation_cases]
+        issues = list(val_report.issues) if val_report.status != ValidationStatus.PASSED else []
+        mandatory = [case for case in cases if case.mandatory]
+        if not mandatory:
+            issues.append(
+                ValidationIssue(
+                    path="evaluation_cases",
+                    code="EVAL_NO_MANDATORY_CASE",
+                    message="At least one evaluation case must be mandatory for the publish gate.",
+                    rule_id="EVALUATION_OUTCOME_ACCURACY",
+                )
+            )
         mandatory_passed = (
-            len(mandatory_cases) > 0
-            and all(c.passed for c in mandatory_cases)
-            and val_report.status == ValidationStatus.PASSED
-            and hash_mismatch_issue is None
+            val_report.status == ValidationStatus.PASSED
+            and bool(mandatory)
+            and all(case.passed for case in mandatory)
         )
-        all_cases_passed = (
-            len(case_results) > 0
-            and all(c.passed for c in case_results)
-            and val_report.status == ValidationStatus.PASSED
-            and hash_mismatch_issue is None
-        )
-
-        final_status = (
-            ValidationStatus.PASSED if all_cases_passed and mandatory_passed else ValidationStatus.FAILED
-        )
-
-        return self._build_report(
-            report_id=f"eval_{uuid4().hex[:16]}",
-            experience_id=exp_id,
-            draft_revision=expected_revision,
-            content_hash=content_hash,
-            definition_schema_version=def_doc.schema_version,
-            engine_version=def_doc.engine_version,
-            status=final_status,
-            mandatory_passed=mandatory_passed,
-            cases=case_results,
-        )
+        all_passed = mandatory_passed and all(case.passed for case in cases)
+        return report(ValidationStatus.PASSED if all_passed else ValidationStatus.FAILED, cases, issues,
+                      mandatory_passed)
 
     def _evaluate_case(
         self,
@@ -197,11 +165,6 @@ class EvaluationRunner:
         raw_dict: Mapping[str, Any],
     ) -> EvaluationCaseResult:
         """Evaluate a single golden case against question selector, scoring engine and card projector."""
-        from agent_runtime.engine.exceptions import (
-            EngineError,
-            MissingMappingError,
-            UnsupportedDefinitionError,
-        )
         from agent_runtime.engine.projection.summary_v1 import project_summary_from_result
 
         issues: list[ValidationIssue] = []
@@ -216,6 +179,7 @@ class EvaluationRunner:
         actual_stopping_reason: str | None = None
         actual_tie_applied: bool = False
         actual_holland_code: str | None = None
+        selector_house_id: str | None = None
 
         ans_payloads = [
             {"question_id": a.question_id, "option_id": a.option_id}
@@ -231,21 +195,33 @@ class EvaluationRunner:
                     validate_sequence=False,
                     seed=seed,
                 )
-                if step_res.next_question_id:
-                    actual_question_ids.append(step_res.next_question_id)
-                    if step_res.next_question_id != ans_payloads[step_idx]["question_id"]:
-                        issues.append(
-                            ValidationIssue(
-                                path=f"evaluation_cases[{case_id}].answers[{step_idx}].question_id",
-                                code="EVAL_UNEXPECTED_QUESTION_IN_SEQUENCE",
-                                message=(
-                                    f"At step {step_idx + 1}, engine selected question "
-                                    f"'{step_res.next_question_id}' but golden answer provided was for "
-                                    f"'{ans_payloads[step_idx]['question_id']}'."
-                                ),
-                                rule_id="EVALUATION_SEQUENCE_INTEGRITY",
-                            )
+                if not step_res.next_question_id:
+                    issues.append(
+                        ValidationIssue(
+                            path=f"evaluation_cases[{case_id}].answers[{step_idx}]",
+                            code="EVAL_ANSWERS_AFTER_STOP",
+                            message=(
+                                f"The engine stopped after {step_idx} answers; the remaining golden answers "
+                                "would never be collected at runtime."
+                            ),
+                            rule_id="EVALUATION_SEQUENCE_INTEGRITY",
                         )
+                    )
+                    break
+                actual_question_ids.append(step_res.next_question_id)
+                if step_res.next_question_id != ans_payloads[step_idx]["question_id"]:
+                    issues.append(
+                        ValidationIssue(
+                            path=f"evaluation_cases[{case_id}].answers[{step_idx}].question_id",
+                            code="EVAL_UNEXPECTED_QUESTION_IN_SEQUENCE",
+                            message=(
+                                f"At step {step_idx + 1}, engine selected question "
+                                f"'{step_res.next_question_id}' but golden answer provided was for "
+                                f"'{ans_payloads[step_idx]['question_id']}'."
+                            ),
+                            rule_id="EVALUATION_SEQUENCE_INTEGRITY",
+                        )
+                    )
 
             final_sel = self._selector.select_next_question(
                 answers=ans_payloads,
@@ -259,18 +235,9 @@ class EvaluationRunner:
                     if hasattr(final_sel.stopping_reason, "value")
                     else str(final_sel.stopping_reason)
                 )
-            if final_sel.primary_house_id:
-                actual_primary_house_id = final_sel.primary_house_id
-
-        except (EngineError, ValidationError, Exception) as sel_err:
-            issues.append(
-                ValidationIssue(
-                    path=f"evaluation_cases[{case_id}].selector",
-                    code="EVAL_SELECTOR_EXECUTION_ERROR",
-                    message=f"Adaptive question selector failed on golden case: {sel_err}",
-                    rule_id="EVALUATION_ENGINE_REPLAY",
-                )
-            )
+            selector_house_id = final_sel.primary_house_id
+        except Exception as sel_err:
+            issues.append(_replay_issue(case_id, "selector", "EVAL_SELECTOR_EXECUTION_ERROR", sel_err))
 
         scoring_res: AssessmentScoringResult | None = None
         try:
@@ -302,12 +269,23 @@ class EvaluationRunner:
                 for house_id, detail in scoring_res.house_scores.items()
             }
 
-        except (EngineError, ValidationError, Exception) as scr_err:
+        except Exception as scr_err:
+            scoring_res = None
+            issues.append(_replay_issue(case_id, "scorer", "EVAL_SCORING_EXECUTION_ERROR", scr_err))
+
+        # The runtime refuses to complete when these disagree (EngineCompletionPort.prepare).
+        if scoring_res is not None and (
+            not scoring_res.is_complete or scoring_res.primary_house_id != selector_house_id
+        ):
             issues.append(
                 ValidationIssue(
-                    path=f"evaluation_cases[{case_id}].scorer",
-                    code="EVAL_SCORING_EXECUTION_ERROR",
-                    message=f"Scoring engine failed on golden case: {scr_err}",
+                    path=f"evaluation_cases[{case_id}]",
+                    code="EVAL_COMPLETION_MISMATCH",
+                    message=(
+                        f"Scorer (complete={scoring_res.is_complete}, house '{scoring_res.primary_house_id}') "
+                        f"and selector (house '{selector_house_id}') disagree; the runtime would not "
+                        "complete this case."
+                    ),
                     rule_id="EVALUATION_ENGINE_REPLAY",
                 )
             )
@@ -317,21 +295,14 @@ class EvaluationRunner:
                 project_summary_from_result(
                     scoring=scoring_res,
                     definition=raw_dict,
-                    display_name="Học sinh thử nghiệm",
+                    display_name="Học sinh thử nghiệm",  # placeholder: the card only needs a name
                     is_demo=def_doc.is_demo,
                     result_id=f"res_eval_{case_id}",
                     result_revision=1,
                     activity_id=f"act_eval_{case_id}",
                 )
-            except (MissingMappingError, EngineError, UnsupportedDefinitionError, Exception) as prj_err:
-                issues.append(
-                    ValidationIssue(
-                        path=f"evaluation_cases[{case_id}].projection",
-                        code="EVAL_CARD_PROJECTION_FAILED",
-                        message=f"Preview/Runtime card projection failed: {prj_err}",
-                        rule_id="EVALUATION_PREVIEW_PARITY",
-                    )
-                )
+            except Exception as prj_err:
+                issues.append(_replay_issue(case_id, "projection", "EVAL_CARD_PROJECTION_FAILED", prj_err))
 
         if expected.house_id != actual_primary_house_id:
             issues.append(
@@ -434,29 +405,25 @@ class EvaluationRunner:
             issues=issues,
         )
 
-    def _build_report(
-        self,
-        *,
-        report_id: str,
-        experience_id: str,
-        draft_revision: int,
-        content_hash: str,
-        definition_schema_version: str,
-        engine_version: str,
-        status: ValidationStatus,
-        mandatory_passed: bool,
-        cases: list[EvaluationCaseResult],
-    ) -> EvaluationReport:
-        now_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return EvaluationReport(
-            id=report_id,
-            experience_id=experience_id,
-            draft_revision=draft_revision,
-            content_hash=content_hash,
-            definition_schema_version=definition_schema_version,
-            engine_version=engine_version,
-            status=status,
-            mandatory_passed=mandatory_passed,
-            cases=cases,
-            created_at=now_utc,
+
+def _replay_issue(case_id: str, stage: str, code: str, error: Exception) -> ValidationIssue:
+    """Engine errors are expected golden-case failures; anything else is a runtime bug, so log it.
+
+    Both fail the case (fail closed); the code tells the author which side is at fault.
+    """
+    from agent_runtime.engine.exceptions import EngineError
+
+    if not isinstance(error, (EngineError, ValidationError)):
+        logger.error("evaluation replay crashed: case=%s stage=%s", case_id, stage, exc_info=error)
+        return ValidationIssue(
+            path=f"evaluation_cases[{case_id}].{stage}",
+            code="EVAL_ENGINE_INTERNAL_ERROR",
+            message=f"The {stage} crashed ({type(error).__name__}); this is a runtime defect, not a case error.",
+            rule_id="EVALUATION_ENGINE_REPLAY",
         )
+    return ValidationIssue(
+        path=f"evaluation_cases[{case_id}].{stage}",
+        code=code,
+        message=f"The {stage} rejected the golden case: {error}",
+        rule_id="EVALUATION_ENGINE_REPLAY",
+    )

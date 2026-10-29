@@ -4,8 +4,8 @@ Responsible for:
 - Schema validation of ExperienceDefinitionDocument (1.0 and 2.0)
 - DEC-04 Rule schema compatibility and Engine capability checking
 - ValidationReport and EvaluationReport generation
-- Golden evaluation cases deterministic runner
-- Publish gate verification and report store
+- Deterministic golden-case evaluation runner
+- Publish-gate verification over an in-memory report store
 """
 
 from agent_runtime.evaluations.schemas.experience import (
@@ -13,8 +13,8 @@ from agent_runtime.evaluations.schemas.experience import (
 )
 from agent_runtime.evaluations.schemas.validation import (
     EvaluationCaseResult,
-    EvaluationCommandInput,
     EvaluationReport,
+    ExperienceSnapshotCommand,
     PublishReportInput,
     SnapshotCommandInput,
     ValidationIssue,
@@ -44,7 +44,7 @@ __all__ = [
     "ValidationStatus",
     "EvaluationCaseResult",
     "EvaluationReport",
-    "EvaluationCommandInput",
+    "ExperienceSnapshotCommand",
     "PublishReportInput",
     "SnapshotCommandInput",
     "CompatibilityChecker",

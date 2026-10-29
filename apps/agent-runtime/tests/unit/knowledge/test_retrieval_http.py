@@ -32,13 +32,19 @@ class StubKnowledge:
 
 
 def call(knowledge, payload):
+    return studio_call(knowledge, payload)
+
+
+def test_a_student_token_cannot_search():
     runtime = RuntimeContainer(policy=RuntimePolicy(environment="demo"),
-                               verifier=CallerVerifier({"active": KEY}, FakeClock(NOW)), knowledge=knowledge)
-    body = json.dumps(payload).encode()
-    token = sign_request(RawRequestContext("POST", TARGET, body), owner_id="studio", now=NOW, key=KEY, kid="active")
+                               verifier=CallerVerifier({"active": KEY}, FakeClock(NOW)),
+                               knowledge=StubKnowledge(RetrievalResult(records=())))
+    body = json.dumps({"knowledge_id": "kb1", "query": "x"}).encode()
+    token = sign_request(RawRequestContext("POST", TARGET, body), owner_id="owner", now=NOW, key=KEY, kid="active")
     with TestClient(create_app(runtime)) as client:
-        return client.post(TARGET, content=body, headers={
+        response = client.post(TARGET, content=body, headers={
             "X-Internal-Caller": "sda-product-bff", "X-Caller-Context": token, "Content-Type": "application/json"})
+    assert response.status_code == 403
 
 
 def test_records_are_returned_in_the_runtime_envelope():
