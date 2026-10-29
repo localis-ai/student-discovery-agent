@@ -44,6 +44,7 @@ PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
     ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("POST", PREFIX + "/knowledge/index-runs"): "knowledge.index",
 }
 
 
@@ -67,6 +68,8 @@ class RuntimeContainer:
     engine: object | None = None
     knowledge: object | None = None
     agent_validation: object | None = None
+    knowledge_indexer: object | None = None
+    knowledge_indexer_engine: object | None = None
 
 
 def _decode_key(value):
@@ -124,6 +127,27 @@ def _choose_agent_source(settings: Settings, local, student_keys: dict[str, byte
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 
 
+def _build_index_runner(settings: Settings):
+    """(runner, engine) over the separate kb_indexer database; (None, None) when unset or misconfigured."""
+    if not settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL:
+        return None, None
+    engine = None
+    try:
+        from agent_runtime.knowledge.index_runner import KnowledgeIndexRunner, build_embeddings
+        from agent_runtime.knowledge.indexer import IndexerService, drain
+        embeddings = build_embeddings(settings, settings.RUNTIME_KNOWLEDGE_FAKE_EMBEDDING)
+        if not embeddings:
+            return None, None
+        engine = build_engine(settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL.get_secret_value())
+        service = IndexerService(RuntimeUnitOfWork(engine), embeddings)
+        batch = settings.RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE
+        return KnowledgeIndexRunner(lambda: drain(service, batch)), engine
+    except Exception:
+        if engine is not None:
+            engine.dispose()
+        return None, None
+
+
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
     """No connection/migration at startup; malformed secrets fail closed silently.
 
@@ -140,7 +164,9 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     except Exception:
         return None
     service_verifier = _build_service_verifier(settings, keys)
-    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier)
+    indexer, indexer_engine = _build_index_runner(settings)
+    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier,
+                                   knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine)
     engine = None
     try:
         if not settings.RUNTIME_DATABASE_URL:
@@ -187,6 +213,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             knowledge=knowledge, agent_validation=agent_validation,
+            knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
             product_ready=agent_source is not None)
     except Exception:
         if engine is not None:

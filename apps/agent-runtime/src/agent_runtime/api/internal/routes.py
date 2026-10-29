@@ -162,3 +162,12 @@ def validate_agent_snapshot(request: Request):
         raise RuntimeSessionError(422, "INVALID_INPUT")
     result = _service(request, "agent_validation").validate(data["content"])
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/knowledge/index-runs", status_code=202, operation_id="internalStartKnowledgeIndexRun")
+def start_knowledge_index_run(request: Request):
+    _query(request, ())
+    if read_strict_json(request.state.raw_body) != {}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    status = _service(request, "knowledge_indexer").request()
+    return success(ServiceResponse(status=202, data={"status": status}), *request.state.meta)

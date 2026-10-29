@@ -170,3 +170,13 @@ class IndexerService:
                 "UPDATE knowledge.document_revisions SET index_status = 'pending', claimed_at = NULL, error = NULL "
                 "WHERE index_status <> 'indexing' AND id IN (SELECT active_revision_id FROM knowledge.documents "
                 "WHERE kb_id = :kb AND status = 'active' AND active_revision_id IS NOT NULL)"), {"kb": kb_id}).rowcount
+
+
+def drain(service: "IndexerService", batch_size: int) -> IndexReport:
+    """Run batches until one comes back short: the queue is empty."""
+    total = IndexReport()
+    while True:
+        report = service.run_once(batch_size)
+        total += report
+        if report.indexed + report.failed < batch_size:
+            return total
