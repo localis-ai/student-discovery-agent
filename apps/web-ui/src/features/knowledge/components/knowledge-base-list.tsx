@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { CircleAlert, Database, FileText, MoreHorizontal, Pencil, Plus, Search, Settings } from 'lucide-react';
+import { CircleAlert, Database, FileText, MoreHorizontal, Pencil, Plus, Search, Settings, Trash2 } from 'lucide-react';
 import { IconButton } from '@/components/shared/icon-button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils/cn';
 import { useKnowledgeBases } from '../hooks/use-knowledge';
 import type { KnowledgeBase } from '../types';
 import { CreateKnowledgeBaseDialog } from './create-knowledge-base-dialog';
+import { DeleteKnowledgeBaseDialog } from './delete-knowledge-base-dialog';
 import { kbHref } from './kb-routes';
 import { RenameKnowledgeBaseDialog } from './rename-knowledge-base-dialog';
 import { fullDateTime, relativeTime } from './shared/format';
@@ -25,6 +26,7 @@ const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:rin
 /** The name link stretches over the card; the error link and the menu sit above it, so no link is nested. */
 function KnowledgeBaseCard({ kb }: { kb: KnowledgeBase }) {
   const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   return (
     <div className={cn(CARD, 'relative bg-card hover:border-primary/40 hover:shadow-sm focus-within:border-primary/40')}>
       <div className="flex items-start gap-2">
@@ -42,6 +44,9 @@ function KnowledgeBaseCard({ kb }: { kb: KnowledgeBase }) {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => setRenaming(true)}><Pencil aria-hidden />Đổi tên</DropdownMenuItem>
             <DropdownMenuItem asChild><Link href={kbHref(kb.id, 'settings')}><Settings aria-hidden />Cài đặt</Link></DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(true)}>
+              <Trash2 aria-hidden />Xoá knowledge base
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -66,6 +71,7 @@ function KnowledgeBaseCard({ kb }: { kb: KnowledgeBase }) {
         </Tooltip>
       </div>
       <RenameKnowledgeBaseDialog kb={kb} open={renaming} onOpenChange={setRenaming} />
+      <DeleteKnowledgeBaseDialog kb={kb} open={deleting} onOpenChange={setDeleting} />
     </div>
   );
 }

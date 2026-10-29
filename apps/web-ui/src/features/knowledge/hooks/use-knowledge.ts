@@ -52,6 +52,20 @@ function useKnowledgeWrite<V, R>(mutationFn: (vars: V) => Promise<R>) {
 
 export const useCreateKnowledgeBase = () => useKnowledgeWrite(knowledgeApi.createBase);
 export const useUpdateKnowledgeBase = () => useKnowledgeWrite(knowledgeApi.patchBase);
+/** Drops everything cached for the deleted KB (so nothing refetches a 404) and refreshes the list. */
+export function useDeleteKnowledgeBase() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (kb: string) => knowledgeApi.deleteBase(kb),
+    onSuccess: (_result, kb) => {
+      for (const key of [knowledgeKeys.base(kb), knowledgeKeys.fields(kb), knowledgeKeys.documents(kb), knowledgeKeys.agentParams(kb)]) {
+        client.removeQueries({ queryKey: key });
+      }
+      client.removeQueries({ queryKey: ['knowledge', 'document', kb] });
+      return client.invalidateQueries({ queryKey: knowledgeKeys.bases() });
+    },
+  });
+}
 export const useCreateField = () => useKnowledgeWrite(knowledgeApi.createField);
 export const usePatchField = () => useKnowledgeWrite(knowledgeApi.patchField);
 export const useDeleteField = () => useKnowledgeWrite(knowledgeApi.deleteField);

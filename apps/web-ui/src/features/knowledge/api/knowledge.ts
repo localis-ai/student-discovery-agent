@@ -19,6 +19,7 @@ export const knowledgeApi = {
   createBase: (body: KnowledgeBaseCreate) => api.post<KnowledgeBase>('admin/knowledge-bases', body),
   getBase: (kb: string) => api.get<KnowledgeBase>(base(kb)),
   patchBase: ({ kb, body }: { kb: string; body: KnowledgeBasePatch }) => api.patch<KnowledgeBase>(base(kb), body),
+  deleteBase: (kb: string) => api.del<{ id: string; deleted: true }>(base(kb)),
   listFields: async (kb: string) => (await api.get<{ items: MetadataField[] }>(`${base(kb)}/fields`)).items,
   createField: ({ kb, body }: { kb: string; body: FieldCreate }) => api.post<MetadataField>(`${base(kb)}/fields`, body),
   patchField: ({ kb, name, body }: { kb: string; name: string; body: FieldPatch }) =>

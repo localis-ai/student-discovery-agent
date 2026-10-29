@@ -68,6 +68,17 @@ paths:
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    delete:
+      operationId: deleteKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Xoá knowledge base cùng document; 409 CONFLICT_RESOURCE_IN_USE nếu agent (bản active hoặc draft) đang dùng
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseDeletedEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/knowledge-bases/{kb_id}/fields:
     parameters: [{$ref: "#/components/parameters/KbId"}]
     get:
@@ -677,6 +688,19 @@ components:
                   type: object
                   required: [items]
                   properties: {items: {type: array, items: {$ref: "#/components/schemas/MetadataField"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    KnowledgeBaseDeletedEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: false
+                  required: [id, deleted]
+                  properties: {id: {type: string}, deleted: {type: boolean, enum: [true]}}
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     FieldDeletedEnvelope:
       oneOf:

@@ -14,6 +14,7 @@ import {
   listFields, listKnowledgeBases, patchField, patchKnowledgeBase, retryDocumentRevision, saveDocument,
   searchKnowledgeBase, requestKnowledgeIndexRun,
 } from '@/modules/knowledge/knowledge.service';
+import { deleteKnowledgeBase } from '@/modules/knowledge/delete-knowledge-base';
 import { commitImport, previewImport } from '@/modules/knowledge/import.service';
 
 export const KB_BASE = '/api/v1/admin/knowledge-bases';
@@ -43,6 +44,11 @@ export const handlePatchKnowledgeBase = withHandler<KbParams>(async (req, ctx, r
   const id = kbIdSchema.parse(route.params.kb_id);
   const body = patchKnowledgeBaseSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await patchKnowledgeBase(id, body), ctx);
+});
+
+export const handleDeleteKnowledgeBase = withHandler<KbParams>(async (req, ctx, route) => {
+  const actor = await requireAdmin(req);
+  return success(await deleteKnowledgeBase(kbIdSchema.parse(route.params.kb_id), actor.sub), ctx);
 });
 
 export const handleListFields = withHandler<KbParams>(async (req, ctx, route) => {
@@ -157,6 +163,7 @@ export function registerKnowledgeRoutes(app: Hono): void {
   app.post(KB_BASE, honoHandler(handleCreateKnowledgeBase));
   app.get(`${KB_BASE}/:kb_id`, honoHandler(handleGetKnowledgeBase));
   app.patch(`${KB_BASE}/:kb_id`, honoHandler(handlePatchKnowledgeBase));
+  app.delete(`${KB_BASE}/:kb_id`, honoHandler(handleDeleteKnowledgeBase));
   app.get(`${KB_BASE}/:kb_id/fields`, honoHandler(handleListFields));
   app.post(`${KB_BASE}/:kb_id/fields`, honoHandler(handleCreateField));
   app.patch(`${KB_BASE}/:kb_id/fields/:field_name`, honoHandler(handlePatchField));
