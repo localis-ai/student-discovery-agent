@@ -136,12 +136,16 @@ class PgKnowledge:
     def _embed_query(self, model: str, query: str):
         embedding = self._embeddings.get(model)
         if embedding is None:
-            return EmbeddingUnavailable("not_configured")
-        try:
-            return embedding.embed_query(query)
-        except Exception as error:  # any provider failure must degrade to keyword search
-            logger.warning("knowledge query embedding failed: %s", type(error).__name__)
-            return EmbeddingUnavailable("provider_error")
+            result = EmbeddingUnavailable("not_configured")
+        else:
+            try:
+                result = embedding.embed_query(query)
+            except Exception as error:  # any provider failure must degrade to keyword search
+                result = EmbeddingUnavailable("provider_error", type(error).__name__)
+        if isinstance(result, EmbeddingUnavailable):  # degraded on every turn until fixed, so say why
+            logger.warning("knowledge search falls back to keywords: model=%s reason=%s %s",
+                           model, result.reason, result.detail)
+        return result
 
     @staticmethod
     def _record(row, fields) -> Record:

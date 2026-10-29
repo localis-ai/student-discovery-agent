@@ -17,6 +17,7 @@ from agent_runtime.infrastructure.auth.caller import RawRequestContext
 from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
+from agent_runtime.infrastructure.http.logging import logger
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
 from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
@@ -104,7 +105,9 @@ def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> s
                 others |= {_decode_key(value) for value in raw.values()}
             else:
                 others.add(_decode_key(secret.get_secret_value()))
-        except Exception:
+        except Exception:  # an unreadable key cannot be compared, so the collision check is incomplete
+            logger.error("runtime key unreadable, delivery key collision check skips it: {}",
+                         "RUNTIME_STUDIO_KEYRING" if is_keyring else "RUNTIME_CURSOR_SIGNING_KEY")
             continue
     return others
 
@@ -113,13 +116,17 @@ def _choose_agent_source(settings: Settings, local, student_keys: dict[str, byte
     """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
     if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
         return local
+    # Fail closed, but say why: names of settings only, never their values.
     if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
         return None
     try:
         delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
     except Exception:
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
         return None
     if delivery_key in _other_runtime_keys(settings, student_keys):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
         return None
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 
@@ -268,7 +275,9 @@ class InternalBoundary:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
-            if service and SERVICE_ROUTES.get((scope["method"], target)) != caller.purpose:
+            # Both directions: a service token reaches only its own route, a student token never a service route.
+            route_purpose = SERVICE_ROUTES.get((scope["method"], target))
+            if (route_purpose != caller.purpose) if service else route_purpose is not None:
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 

@@ -64,7 +64,9 @@ export async function forwardToRuntime(
         'x-trace-id': ctx.traceId,
       },
     });
-  } catch {
+  } catch (error) {
+    // Keep the cause (DNS, refused, redirect, the 90s abort) so a 503 can be traced; never the URL or token.
+    console.error('[conversations] runtime unreachable', { error: error instanceof Error ? error.name : 'Error', requestId: ctx.requestId });
     throw unavailable('dependency_down');
   }
   const text = await response.text();

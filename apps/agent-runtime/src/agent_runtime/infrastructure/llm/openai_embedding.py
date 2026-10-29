@@ -47,17 +47,18 @@ class OpenAICompatibleEmbedding:
             try:
                 response = self._client.post("embeddings", json={"model": self._remote_model, "input": texts})
             except httpx.TimeoutException:
-                reason, retryable = "timeout", True
-            except httpx.HTTPError:
-                reason, retryable = "provider_error", True
+                reason, retryable, detail = "timeout", True, ""
+            except httpx.HTTPError as error:
+                reason, retryable, detail = "provider_error", True, type(error).__name__
             else:
                 status = response.status_code
                 if status < 400:
                     return self._vectors(response, len(texts))
                 reason = "rate_limited" if status == 429 else "provider_error"
                 retryable = status == 429 or status >= 500
+                detail = f"http {status}"  # 401/403 here is a bad key, not an outage
             if not retryable or attempt == self._max_retries:
-                return EmbeddingUnavailable(reason)
+                return EmbeddingUnavailable(reason, detail)
             self._sleep(RETRY_BACKOFF_SECONDS * 2 ** attempt)
         return EmbeddingUnavailable("provider_error")
 

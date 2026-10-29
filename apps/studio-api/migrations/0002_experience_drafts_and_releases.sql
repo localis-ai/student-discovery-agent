@@ -81,20 +81,20 @@ BEGIN
   -- Agent config (Studio Agent Config): one default agent, immutable releases, active pointer, audit.
   CREATE TABLE IF NOT EXISTS product.agent_draft (
     id TEXT DEFAULT 'default' NOT NULL CHECK (id = 'default'),
-    content JSONB NOT NULL,
-    revision BIGINT DEFAULT 1 NOT NULL,
-    content_hash TEXT NOT NULL,
+    content JSONB NOT NULL CHECK (jsonb_typeof(content) = 'object'),
+    revision BIGINT DEFAULT 1 NOT NULL CHECK (revision >= 1),
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[0-9a-f]{64}$'),
     updated_by TEXT NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     PRIMARY KEY (id)
   );
 
   CREATE TABLE IF NOT EXISTS product.agent_releases (
-    id TEXT NOT NULL,
-    version INTEGER NOT NULL,
-    content JSONB NOT NULL,
-    content_hash TEXT NOT NULL,
-    draft_revision BIGINT NOT NULL,
+    id TEXT NOT NULL CHECK (id ~ '^agr_[0-9a-f]{24}$'),
+    version INTEGER NOT NULL CHECK (version >= 1),
+    content JSONB NOT NULL CHECK (jsonb_typeof(content) = 'object'),
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[0-9a-f]{64}$'),
+    draft_revision BIGINT NOT NULL CHECK (draft_revision >= 1),
     note TEXT CHECK (note IS NULL OR char_length(note) <= 500),
     created_by TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
@@ -105,7 +105,7 @@ BEGIN
   CREATE TABLE IF NOT EXISTS product.agent_active (
     id TEXT DEFAULT 'default' NOT NULL CHECK (id = 'default'),
     release_id TEXT NOT NULL REFERENCES product.agent_releases(id),
-    revision BIGINT DEFAULT 1 NOT NULL,
+    revision BIGINT DEFAULT 1 NOT NULL CHECK (revision >= 1),
     updated_by TEXT NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     PRIMARY KEY (id)

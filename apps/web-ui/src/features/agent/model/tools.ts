@@ -22,12 +22,14 @@ export type ToolBinding = { name: string; version: number; params?: Record<strin
 export function bindKnowledge(tools: ToolBinding[], params: Record<string, unknown>): ToolBinding[] {
   const existing = tools.find(t => t.name === 'knowledge.search')?.params ?? {};
   const suggestedSearch = (params['knowledge.search'] ?? {}) as Record<string, unknown>;
+  // Without a KB id the binding could only fail validation; keep what the admin already has.
+  if (typeof suggestedSearch.knowledge_base_id !== 'string' || !suggestedSearch.knowledge_base_id) return tools;
   const kept = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== 'knowledge_base_id' && key !== 'auto_filter_fields'));
   const search: ToolBinding = { name: 'knowledge.search', version: 1, params: { ...suggestedSearch, ...kept,
     knowledge_base_id: suggestedSearch.knowledge_base_id, auto_filter_fields: suggestedSearch.auto_filter_fields ?? [] } };
-  const show = params['knowledge.show'] as { display?: unknown[] } | undefined;
+  const show = params['knowledge.show'] as { display?: unknown } | undefined;
   const rest = tools.filter(t => t.name !== 'knowledge.search' && t.name !== 'knowledge.show');
-  return show?.display?.length
+  return Array.isArray(show?.display) && show.display.length
     ? [...rest, search, { name: 'knowledge.show', version: 1, params: show as Record<string, unknown> }]
     : [...rest, search];
 }

@@ -45,11 +45,39 @@ const req = async (method: string, path: string, body?: unknown, token = admin) 
   return { status: res.status, body: envelope };
 };
 
-describe('agent draft API', () => {
-  it('requires admin', async () => {
+describe('agent admin access', () => {
+  // Every handler calls requireAdmin on its own, so each route is checked rather than one representative.
+  const routes = (releaseId: string): Array<[string, string, unknown?]> => [
+    ['GET', '/admin/agent/draft'],
+    ['PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: 'hijack' }, expected_revision: 1 }],
+    ['POST', '/admin/agent/draft/validations', {}],
+    ['POST', '/admin/agent/releases', { expected_draft_revision: 1, expected_active_revision: 1, idempotency_key: 'access-0001' }],
+    ['GET', '/admin/agent/releases'],
+    ['GET', `/admin/agent/releases/${releaseId}`],
+    ['POST', `/admin/agent/releases/${releaseId}:restore`, { expected_active_revision: 1, idempotency_key: 'access-0002' }],
+    ['GET', '/admin/agent/active'],
+    ['GET', '/admin/agent/audit-logs'],
+  ];
+
+  it('rejects a non-admin with 403 and a missing token with 401 on every route, changing nothing', async () => {
+    const before = {
+      draft: (await req('GET', '/admin/agent/draft')).body.data,
+      active: (await req('GET', '/admin/agent/active')).body.data,
+      releases: (await req('GET', '/admin/agent/releases')).body.data,
+    };
     const user = await issueAccessToken('7', false);
-    expect((await req('GET', '/admin/agent/draft', undefined, user)).status).toBe(403);
+    for (const [method, path, body] of routes(before.active.release_id)) {
+      expect((await req(method, path, body, user)).status, `${method} ${path} as user`).toBe(403);
+      const anonymous = await dispatch(call(method, path, undefined, body));
+      expect(anonymous.status, `${method} ${path} without token`).toBe(401);
+    }
+    expect((await req('GET', '/admin/agent/draft')).body.data).toEqual(before.draft);
+    expect((await req('GET', '/admin/agent/active')).body.data).toEqual(before.active);
+    expect((await req('GET', '/admin/agent/releases')).body.data).toEqual(before.releases);
   });
+});
+
+describe('agent draft API', () => {
 
   it('reads the seeded draft and saves with revision', async () => {
     const read = await req('GET', '/admin/agent/draft');

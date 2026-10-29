@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { ConfirmDialog, QueryState, errorMessage, fullDateTime } from '@/features/knowledge';
 import { actionKey, agentKeys, useAgentRelease, useAgentReleases, useRestore } from '../hooks/use-agent';
+import { ApiError } from '@/lib/api/errors';
 import { conflictMessage } from '../model/conflict';
-import type { AgentActive, AgentConfig, AgentReleaseSummary } from '../types';
+import type { AgentActive, AgentConfig, AgentIssue, AgentReleaseSummary } from '../types';
 import { AuditList } from './audit-list';
 
 export interface VersionsTabProps { active: AgentActive | null; onCopyToDraft: (content: AgentConfig) => void }
@@ -21,7 +22,8 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
   const [viewing, setViewing] = useState<string | null>(null);
   const [copying, setCopying] = useState<string | null>(null);
   // The key is minted when the target is chosen, so retrying the same confirmation replays.
-  const [restoring, setRestoring] = useState<{ release: AgentReleaseSummary; key: string } | null>(null);
+  // issues: why the runtime refused this release, shown in the dialog; retrying cannot help, so confirm is disabled.
+  const [restoring, setRestoring] = useState<{ release: AgentReleaseSummary; key: string; issues?: AgentIssue[] } | null>(null);
   const viewed = useAgentRelease(viewing ?? copying);
 
   const doRestore = async ({ release, key }: { release: AgentReleaseSummary; key: string }) => {
@@ -30,6 +32,11 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
       await restore.mutateAsync({ id: release.id, expected_active_revision: active.revision, idempotency_key: key });
       toast.success(`Đã chuyển sang v${release.version}`);
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'PUBLISH_GATE_FAILED') {
+        const issues = (error.details as { issues?: AgentIssue[] } | undefined)?.issues ?? [];
+        setRestoring({ release, key, issues });
+        throw error; // keeps the dialog open on the issue list
+      }
       const conflict = conflictMessage(error);
       if (conflict) {
         void client.invalidateQueries({ queryKey: agentKeys.all });
@@ -85,7 +92,20 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
 
       {restoring && (
         <ConfirmDialog open onOpenChange={open => { if (!open) setRestoring(null); }} title={`Khôi phục v${restoring.release.version}?`}
-          description={`Chuyển sang v${restoring.release.version}. Hội thoại đang diễn ra không bị ảnh hưởng.`} confirmLabel="Khôi phục"
+          description={restoring.issues ? (
+            <span className="block space-y-2">
+              <span className="block text-destructive">v{restoring.release.version} không còn hợp lệ với hệ thống hiện tại nên chưa thể khôi phục:</span>
+              <span className="block space-y-1" role="list">
+                {restoring.issues.map((issue, index) => (
+                  <span key={`${index}:${issue.path}`} role="listitem" className="block">
+                    <code>{issue.path || '(toàn bộ)'}</code>: {issue.message}
+                  </span>
+                ))}
+              </span>
+              <span className="block">Chép phiên bản này vào nháp để sửa rồi phát hành lại.</span>
+            </span>
+          ) : `Chuyển sang v${restoring.release.version}. Hội thoại đang diễn ra không bị ảnh hưởng.`}
+          confirmLabel="Khôi phục" confirmDisabled={Boolean(restoring.issues)}
           onConfirm={() => doRestore(restoring)} />
       )}
       {copying && (

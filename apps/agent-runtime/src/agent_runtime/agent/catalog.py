@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from agent_runtime.knowledge.schemas import OPERATORS, FieldName, MetadataCondition, MetadataField
 from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
@@ -39,7 +40,7 @@ class StartAssessmentParams(ContractModel):
     @model_validator(mode="after")
     def unique_experiences(self) -> "StartAssessmentParams":
         if len({item.experience_id for item in self.experiences}) != len(self.experiences):
-            raise ValueError("experience_id must be unique")
+            raise PydanticCustomError("duplicate_items", "experience_id must be unique", {"field": "experiences"})
         return self
 
 
@@ -77,7 +78,8 @@ class KnowledgeSearchParams(ContractModel):
     @model_validator(mode="after")
     def unique_fields(self) -> "KnowledgeSearchParams":
         if len(set(self.auto_filter_fields)) != len(self.auto_filter_fields):
-            raise ValueError("auto_filter_fields must be unique")
+            raise PydanticCustomError("duplicate_items", "auto_filter_fields must be unique",
+                                      {"field": "auto_filter_fields"})
         return self
 
 

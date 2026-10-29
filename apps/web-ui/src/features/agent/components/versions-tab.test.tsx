@@ -63,4 +63,15 @@ describe('VersionsTab', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Chép vào nháp' }).at(-1)!);
     await waitFor(() => expect(onCopy).toHaveBeenCalledWith({ greeting_text: 'Cũ' }));
   });
+
+  it('lists why a release can no longer be restored and does not offer a pointless retry', async () => {
+    setup();
+    vi.mocked(agentApi.restore).mockReset().mockRejectedValue(new ApiError({ code: 'PUBLISH_GATE_FAILED', message: 'x', httpStatus: 422,
+      details: { issues: [{ path: 'tools[6].params.knowledge_base_id', code: 'knowledge_base_not_found', message: 'Không tìm thấy knowledge base' }] } }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Khôi phục v1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Khôi phục' }));
+    expect(await screen.findByText(/Không tìm thấy knowledge base/)).toBeInTheDocument();
+    expect(screen.getByText('tools[6].params.knowledge_base_id')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Khôi phục' })).toBeDisabled();
+  });
 });

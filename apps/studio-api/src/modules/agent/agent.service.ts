@@ -39,7 +39,11 @@ export async function saveDraftContent(db: ProductDatabase, input: SaveDraftInpu
   return toDraftDTO(result.draft);
 }
 
-/** Local/bootstrap only: draft + v1 + pointer from agent.json when no release exists yet. */
+/**
+ * Local/bootstrap only: draft + v1 + pointer from agent.json when no release exists yet.
+ * It skips the runtime gate because the runtime is not up yet when the stack seeds; the seed file
+ * infra/local-releases/agent.json is validated in CI instead (agent-runtime test_snapshot_validation.py).
+ */
 export async function seedAgent(db: ProductDatabase, content: Record<string, unknown>): Promise<'seeded' | 'skipped'> {
   return db.transaction(async tx => {
     if ((await repo.countReleases(tx)) > 0) return 'skipped';
@@ -95,6 +99,15 @@ function gateFailed(issues: unknown[]): ProductError {
   return new ProductError(422, 'PUBLISH_GATE_FAILED', 'Agent config failed validation', false, { kind: 'validation', issues });
 }
 
+/** Publish and restore gate: a valid report that describes exactly this content, else no pointer move. */
+function requirePassingReport(report: AgentValidation, contentHash: string): void {
+  if (!report.valid) throw gateFailed(report.issues);
+  // Any other hash means a broken validator, never a publish.
+  if (report.content_hash !== contentHash) {
+    throw new ProductError(503, 'SYS_UNAVAILABLE', 'Validation report does not match the content', true, { kind: 'hash_mismatch' });
+  }
+}
+
 async function lockedPointer(tx: repo.ProductExecutorLike, expected: number) {
   const pointer = await repo.lockActive(tx);
   if (!pointer) throw new ProductError(422, 'RES_EXPERIENCE_NOT_CONFIGURED', 'No active agent release');
@@ -117,12 +130,7 @@ export async function publish(
       { kind: 'revision_conflict', expected_draft_revision: input.expected_draft_revision, actual_draft_revision: draft.revision });
   }
   // Validate outside the transaction (network call); the hash check inside binds the report to this content.
-  const report = await getAgentValidator()(draft.content, ctx);
-  if (!report.valid) throw gateFailed(report.issues);
-  // The report must describe exactly this draft; anything else means a broken validator, never a publish.
-  if (report.content_hash !== draft.content_hash) {
-    throw new ProductError(503, 'SYS_UNAVAILABLE', 'Validation report does not match the draft', true, { kind: 'hash_mismatch' });
-  }
+  requirePassingReport(await getAgentValidator()(draft.content, ctx), draft.content_hash);
   return idempotent(db, 'agent:publish', input.idempotency_key, input, 201, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     const current = await repo.getDraft(tx);
@@ -155,8 +163,7 @@ export async function restore(
   if (replay) return replay;
   const target = await repo.findRelease(db, releaseId);
   if (!target) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent release not found');
-  const report = await getAgentValidator()(target.content, ctx);
-  if (!report.valid) throw gateFailed(report.issues);
+  requirePassingReport(await getAgentValidator()(target.content, ctx), target.content_hash);
   return idempotent(db, 'agent:restore', input.idempotency_key, payload, 200, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     if (pointer.release_id === releaseId) {

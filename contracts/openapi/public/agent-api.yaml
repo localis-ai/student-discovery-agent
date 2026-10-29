@@ -225,7 +225,7 @@ components:
     AgentContent:
       type: object
       additionalProperties: true
-      description: Nội dung agent.snapshot.v1 (greeting, allowed_activity_profiles, persona, model, limits, tools, guardrails, links, templates); runtime là nguồn xác thực.
+      description: Nội dung agent.snapshot.v1 (greeting_text, greeting_suggestions, allowed_activity_profiles, persona, model, limits, tools, guardrails, links, templates); runtime là nguồn xác thực.
     AgentDraft:
       type: object
       additionalProperties: false
@@ -300,7 +300,7 @@ components:
       additionalProperties: false
       required: [release_id, version, content_hash, revision, updated_at, updated_by]
       properties:
-        release_id: {type: string}
+        release_id: {type: string, pattern: "^agr_[0-9a-f]{24}$"}
         version: {type: integer, minimum: 1}
         content_hash: {type: string}
         revision: {$ref: "#/components/schemas/Revision"}

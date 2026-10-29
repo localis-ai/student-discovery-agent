@@ -38,6 +38,14 @@ const MESSAGES: Record<string, string> = {
   SYS_TURN_ABANDONED: 'Lượt trả lời bị gián đoạn, vui lòng gửi lại.',
   VAL_INCOMPATIBLE_SCHEMA: 'Phiên bản giao diện chưa tương thích với cấu hình hiện tại.',
   VAL_INCOMPATIBLE_RELEASE: 'Phiên bản giao diện chưa tương thích với cấu hình hiện tại.',
+  // Cấu hình agent trong Studio (contracts/openapi/public/agent-api.yaml).
+  PUBLISH_GATE_FAILED: 'Cấu hình chưa hợp lệ nên chưa thể phát hành — xem danh sách lỗi.',
+  CONFLICT_REVISION: 'Cấu hình đã thay đổi ở nơi khác, hãy tải lại rồi thử lại.',
+  CONFLICT_INVALID_STATE: 'Thao tác không còn phù hợp với trạng thái hiện tại, hãy tải lại.',
+  CONFLICT_IDEMPOTENCY_KEY:
+    'Thao tác này đã được gửi với nội dung khác, hãy mở lại hộp thoại rồi thử lại.',
+  SYS_UNAVAILABLE: 'Dịch vụ tạm thời không sẵn sàng, hãy thử lại sau ít phút.',
+  SYS_INTERNAL_ERROR: 'Hệ thống đang gặp sự cố, vui lòng thử lại sau.',
 };
 
 /** Fallback theo prefix module khi không có message cụ thể. */
