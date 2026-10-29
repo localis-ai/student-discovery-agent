@@ -18,7 +18,7 @@ FROM deps AS build
 ARG NEXT_PUBLIC_CHAT_MOCK
 ENV NEXT_PUBLIC_CHAT_MOCK=${NEXT_PUBLIC_CHAT_MOCK}
 COPY . .
-RUN pnpm gen:api && pnpm build
+RUN pnpm build
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
