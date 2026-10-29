@@ -283,6 +283,18 @@ paths:
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/index-runs:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    post:
+      operationId: runKnowledgeIndex
+      tags: [Studio Knowledge]
+      summary: Yêu cầu runtime index các revision đang chờ (không chờ hoàn tất)
+      responses:
+        "202": {description: Accepted, content: {application/json: {schema: {$ref: "#/components/schemas/IndexRunEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/knowledge-bases/{kb_id}/agent-params:
     parameters: [{$ref: "#/components/parameters/KbId"}]
     get:
@@ -717,6 +729,18 @@ components:
         - allOf:
             - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
             - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/SearchResult"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    IndexRunResult:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {type: string, enum: [started, already_running]}
+    IndexRunEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/IndexRunResult"}}}
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     AgentParamsEnvelope:
       oneOf:

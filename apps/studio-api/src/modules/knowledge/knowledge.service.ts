@@ -1,5 +1,6 @@
 import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
+import type { RequestContext } from '@/http/types';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
 import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
 import type {
@@ -16,6 +17,7 @@ import { buildAgentParams } from '@/modules/knowledge/agent-params';
 import { newId } from '@/modules/knowledge/ids';
 import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modules/knowledge/metadata';
 import { slugify } from '@/modules/knowledge/slug';
+import { kickIndexing, runIndexNow } from '@/modules/knowledge/index-kick';
 import { retrieveKnowledge } from '@/modules/knowledge/runtime-client';
 import { putDocument, type PutOutcome } from '@/modules/knowledge/writer';
 
@@ -210,9 +212,11 @@ export function writeOutcomeError(outcome: Exclude<PutOutcome, { status: 'writte
   }
 }
 
-export async function saveDocument(kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }) {
+export async function saveDocument(
+  kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }, ctx?: RequestContext,
+) {
   const { expected_revision, ...content } = input;
-  return inKnowledgeTransaction(async client => {
+  const saved = await inKnowledgeTransaction(async client => {
     await requireKnowledgeBase(client, kbId);
     let outcome: PutOutcome;
     try {
@@ -226,6 +230,8 @@ export async function saveDocument(kbId: string, documentId: string, input: Docu
       data: { document_id: documentId, revision: outcome.revision, outcome: outcome.outcome },
     };
   });
+  if (ctx && saved.data.outcome !== 'unchanged') kickIndexing(ctx);
+  return saved;
 }
 
 export async function changeDocumentStatus(kbId: string, documentId: string, status: 'active' | 'archived', expectedRevision: number) {
@@ -241,8 +247,8 @@ export async function changeDocumentStatus(kbId: string, documentId: string, sta
   });
 }
 
-export async function retryDocumentRevision(kbId: string, documentId: string, revision: number) {
-  return inKnowledgeTransaction(async client => {
+export async function retryDocumentRevision(kbId: string, documentId: string, revision: number, ctx?: RequestContext) {
+  const detail = await inKnowledgeTransaction(async client => {
     await requireKnowledgeBase(client, kbId);
     const current = await lockDocument(client, documentId);
     if (!current || current.kb_id !== kbId) throw notFound('Document');
@@ -255,6 +261,13 @@ export async function retryDocumentRevision(kbId: string, documentId: string, re
     }
     return documentDetail(client, kbId, documentId);
   });
+  if (ctx) kickIndexing(ctx);
+  return detail;
+}
+
+export async function requestKnowledgeIndexRun(kbId: string, ctx: RequestContext) {
+  await withKnowledgeClient(client => requireKnowledgeBase(client, kbId));
+  return runIndexNow(ctx);
 }
 
 export async function searchKnowledgeBase(kbId: string, input: SearchInput, ctx: { requestId: string; traceId: string }) {

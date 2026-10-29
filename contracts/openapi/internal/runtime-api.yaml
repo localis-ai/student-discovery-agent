@@ -413,6 +413,36 @@ paths:
                             metadata: {type: object}
         default:
           $ref: '#/components/responses/RuntimeError'
+  /knowledge/index-runs:
+    post:
+      operationId: internalStartKnowledgeIndexRun
+      tags:
+        - Knowledge
+      summary: Bắt đầu một lượt index các revision đang chờ (không chờ hoàn tất)
+      description: >-
+        Chỉ Studio service (`X-Internal-Caller: sda-studio-api`, `purpose=knowledge.index`, không có `owner_id`).
+        Body phải đúng `{}`. Trả 202 ngay; `already_running` nghĩa là một lượt đang chạy và sẽ chạy thêm một vòng.
+        503 `SERVICE_UNAVAILABLE` (`kind=not_configured`) khi RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL chưa được cấu hình.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, maxProperties: 0}
+      responses:
+        '202':
+          description: Đã nhận yêu cầu.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [status]
+                    properties:
+                      status: {type: string, enum: [started, already_running]}
+        default:
+          $ref: '#/components/responses/RuntimeError'
 
 components:
   securitySchemes:

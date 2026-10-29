@@ -12,7 +12,7 @@ import {
 import {
   agentParams, changeDocumentStatus, createField, createKnowledgeBase, deleteField, getDocument, getKnowledgeBase, listDocuments,
   listFields, listKnowledgeBases, patchField, patchKnowledgeBase, retryDocumentRevision, saveDocument,
-  searchKnowledgeBase,
+  searchKnowledgeBase, requestKnowledgeIndexRun,
 } from '@/modules/knowledge/knowledge.service';
 import { commitImport, previewImport } from '@/modules/knowledge/import.service';
 
@@ -96,7 +96,7 @@ export const handlePutDocument = withHandler<DocParams>(async (req, ctx, route) 
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const documentId = documentIdSchema.parse(route.params.document_id);
   const body = putDocumentSchema.parse(await readExperienceJsonBody(req, { maxBytes: DOCUMENT_BODY }));
-  const result = await saveDocument(kbId, documentId, body);
+  const result = await saveDocument(kbId, documentId, body, ctx);
   return success(result.data, ctx, result.status);
 });
 
@@ -116,7 +116,7 @@ export const handleRetryRevision = withHandler<RevisionParams>(async (req, ctx, 
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const documentId = documentIdSchema.parse(route.params.document_id);
   const revision = revisionParamSchema.parse(route.params.revision);
-  return success(await retryDocumentRevision(kbId, documentId, revision), ctx);
+  return success(await retryDocumentRevision(kbId, documentId, revision, ctx), ctx);
 });
 
 const IMPORT_BODY = 5 * 1024 * 1024;
@@ -132,7 +132,7 @@ export const handleCommitImport = withHandler<KbParams>(async (req, ctx, route) 
   const actor = await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const body = importCommitSchema.parse(await readExperienceJsonBody(req, { maxBytes: IMPORT_BODY }));
-  return success(await commitImport(kbId, body, actor.sub), ctx);
+  return success(await commitImport(kbId, body, actor.sub, ctx), ctx);
 });
 
 export const handleSearch = withHandler<KbParams>(async (req, ctx, route) => {
@@ -140,6 +140,11 @@ export const handleSearch = withHandler<KbParams>(async (req, ctx, route) => {
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const body = searchSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await searchKnowledgeBase(kbId, body, ctx), ctx);
+});
+
+export const handleRunIndex = withHandler<KbParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  return success(await requestKnowledgeIndexRun(kbIdSchema.parse(route.params.kb_id), ctx), ctx, 202);
 });
 
 export const handleAgentParams = withHandler<KbParams>(async (req, ctx, route) => {
@@ -165,5 +170,6 @@ export function registerKnowledgeRoutes(app: Hono): void {
   app.post(`${KB_BASE}/:kb_id/imports/preview`, honoHandler(handlePreviewImport));
   app.post(`${KB_BASE}/:kb_id/imports`, honoHandler(handleCommitImport));
   app.post(`${KB_BASE}/:kb_id/search`, honoHandler(handleSearch));
+  app.post(`${KB_BASE}/:kb_id/index-runs`, honoHandler(handleRunIndex));
   app.get(`${KB_BASE}/:kb_id/agent-params`, honoHandler(handleAgentParams));
 }

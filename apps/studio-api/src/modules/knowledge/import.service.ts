@@ -2,6 +2,8 @@ import { ProductError } from '@/http/errors';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import { knowledgeContentHash } from '@/modules/knowledge/content-hash';
+import type { RequestContext } from '@/http/types';
+import { kickIndexing } from '@/modules/knowledge/index-kick';
 import { newId } from '@/modules/knowledge/ids';
 import { ImportInputError, parseCsvRows, parseFiles, type ParsedRow } from '@/modules/knowledge/import';
 import {
@@ -116,7 +118,7 @@ function replay(stored: { request_hash: string; report: unknown }, requestHash: 
  * both write rows (the second then sees them as unchanged) and the first stored report wins. If the payloads differ,
  * the losing request answers 409 but may already have written its rows.
  */
-export async function commitImport(kbId: string, input: ImportCommitInput, actor: string): Promise<ImportReportDTO> {
+export async function commitImport(kbId: string, input: ImportCommitInput, actor: string, ctx?: RequestContext): Promise<ImportReportDTO> {
   const requestHash = computeContentHash(input.rows);
   const stored = await withKnowledgeClient(async client => {
     await requireKnowledgeBase(client, kbId);
@@ -148,7 +150,10 @@ export async function commitImport(kbId: string, input: ImportCommitInput, actor
   const saved = await inKnowledgeTransaction(client => insertImport(client, {
     id: report.import_id, kbId, key: input.idempotency_key, requestHash, report, createdBy: actor,
   }));
-  if (saved) return report;
+  if (saved) {
+    if (ctx && report.created + report.updated > 0) kickIndexing(ctx);
+    return report;
+  }
   const winner = await withKnowledgeClient(client => findImport(client, kbId, input.idempotency_key));
   return replay(winner!, requestHash);
 }

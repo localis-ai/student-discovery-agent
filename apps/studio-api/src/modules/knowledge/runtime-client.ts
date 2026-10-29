@@ -79,3 +79,38 @@ export async function retrieveKnowledge(
   console.error('[knowledge] retrieval failed', { status: response.status, requestId: ctx.requestId });
   throw unavailable('dependency_down');
 }
+
+export const INDEX_RUNS_TARGET = '/api/v1/internal/knowledge/index-runs';
+export type IndexRunStatus = 'started' | 'already_running';
+
+/** Asks the runtime to drain pending revisions. Throws a 503 ProductError when the runtime cannot take the request. */
+export async function requestIndexRun(ctx: { requestId: string; traceId: string }): Promise<{ status: IndexRunStatus }> {
+  const env = getKnowledgeEnv();
+  const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
+  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
+  const body = '{}';
+  const token = await signServiceRequest('POST', INDEX_RUNS_TARGET, body, key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'knowledge.index');
+  let response: Response;
+  try {
+    response = await fetch(new URL(INDEX_RUNS_TARGET, env.RUNTIME_INTERNAL_URL), {
+      method: 'POST',
+      body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: {
+        'content-type': 'application/json',
+        'x-internal-caller': 'sda-studio-api',
+        'x-caller-context': token,
+        'x-request-id': ctx.requestId,
+        'x-trace-id': ctx.traceId,
+      },
+    });
+  } catch {
+    throw unavailable('dependency_down');
+  }
+  const envelope = await response.json().catch(() => null) as { success?: boolean; data?: { status?: string } } | null;
+  const status = envelope?.data?.status;
+  if (response.status === 202 && envelope?.success && (status === 'started' || status === 'already_running')) return { status };
+  console.error('[knowledge] index run request failed', { status: response.status, requestId: ctx.requestId });
+  throw unavailable(response.status === 503 ? 'not_configured' : 'dependency_down');
+}
