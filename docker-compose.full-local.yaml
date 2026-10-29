@@ -69,8 +69,7 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       # Studio writes kick indexing inside the runtime (no separate worker); it embeds through this connection.
       RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_runtime
-      # Set true together with SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL=fake-embedding (offline, keyword search only).
-      RUNTIME_KNOWLEDGE_FAKE_EMBEDDING: ${SDA_LOCAL_KNOWLEDGE_FAKE_EMBEDDING:-false}
+      # Offline mode follows the model list: SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL=fake-embedding is enough.
       # OpenAI-compatible vLLM / LiteLLM proxy: chat provider `vllm` and the vLLM embedding models.
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
