@@ -522,7 +522,7 @@ components:
         action: {type: string, enum: [create, update, unchanged, invalid]}
         expected_revision: {type: integer, nullable: true}
         errors: {type: array, items: {type: string}}
-        notes: {type: array, items: {type: string}, description: Ghi chú cho admin, ví dụ ID đã được đổi vì trùng ở knowledge base khác}
+        notes: {type: array, items: {type: string}, description: "Ghi chú cho admin, ví dụ ID đã được đổi vì trùng ở knowledge base khác"}
         payload: {anyOf: [{$ref: "#/components/schemas/DocumentContent"}, {type: object, nullable: true, enum: [null]}]}
     ImportPreview:
       type: object
