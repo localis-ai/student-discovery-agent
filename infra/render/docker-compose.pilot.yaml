@@ -72,6 +72,7 @@ services:
       RUNTIME_PRODUCT_SIGNING_KID: runtime
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       KNOWLEDGE_EMBEDDING_MODELS: gemini-embedding-2
+      RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://pilot_owner:pilot_owner@db:5432/sda_runtime
     depends_on:
       db:
         condition: service_healthy
