@@ -20,7 +20,10 @@ _REQUIRED_CLAIMS = (
     "iss", "aud", "caller_type", "owner_id", "iat", "exp", "method", "request_target", "body_sha256"
 )
 _SERVICE_ISSUER = "sda-studio-api"
-_SERVICE_PURPOSES = frozenset({"knowledge.retrieval", "agent.validate", "knowledge.index"})
+_SERVICE_PURPOSES = frozenset({
+    "knowledge.retrieval", "knowledge.index", "agent.validate", "experience.validate", "experience.evaluate",
+    "experience.verify",
+})
 _SERVICE_CLAIMS = (
     "iss", "aud", "caller_type", "purpose", "iat", "exp", "method", "request_target", "body_sha256"
 )
