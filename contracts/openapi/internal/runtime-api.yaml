@@ -329,6 +329,102 @@ paths:
                             message: {type: string}
         default:
           $ref: '#/components/responses/RuntimeError'
+  /experience-validations:run:
+    post:
+      operationId: internalRunExperienceValidation
+      summary: Validate a captured Experience definition snapshot and store the report
+      description: |
+        Studio as a service (`purpose=experience.validate`; see /agent-snapshots:validate for the token). The body
+        is SnapshotCommandInput (experience-validation-api.yaml) plus the exact definition Studio captured. A
+        content_hash that is not the RFC 8785 hash of `definition` is 409 CONFLICT_REVISION before any work; the
+        runtime keeps no drafts, so expected_revision is recorded, not checked. The same idempotency_key returns
+        the stored report; reusing it for another hash or revision is 409 CONFLICT_IDEMPOTENCY_KEY. Reports are
+        held in bounded process memory: they do not survive a restart, and a later verify then fails closed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceSnapshotCommand'
+      responses:
+        '200':
+          description: The validation report (status may be failed or unsupported).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../public/experience-validation-api.yaml#/components/schemas/ValidationReport
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /experience-evaluations:run:
+    post:
+      operationId: internalRunExperienceEvaluation
+      summary: Replay the golden cases of a captured Experience definition snapshot and store the report
+      description: |
+        Same caller, body, hash, idempotency and storage rules as /experience-validations:run, with
+        `purpose=experience.evaluate`. Cases replay on the runtime selector and scorer. The report may carry
+        report-level `issues` (validation failures, no mandatory case) in addition to per-case issues.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceSnapshotCommand'
+      responses:
+        '200':
+          description: The evaluation report (status may be failed or unsupported).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../public/experience-validation-api.yaml#/components/schemas/EvaluationReport
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /experience-reports:verify:
+    post:
+      operationId: internalVerifyExperienceReports
+      summary: Publish gate for an Experience release
+      description: |
+        Studio as a service (`purpose=experience.verify`). Mirrors studio-api PublishReportInput. Verified only when
+        both reports are stored here, the validation report passed, the evaluation report has mandatory_passed
+        (non-mandatory case failures do not block), and both match experience_id, definition_hash, schema and
+        engine version. Anything else is 200 with verified=false and a reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [experience_id, definition_hash, definition_schema_version, engine_version, validation_id,
+                evaluation_id]
+              properties:
+                experience_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                definition_hash: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+                definition_schema_version: {type: string, minLength: 1}
+                engine_version: {type: string, minLength: 1}
+                validation_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                evaluation_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+      responses:
+        '200':
+          description: Gate verdict.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [verified, reason]
+                    properties:
+                      verified: {type: boolean}
+                      reason: {type: string, nullable: true}
+        default:
+          $ref: '#/components/responses/RuntimeError'
   /knowledge/retrieval:
     post:
       operationId: internalRetrieveKnowledge
@@ -341,9 +437,9 @@ paths:
         max_chunks_per_doc chunk. Điểm từ khoá là tỉ lệ từ (không dấu) của câu hỏi có trong chunk, kể cả heading.
         degraded=true khi không embed được câu hỏi (chỉ dùng điểm từ khoá).
         Ví dụ đầy đủ ở contracts/fixtures/knowledge-retrieval.json.
-        Callers: the Product BFF as a student (`X-Internal-Caller: sda-product-bff`) or Studio as a service
-        (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`, `purpose=knowledge.retrieval`,
-        no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Studio tokens are rejected with 403 on every other route.
+        Caller: Studio as a service (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`,
+        `purpose=knowledge.retrieval`, no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Studio tokens are rejected
+        with 403 on every other route, and student tokens with 403 on every service route.
       requestBody:
         required: true
         content:
@@ -450,6 +546,17 @@ components:
         minimum: 1
         maximum: 9007199254740991
   schemas:
+    ExperienceSnapshotCommand:
+      description: SnapshotCommandInput (experience-validation-api.yaml) plus the experience id and captured definition.
+      type: object
+      required: [experience_id, definition, expected_revision, content_hash, idempotency_key]
+      properties:
+        experience_id: {type: string, minLength: 1, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+        definition: {type: object, additionalProperties: true, description: Exact captured definition snapshot.}
+        expected_revision: {type: integer, minimum: 0, maximum: 9007199254740991}
+        content_hash: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+        idempotency_key: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+      additionalProperties: false
     AgentSnapshotV1:
       $ref: ../schemas/session-lifecycle.yaml#/components/schemas/AgentSnapshotV1
     ReleaseDescriptor:

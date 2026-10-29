@@ -39,11 +39,15 @@ from .envelopes import failure
 
 if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
+    from agent_runtime.evaluations.services.publish_gate import PublishGateService
 
 PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
     ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("POST", PREFIX + "/experience-validations:run"): "experience.validate",
+    ("POST", PREFIX + "/experience-evaluations:run"): "experience.evaluate",
+    ("POST", PREFIX + "/experience-reports:verify"): "experience.verify",
 }
 
 
@@ -67,6 +71,7 @@ class RuntimeContainer:
     engine: object | None = None
     knowledge: object | None = None
     agent_validation: object | None = None
+    evaluations: PublishGateService | None = None
 
 
 def _decode_key(value):
@@ -178,6 +183,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
         from agent_runtime.agent.validation import AgentSnapshotValidator
         agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
+        from agent_runtime.evaluations.services.publish_gate import PublishGateService
+        evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
@@ -186,7 +193,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            knowledge=knowledge, agent_validation=agent_validation,
+            knowledge=knowledge, agent_validation=agent_validation, evaluations=evaluations,
             product_ready=agent_source is not None)
     except Exception:
         if engine is not None:
@@ -268,7 +275,9 @@ class InternalBoundary:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
-            if service and SERVICE_ROUTES.get((scope["method"], target)) != caller.purpose:
+            # Both directions: a service token reaches only its own route, a student token never a service route.
+            route_purpose = SERVICE_ROUTES.get((scope["method"], target))
+            if (route_purpose != caller.purpose) if service else route_purpose is not None:
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 

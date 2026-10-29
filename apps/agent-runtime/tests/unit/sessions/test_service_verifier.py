@@ -37,7 +37,7 @@ def test_student_tokens_are_not_service_tokens(verifier):
     assert rejected(verifier, sign_request(REQUEST, owner_id="own_x", now=NOW, key=KEY, kid="studio")) == 401
 
 
-@pytest.mark.parametrize("claims", [{"caller_type": "student"}, {"purpose": "experience.validate"}])
+@pytest.mark.parametrize("claims", [{"caller_type": "student"}, {"purpose": "experience.publish"}])
 def test_wrong_caller_type_or_purpose_is_forbidden(verifier, claims):
     token = sign_service_request(REQUEST, now=NOW, key=KEY, kid="studio", **claims)
     assert rejected(verifier, token) == 403
