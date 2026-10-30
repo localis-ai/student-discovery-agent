@@ -18,7 +18,6 @@ from agent_runtime.infrastructure.auth.caller import RawRequestContext
 from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
-from agent_runtime.infrastructure.http.logging import logger
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
 from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
@@ -116,7 +115,7 @@ def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> s
             else:
                 others.add(_decode_key(secret.get_secret_value()))
         except Exception:  # an unreadable key cannot be compared, so the collision check is incomplete
-            logger.error("runtime key unreadable, delivery key collision check skips it: {}",
+            logger.error("runtime key unreadable, delivery key collision check skips it: %s",
                          "RUNTIME_STUDIO_KEYRING" if is_keyring else "RUNTIME_CURSOR_SIGNING_KEY")
             continue
     return others
