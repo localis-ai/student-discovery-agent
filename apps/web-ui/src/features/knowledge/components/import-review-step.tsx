@@ -76,6 +76,11 @@ export function ImportPreviewTable({ rows }: ImportPreviewTableProps) {
                       {row.errors.map(error => <li key={error}>{error}</li>)}
                     </ul>
                   )}
+                  {row.notes.length > 0 && (
+                    <ul className="space-y-0.5 text-muted-foreground">
+                      {row.notes.map(note => <li key={note}>{note}</li>)}
+                    </ul>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

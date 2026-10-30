@@ -183,6 +183,7 @@ def test_no_public_product_routes_or_seed_routes(http, rig):
         PREFIX + "/responses/{response_id}",
         PREFIX + "/responses/{response_id}/cancel",
         PREFIX + "/knowledge/retrieval",
+        PREFIX + "/knowledge/index-runs",
         PREFIX + "/agent-snapshots:validate",
         PREFIX + "/experience-validations:run",
         PREFIX + "/experience-evaluations:run",

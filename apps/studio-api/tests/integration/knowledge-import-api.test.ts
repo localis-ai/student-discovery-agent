@@ -154,4 +154,24 @@ describe('knowledge import', () => {
     const files = Array.from({ length: 201 }, (_, i) => ({ name: `f${i}.md`, content: 'x' }));
     expect((await api('POST', `${base(kbId)}/imports/preview`, admin, { kind: 'files', files })).status).toBe(422);
   });
+
+  it('gives a same-named file in a second KB a KB-prefixed id and indexes it as pending', async () => {
+    const first = await kb();
+    const second = await kb();
+    await api('PUT', `${base(first)}/documents/tuyen-sinh-hiu`, admin, {
+      title: 'HIU', body: 'cũ', source_url: null, metadata: {}, expected_revision: 0,
+    });
+    const files = [{ name: 'tuyen-sinh-hiu.md', content: '# HIU\n\nnội dung' }];
+    const preview = await api('POST', `${base(second)}/imports/preview`, admin, { kind: 'files', files });
+    const [row] = preview.body.data.rows;
+    expect(row).toMatchObject({ action: 'create', document_id: `${second}-tuyen-sinh-hiu`, expected_revision: 0 });
+    expect(row.notes[0]).toContain('ID đổi thành');
+    const commit = await api('POST', `${base(second)}/imports`, admin, { idempotency_key: 'prefix-1', rows: committable(preview.body.data.rows) });
+    expect(commit.body.data).toMatchObject({ created: 1, failed: 0 });
+    const detail = await api('GET', `${base(second)}/documents/${second}-tuyen-sinh-hiu`, admin);
+    expect(detail.body.data.latest.index_status).toBe('pending');
+    // Re-importing into the same KB updates the prefixed document instead of chaining another prefix.
+    const again = await api('POST', `${base(second)}/imports/preview`, admin, { kind: 'files', files });
+    expect(again.body.data.rows[0]).toMatchObject({ action: 'unchanged', document_id: `${second}-tuyen-sinh-hiu` });
+  });
 });

@@ -51,24 +51,24 @@ API chạy với `NODE_ENV=development` trong **stack local này** để cookie 
 
 ## Knowledge Base (Studio)
 
-`up` chạy thêm bước `runtime-provision` (profile `tools`, script [runtime-provision.py](../../scripts/runtime-provision.py)): tạo database `sda_runtime` trong container `db`, tạo role `kb_runtime`/`kb_indexer` (NOLOGIN) và `kb_studio` (Studio đăng nhập bằng role này, chỉ ghi cột nội dung), migrate + grant qua `knowledge_provision`, rồi nạp KB demo `kb_ihrd_demo`. Chạy lại an toàn. Service `knowledge-indexer` chạy nền để embed tài liệu sửa trong Studio.
+`up` chạy thêm bước `runtime-provision` (profile `tools`, script [runtime-provision.py](../../scripts/runtime-provision.py)): tạo database `sda_runtime` trong container `db`, tạo role `kb_runtime`/`kb_indexer` (NOLOGIN) và `kb_studio` (Studio đăng nhập bằng role này, chỉ ghi cột nội dung), migrate + grant qua `knowledge_provision`, rồi nạp KB demo `kb_ihrd_demo`. Chạy lại an toàn. Indexing tự động: sau mỗi lần ghi tài liệu trong Studio (lưu, nhập file, thử lại), studio-api gọi runtime và runtime tự embed trong tiến trình (không còn service `knowledge-indexer`). Trang Tài liệu có nút "Chạy index" khi còn tài liệu chờ/lỗi.
 
 Khoá ký Studio↔runtime, keyring/cursor key của runtime và password `kb_studio` được tự thêm vào `.local-docker/.env` (chỉ khi còn thiếu). Các biến tuỳ chọn:
 
 | Biến | Ý nghĩa |
 |---|---|
-| `GOOGLE_API_KEY` | Key embedding Gemini cho runtime/indexer. |
+| `GOOGLE_API_KEY` | Key embedding Gemini cho runtime. |
 | `VLLM_API_KEY`, `VLLM_BASE_URL` | Endpoint OpenAI-compatible (vLLM/LiteLLM proxy, ví dụ `https://.../v1`): chat model `vllm/<model id>` và embedding `nomic-embed-text-v1.5`, `multilingual-e5-large`. |
-| `SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL` | Danh sách phân tách bằng dấu phẩy, mặc định `gemini-embedding-2`; admin chọn một model cho mỗi KB khi tạo. Hỗ trợ `gemini-embedding-2`, `nomic-embed-text-v1.5`, `multilingual-e5-large`; đặt `fake-embedding` để chạy offline (search chỉ theo từ khoá). Đổi model trên DB đã seed cần requeue KB. |
-| `SDA_LOCAL_PROXY_HOST` / `SDA_LOCAL_PROXY_PORT` | Proxy ra ngoài cho runtime/indexer khi container không có route trực tiếp (ví dụ mạng công ty). |
+| `SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL` | Danh sách phân tách bằng dấu phẩy, mặc định `gemini-embedding-2`; admin chọn một model cho mỗi KB khi tạo. Hỗ trợ `gemini-embedding-2`, `nomic-embed-text-v1.5`, `multilingual-e5-large`; đặt `fake-embedding` để chạy offline (search chỉ theo từ khoá; runtime tự index bằng embedding giả, không cần biến nào khác). Đổi model trên DB đã seed cần requeue KB. |
+| `SDA_LOCAL_PROXY_HOST` / `SDA_LOCAL_PROXY_PORT` | Proxy ra ngoài cho runtime khi container không có route trực tiếp (ví dụ mạng công ty). |
 
-Tài liệu bị `error` (ví dụ embed khi chưa có proxy) gửi lại hàng đợi bằng:
+Gửi lại hàng đợi thủ công (ví dụ tài liệu `error` do embed khi chưa có proxy) bằng CLI trong container runtime:
 
 ```bash
-docker exec sda-full-local-knowledge-indexer-1 python -m agent_runtime.cli.knowledge_indexer --retry-errors kb_ihrd_demo
+docker compose --project-name sda-full-local --env-file .local-docker/.env -f docker-compose.full-local.yaml exec agent-runtime python -m agent_runtime.cli.knowledge_indexer --retry-errors kb_ihrd_demo
 ```
 
-Revision kẹt ở `indexing` do indexer bị dừng giữa chừng tự được nhận lại sau 600 giây.
+Revision kẹt ở `indexing` do tiến trình index bị dừng giữa chừng được nhận lại sau 120 giây, ở lượt index kế tiếp. Runtime tự chạy một lượt khi khởi động (sau restart hoặc khi instance free tier thức dậy) nên tài liệu đang chờ được index mà không cần bấm. Nút "Chạy index" cũng gửi lại các tài liệu `error` vào hàng đợi trước khi chạy. Lưu trữ (archive) không xoá chunk: khôi phục tài liệu là tìm lại được ngay.
 
 ## Chat học sinh
 

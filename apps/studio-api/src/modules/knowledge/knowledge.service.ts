@@ -1,5 +1,6 @@
 import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
+import type { RequestContext } from '@/http/types';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
 import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
 import type {
@@ -7,7 +8,7 @@ import type {
   PatchKnowledgeBaseInput, SearchInput,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
-  countDocumentsUsingField, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
+  countDocumentsUsingField, findFailedLatestRevisionIds, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
   insertField, insertKnowledgeBase, listDocumentRows, listFieldRows, listKnowledgeBaseRows, lockDocument, lockField,
   retryRevision, setDocumentStatus, updateField, updateKnowledgeBase,
   type DocumentRow, type DocumentSummaryRow, type FieldRow, type KnowledgeBaseRow,
@@ -16,8 +17,9 @@ import { buildAgentParams } from '@/modules/knowledge/agent-params';
 import { newId } from '@/modules/knowledge/ids';
 import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modules/knowledge/metadata';
 import { slugify } from '@/modules/knowledge/slug';
+import { kickIndexing, runIndexNow } from '@/modules/knowledge/index-kick';
 import { retrieveKnowledge } from '@/modules/knowledge/runtime-client';
-import { putDocument, type PutOutcome } from '@/modules/knowledge/writer';
+import { availableDocumentId, putDocument, type PutOutcome } from '@/modules/knowledge/writer';
 
 export interface KnowledgeBaseDTO {
   id: string;
@@ -210,9 +212,11 @@ export function writeOutcomeError(outcome: Exclude<PutOutcome, { status: 'writte
   }
 }
 
-export async function saveDocument(kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }) {
+export async function saveDocument(
+  kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }, ctx: RequestContext,
+) {
   const { expected_revision, ...content } = input;
-  return inKnowledgeTransaction(async client => {
+  const saved = await inKnowledgeTransaction(async client => {
     await requireKnowledgeBase(client, kbId);
     let outcome: PutOutcome;
     try {
@@ -220,12 +224,19 @@ export async function saveDocument(kbId: string, documentId: string, input: Docu
     } catch (error) {
       throw error instanceof MetadataValidationError ? invalidMetadata(error) : error;
     }
+    if (outcome.status === 'wrong_kb') {
+      throw new ProductError(409, 'CONFLICT_ALREADY_EXISTS', 'Document id belongs to another knowledge base', false, {
+        kind: 'document_id_taken', suggested_id: await availableDocumentId(client, kbId, documentId),
+      });
+    }
     if (outcome.status !== 'written') throw writeOutcomeError(outcome, expected_revision);
     return {
       status: outcome.outcome === 'created' ? 201 : 200,
       data: { document_id: documentId, revision: outcome.revision, outcome: outcome.outcome },
     };
   });
+  if (saved.data.outcome !== 'unchanged') kickIndexing(ctx);
+  return saved;
 }
 
 export async function changeDocumentStatus(kbId: string, documentId: string, status: 'active' | 'archived', expectedRevision: number) {
@@ -241,8 +252,8 @@ export async function changeDocumentStatus(kbId: string, documentId: string, sta
   });
 }
 
-export async function retryDocumentRevision(kbId: string, documentId: string, revision: number) {
-  return inKnowledgeTransaction(async client => {
+export async function retryDocumentRevision(kbId: string, documentId: string, revision: number, ctx: RequestContext) {
+  const detail = await inKnowledgeTransaction(async client => {
     await requireKnowledgeBase(client, kbId);
     const current = await lockDocument(client, documentId);
     if (!current || current.kb_id !== kbId) throw notFound('Document');
@@ -255,6 +266,24 @@ export async function retryDocumentRevision(kbId: string, documentId: string, re
     }
     return documentDetail(client, kbId, documentId);
   });
+  kickIndexing(ctx);
+  return detail;
+}
+
+/**
+ * The admin button: first sends this KB's failed latest revisions back to the queue (the runtime only claims
+ * pending ones), then asks the runtime to run. The run itself drains every knowledge base.
+ */
+export async function requestKnowledgeIndexRun(kbId: string, ctx: RequestContext) {
+  const requeued = await inKnowledgeTransaction(async client => {
+    await requireKnowledgeBase(client, kbId);
+    let count = 0;
+    for (const revisionId of await findFailedLatestRevisionIds(client, kbId)) {
+      if (await retryRevision(client, revisionId)) count += 1;
+    }
+    return count;
+  });
+  return { ...await runIndexNow(ctx), requeued };
 }
 
 export async function searchKnowledgeBase(kbId: string, input: SearchInput, ctx: { requestId: string; traceId: string }) {

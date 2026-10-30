@@ -68,6 +68,17 @@ paths:
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    delete:
+      operationId: deleteKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Xoá knowledge base cùng document; 409 CONFLICT_RESOURCE_IN_USE nếu agent (bản active hoặc draft) đang dùng
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseDeletedEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/knowledge-bases/{kb_id}/fields:
     parameters: [{$ref: "#/components/parameters/KbId"}]
     get:
@@ -283,6 +294,24 @@ paths:
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/index-runs:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    post:
+      operationId: runKnowledgeIndex
+      tags: [Studio Knowledge]
+      summary: Yêu cầu runtime index các revision đang chờ (không chờ hoàn tất)
+      description: >-
+        Trước khi gọi runtime, gửi lại vào hàng đợi revision mới nhất bị lỗi (`error`) của các tài liệu active
+        trong knowledge base này (`requeued` = số revision đã gửi lại). Một lượt index của runtime xử lý hàng đợi
+        của mọi knowledge base, không chỉ KB trong path. 503 `details.kind=runtime_starting` khi runtime không trả
+        lời kịp (đang khởi động sau khi ngủ; nó tự index khi dậy), `not_configured` khi chưa cấu hình,
+        `dependency_down` cho lỗi khác.
+      responses:
+        "202": {description: Accepted, content: {application/json: {schema: {$ref: "#/components/schemas/IndexRunEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/knowledge-bases/{kb_id}/agent-params:
     parameters: [{$ref: "#/components/parameters/KbId"}]
     get:
@@ -485,7 +514,7 @@ components:
     ImportPreviewRow:
       type: object
       additionalProperties: false
-      required: [row, source, document_id, action, expected_revision, errors, payload]
+      required: [row, source, document_id, action, expected_revision, errors, notes, payload]
       properties:
         row: {type: integer, minimum: 1}
         source: {type: string, description: Tên file hoặc "dòng N"}
@@ -493,6 +522,7 @@ components:
         action: {type: string, enum: [create, update, unchanged, invalid]}
         expected_revision: {type: integer, nullable: true}
         errors: {type: array, items: {type: string}}
+        notes: {type: array, items: {type: string}, description: "Ghi chú cho admin, ví dụ ID đã được đổi vì trùng ở knowledge base khác"}
         payload: {anyOf: [{$ref: "#/components/schemas/DocumentContent"}, {type: object, nullable: true, enum: [null]}]}
     ImportPreview:
       type: object
@@ -659,6 +689,19 @@ components:
                   required: [items]
                   properties: {items: {type: array, items: {$ref: "#/components/schemas/MetadataField"}}}
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    KnowledgeBaseDeletedEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: false
+                  required: [id, deleted]
+                  properties: {id: {type: string}, deleted: {type: boolean, enum: [true]}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     FieldDeletedEnvelope:
       oneOf:
         - allOf:
@@ -717,6 +760,19 @@ components:
         - allOf:
             - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
             - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/SearchResult"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    IndexRunResult:
+      type: object
+      additionalProperties: false
+      required: [status, requeued]
+      properties:
+        status: {type: string, enum: [started, already_running]}
+        requeued: {type: integer, minimum: 0, description: Số revision lỗi vừa được gửi lại hàng đợi}
+    IndexRunEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/IndexRunResult"}}}
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     AgentParamsEnvelope:
       oneOf:

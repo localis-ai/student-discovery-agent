@@ -111,3 +111,19 @@ def test_only_studio_may_retry(engines, test_database):
             assert sqlstate(engine, "SELECT knowledge.retry_revision('r1')") == "42501"
         finally:
             engine.dispose()
+
+
+def test_studio_deletes_a_knowledge_base_with_its_content_but_keeps_the_embedding_cache(engines):
+    owner, studio = engines
+    write_content(studio)
+    with owner.begin() as connection:
+        connection.execute(text("INSERT INTO knowledge.chunks (revision_id, ordinal, text, chunk_hash) "
+                                "VALUES ('r1', 0, 'x', :hash)"), {"hash": HASH})
+        connection.execute(text("INSERT INTO knowledge.embeddings (chunk_hash, embedding_model, embedding) "
+                                "VALUES (:hash, 'fake-embedding', '[1,2]')"), {"hash": HASH})
+    with studio.begin() as connection:
+        connection.execute(text("DELETE FROM knowledge.knowledge_bases WHERE id = 'kb1'"))
+    with owner.begin() as connection:
+        for table in ("knowledge_bases", "metadata_fields", "documents", "document_revisions", "chunks", "imports"):
+            assert connection.execute(text(f"SELECT count(*) FROM knowledge.{table}")).scalar_one() == 0
+        assert connection.execute(text("SELECT count(*) FROM knowledge.embeddings")).scalar_one() == 1

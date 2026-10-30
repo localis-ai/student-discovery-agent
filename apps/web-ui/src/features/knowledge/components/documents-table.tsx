@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, FilePlus, FileText, Info, Loader2, SearchX, Upload } from 'lucide-react';
 import { IconButton } from '@/components/shared/icon-button';
@@ -212,16 +212,20 @@ export interface DocumentsTableProps {
   filters: DocumentFilters;
   isFiltered: boolean;
   onClearFilters: () => void;
+  /** Reports the items currently shown, so the page can decide whether indexing needs a nudge. */
+  onItemsChange?: (items: DocumentSummary[]) => void;
 }
 
 /** Remount (via `key`) when filters change so paging restarts at the first page. */
-export function DocumentsTable({ kb, onOpenDocument, filters, isFiltered, onClearFilters }: DocumentsTableProps) {
+export function DocumentsTable({ kb, onOpenDocument, filters, isFiltered, onClearFilters, onItemsChange }: DocumentsTableProps) {
   // Cursor of each visited page; the first page has none.
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const page = cursors.length - 1;
   const query = useDocuments(kb, { ...filters, cursor: cursors[page], limit: PAGE_SIZE }, { pollWhilePending: true, keepPrevious: true });
   // The previous page stays visible (dimmed) while the requested one loads.
   const turning = query.isPlaceholderData;
+  const items = query.data?.items;
+  useEffect(() => { onItemsChange?.(items ?? []); }, [items, onItemsChange]);
 
   const empty = isFiltered ? (
     <EmptyState icon={SearchX} title="Không tìm thấy tài liệu" description="Thử từ khoá hoặc trạng thái khác."

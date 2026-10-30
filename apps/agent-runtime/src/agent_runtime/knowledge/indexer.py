@@ -45,7 +45,6 @@ class IndexReport:
     embedded: int = 0
     reused: int = 0
     reclaimed: int = 0
-    purged: int = 0
 
     def __add__(self, other: "IndexReport") -> "IndexReport":
         return IndexReport(*(getattr(self, item.name) + getattr(other, item.name) for item in fields(self)))
@@ -60,7 +59,8 @@ class IndexerService:
         self._stale_after_seconds = stale_after_seconds
 
     def run_once(self, batch_size: int = 20) -> IndexReport:
-        report = IndexReport(reclaimed=self.reclaim_stale(), purged=self.purge_archived())
+        # Archived chunks are kept: retrieval filters on document status, and a restore must find them again.
+        report = IndexReport(reclaimed=self.reclaim_stale())
         for _ in range(batch_size):
             job = self.claim()
             if job is None:
@@ -76,8 +76,9 @@ class IndexerService:
     def index(self, job: IndexJob) -> IndexReport:
         try:
             return self._index(job)
-        except Exception:
-            logger.exception("knowledge index failed for revision %s", job.revision_id)
+        except Exception as error:
+            # Type only: provider clients put request details and document text in messages and tracebacks.
+            logger.error("knowledge index failed for revision %s: %s", job.revision_id, type(error).__name__)
             self._fail(job, "internal error")
             return IndexReport(failed=1)
 
@@ -150,6 +151,8 @@ class IndexerService:
                 {"age": self._stale_after_seconds}).rowcount
 
     def purge_archived(self) -> int:
+        """Delete chunks of archived documents. Explicit operator use only, never part of a run: a restored
+        document keeps its ready revision and would otherwise come back with nothing to retrieve."""
         with self._uow.begin() as session:
             return session.execute(text(
                 "DELETE FROM knowledge.chunks c USING knowledge.document_revisions r, knowledge.documents d "
@@ -170,3 +173,13 @@ class IndexerService:
                 "UPDATE knowledge.document_revisions SET index_status = 'pending', claimed_at = NULL, error = NULL "
                 "WHERE index_status <> 'indexing' AND id IN (SELECT active_revision_id FROM knowledge.documents "
                 "WHERE kb_id = :kb AND status = 'active' AND active_revision_id IS NOT NULL)"), {"kb": kb_id}).rowcount
+
+
+def drain(service: "IndexerService", batch_size: int) -> IndexReport:
+    """Run batches until one comes back short: the queue is empty."""
+    total = IndexReport()
+    while True:
+        report = service.run_once(batch_size)
+        total += report
+        if report.indexed + report.failed < batch_size:
+            return total

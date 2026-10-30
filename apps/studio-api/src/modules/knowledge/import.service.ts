@@ -2,6 +2,8 @@ import { ProductError } from '@/http/errors';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import { knowledgeContentHash } from '@/modules/knowledge/content-hash';
+import type { RequestContext } from '@/http/types';
+import { kickIndexing } from '@/modules/knowledge/index-kick';
 import { newId } from '@/modules/knowledge/ids';
 import { ImportInputError, parseCsvRows, parseFiles, type ParsedRow } from '@/modules/knowledge/import';
 import {
@@ -12,7 +14,7 @@ import {
 } from '@/modules/knowledge/knowledge.repository';
 import { requireKnowledgeBase } from '@/modules/knowledge/knowledge.service';
 import { MetadataValidationError, namedMetadata, validateMetadata } from '@/modules/knowledge/metadata';
-import { putDocument } from '@/modules/knowledge/writer';
+import { availableDocumentId, putDocument } from '@/modules/knowledge/writer';
 
 export interface PreviewRowDTO {
   row: number;
@@ -21,6 +23,7 @@ export interface PreviewRowDTO {
   action: 'create' | 'update' | 'unchanged' | 'invalid';
   expected_revision: number | null;
   errors: string[];
+  notes: string[];
   payload: DocumentContent | null;
 }
 
@@ -47,16 +50,21 @@ async function resolveRow(
 ): Promise<PreviewRowDTO> {
   const invalid = (errors: string[]): PreviewRowDTO => ({
     row: parsed.row, source: parsed.source, document_id: parsed.documentId, action: 'invalid',
-    expected_revision: null, errors, payload: null,
+    expected_revision: null, errors, notes: [], payload: null,
   });
   if (parsed.errors.length > 0) return invalid(parsed.errors);
-  const documentId = parsed.documentId!;
-  const earlier = seen.get(documentId);
+  const originalId = parsed.documentId!;
+  const earlier = seen.get(originalId);
   if (earlier) return invalid([`Trùng document_id với ${earlier}`]);
-  seen.set(documentId, parsed.source);
+  const documentId = await availableDocumentId(client, kbId, originalId, new Set(seen.keys()));
+  seen.set(originalId, parsed.source);
+  const notes: string[] = [];
+  if (documentId !== originalId) {
+    seen.set(documentId, parsed.source);
+    notes.push(`ID đổi thành ${documentId} vì đã dùng ở knowledge base khác`);
+  }
 
   const existing = await findLatestContent(client, documentId);
-  if (existing && existing.kb_id !== kbId) return invalid(['document_id đã thuộc knowledge base khác']);
   const metadata = Object.fromEntries(Object.entries({
     ...(existing ? namedMetadata(fields, existing.metadata) : {}),
     ...parsed.metadata,
@@ -81,7 +89,7 @@ async function resolveRow(
   return {
     row: parsed.row, source: parsed.source, document_id: documentId,
     action: !existing ? 'create' : existing.content_hash === hash ? 'unchanged' : 'update',
-    expected_revision: existing?.revision ?? 0, errors: [], payload: checked.data,
+    expected_revision: existing?.revision ?? 0, errors: [], notes, payload: checked.data,
   };
 }
 
@@ -116,7 +124,7 @@ function replay(stored: { request_hash: string; report: unknown }, requestHash: 
  * both write rows (the second then sees them as unchanged) and the first stored report wins. If the payloads differ,
  * the losing request answers 409 but may already have written its rows.
  */
-export async function commitImport(kbId: string, input: ImportCommitInput, actor: string): Promise<ImportReportDTO> {
+export async function commitImport(kbId: string, input: ImportCommitInput, actor: string, ctx: RequestContext): Promise<ImportReportDTO> {
   const requestHash = computeContentHash(input.rows);
   const stored = await withKnowledgeClient(async client => {
     await requireKnowledgeBase(client, kbId);
@@ -148,7 +156,10 @@ export async function commitImport(kbId: string, input: ImportCommitInput, actor
   const saved = await inKnowledgeTransaction(client => insertImport(client, {
     id: report.import_id, kbId, key: input.idempotency_key, requestHash, report, createdBy: actor,
   }));
-  if (saved) return report;
+  if (saved) {
+    if (report.created + report.updated > 0) kickIndexing(ctx);
+    return report;
+  }
   const winner = await withKnowledgeClient(client => findImport(client, kbId, input.idempotency_key));
   return replay(winner!, requestHash);
 }

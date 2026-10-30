@@ -29,6 +29,7 @@ def test_health_without_product_dependencies(monkeypatch):
         "/api/v1/internal/responses/{response_id}": {"get"},
         "/api/v1/internal/responses/{response_id}/cancel": {"post"},
         "/api/v1/internal/knowledge/retrieval": {"post"},
+        "/api/v1/internal/knowledge/index-runs": {"post"},
         "/api/v1/internal/agent-snapshots:validate": {"post"},
         "/api/v1/internal/experience-validations:run": {"post"},
         "/api/v1/internal/experience-evaluations:run": {"post"},

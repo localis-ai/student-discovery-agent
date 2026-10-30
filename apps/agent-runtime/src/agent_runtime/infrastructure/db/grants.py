@@ -44,7 +44,7 @@ def grant_knowledge_roles(connection: Connection, runtime_role: str, indexer_rol
     if studio_role:
         studio = quote(studio_role)
         connection.exec_driver_sql(
-            f"GRANT INSERT, UPDATE (name, description, updated_at) ON knowledge.knowledge_bases TO {studio}")
+            f"GRANT INSERT, DELETE, UPDATE (name, description, updated_at) ON knowledge.knowledge_bases TO {studio}")
         connection.exec_driver_sql(
             f"GRANT INSERT, DELETE, UPDATE (label, filterable, ordinal) ON knowledge.metadata_fields TO {studio}")
         connection.exec_driver_sql(

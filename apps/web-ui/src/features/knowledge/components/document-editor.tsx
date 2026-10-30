@@ -44,6 +44,11 @@ function errorLines(errors: FieldErrors<EditorForm>, fields: MetadataField[]): s
   return lines;
 }
 
+function suggestedIdOf(details: unknown): string | null {
+  const { kind, suggested_id } = (details ?? {}) as { kind?: unknown; suggested_id?: unknown };
+  return kind === 'document_id_taken' && typeof suggested_id === 'string' ? suggested_id : null;
+}
+
 function FieldError({ name, message }: { name: string; message?: string }) {
   return message ? <p id={errorId(name)} className="mt-1 text-xs text-destructive">{message}</p> : null;
 }
@@ -100,6 +105,7 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
   const isConflict = save.error instanceof ApiError && save.error.httpStatus === 409;
   const conflict = isConflict && !!docId;
   const idTaken = isConflict && !docId;
+  const suggestedId = idTaken && save.error instanceof ApiError ? suggestedIdOf(save.error.details) : null;
   const otherError = save.error && !isConflict && !(save.error instanceof ApiError && save.error.httpStatus === 422) ? save.error : null;
 
   const openIdInput = () => {
@@ -264,7 +270,20 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
                       aria-invalid={!!errors.id || idTaken} aria-describedby={errors.id || idTaken ? errorId('id') : undefined}
                       {...form.register('id', { onChange: () => { if (idTaken) save.reset(); } })}
                     />
-                    <FieldError name="id" message={idTaken ? 'ID đã tồn tại, hãy chọn ID khác.' : errors.id?.message} />
+                    <FieldError
+                      name="id"
+                      message={idTaken
+                        ? (suggestedId ? 'ID này đã dùng ở knowledge base khác.' : 'ID đã tồn tại, hãy chọn ID khác.')
+                        : errors.id?.message}
+                    />
+                    {suggestedId && (
+                      <Button
+                        type="button" size="sm" variant="outline" className="mt-2 font-mono"
+                        onClick={() => { form.setValue('id', suggestedId, { shouldDirty: true }); save.reset(); }}
+                      >
+                        Dùng ID {suggestedId}
+                      </Button>
+                    )}
                   </div>
                 )
                 : (
