@@ -4,10 +4,13 @@ import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/agent/agent.repository';
+import { computeContentHash } from '@/modules/experiences/canonical';
 
 let pg: PostgresHandle;
 
 beforeAll(async () => { pg = await startPostgres(); await migrateProduct(pg.url); });
+// The schema only accepts real sha256 content hashes.
+const h = (label: string) => computeContentHash({ label });
 afterAll(async () => { try { await closeProductDatabase(); } finally { await pg?.stop(); } });
 beforeEach(async () => {
   vi.stubEnv('DATABASE_URL', pg.url);
@@ -20,29 +23,29 @@ beforeEach(async () => {
 describe('agent repository', () => {
   it('saves the draft with optimistic revision and reports conflicts', async () => {
     const db = getProductDatabase();
-    await repo.insertDraftIfMissing(db, { content: { greeting_text: 'a' }, hash: 'sha256:a', actor: 'admin' });
-    const ok = await repo.saveDraft(db, { expectedRevision: 1, content: { greeting_text: 'b' }, hash: 'sha256:b', actor: 'admin' });
-    expect(ok).toMatchObject({ status: 'ok', draft: { revision: 2, content_hash: 'sha256:b' } });
-    const stale = await repo.saveDraft(db, { expectedRevision: 1, content: { greeting_text: 'c' }, hash: 'sha256:c', actor: 'admin' });
+    await repo.insertDraftIfMissing(db, { content: { greeting_text: 'a' }, hash: h('a'), actor: 'admin' });
+    const ok = await repo.saveDraft(db, { expectedRevision: 1, content: { greeting_text: 'b' }, hash: h('b'), actor: 'admin' });
+    expect(ok).toMatchObject({ status: 'ok', draft: { revision: 2, content_hash: h('b') } });
+    const stale = await repo.saveDraft(db, { expectedRevision: 1, content: { greeting_text: 'c' }, hash: h('c'), actor: 'admin' });
     expect(stale).toMatchObject({ status: 'conflict', current: { revision: 2 } });
   });
 
   it('keeps the revision when content is unchanged', async () => {
     const db = getProductDatabase();
-    await repo.insertDraftIfMissing(db, { content: { x: 1 }, hash: 'sha256:x', actor: 'admin' });
-    const same = await repo.saveDraft(db, { expectedRevision: 1, content: { x: 1 }, hash: 'sha256:x', actor: 'admin' });
+    await repo.insertDraftIfMissing(db, { content: { x: 1 }, hash: h('x'), actor: 'admin' });
+    const same = await repo.saveDraft(db, { expectedRevision: 1, content: { x: 1 }, hash: h('x'), actor: 'admin' });
     expect(same).toMatchObject({ status: 'ok', draft: { revision: 1 } });
   });
 
   it('numbers releases, moves the pointer with revision checks and rejects mutation', async () => {
     const db = getProductDatabase();
     const first = await db.transaction(async tx => {
-      const release = await repo.insertRelease(tx, { content: { v: 1 }, hash: 'sha256:v1', draftRevision: 1, note: null, actor: 'admin' });
+      const release = await repo.insertRelease(tx, { content: { v: 1 }, hash: h('v1'), draftRevision: 1, note: null, actor: 'admin' });
       expect(await repo.pointActive(tx, { releaseId: release.id, expectedRevision: null, actor: 'admin' })).not.toBeNull();
       return release;
     });
     const second = await db.transaction(tx =>
-      repo.insertRelease(tx, { content: { v: 2 }, hash: 'sha256:v2', draftRevision: 2, note: 'n', actor: 'admin' }));
+      repo.insertRelease(tx, { content: { v: 2 }, hash: h('v2'), draftRevision: 2, note: 'n', actor: 'admin' }));
     expect(second.version).toBe(first.version + 1);
     await db.transaction(async tx => {
       expect(await repo.pointActive(tx, { releaseId: second.id, expectedRevision: 99, actor: 'admin' })).toBeNull();
@@ -65,5 +68,16 @@ describe('agent repository', () => {
     const page2 = await repo.listAudit(db, { limit: 2, cursor: page1.next_cursor! });
     expect(page2.items.map(e => e.action)).toEqual(['agent.a']);
     expect(page2.next_cursor).toBeNull();
+  });
+
+  it('rejects rows the service layer would never write', async () => {
+    const db = getProductDatabase();
+    const insert = (statement: ReturnType<typeof sql>) => db.execute(statement).then(() => 'stored', (error: unknown) => String((error as { cause?: unknown }).cause ?? error));
+    expect(await insert(sql`INSERT INTO product.agent_releases (id, version, content, content_hash, draft_revision, created_by)
+      VALUES ('agr_${sql.raw('0'.repeat(24))}', 99, '{}'::jsonb, 'sha256:not-a-hash', 1, 'admin')`)).toMatch(/check constraint/);
+    expect(await insert(sql`INSERT INTO product.agent_releases (id, version, content, content_hash, draft_revision, created_by)
+      VALUES ('release-1', 99, '{}'::jsonb, ${h('x')}, 1, 'admin')`)).toMatch(/check constraint/);
+    expect(await insert(sql`INSERT INTO product.agent_releases (id, version, content, content_hash, draft_revision, created_by)
+      VALUES ('agr_${sql.raw('1'.repeat(24))}', 0, '[]'::jsonb, ${h('x')}, 1, 'admin')`)).toMatch(/check constraint/);
   });
 });

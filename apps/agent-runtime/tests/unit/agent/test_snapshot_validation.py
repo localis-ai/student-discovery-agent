@@ -118,7 +118,7 @@ def _vietnamese(issue):
 
 def test_schema_value_errors_have_specific_codes_and_vietnamese_messages():
     cases = [
-        (lambda c: c["model"].update(ref="nope/some-model"), "model", "unsupported_provider"),
+        (lambda c: c["model"].update(ref="nope/some-model"), "model.ref", "unsupported_provider"),
         (lambda c: c["tools"].append({"name": "web.browse", "version": 1}), f"tools[{len(SEED['tools'])}]",
          "tool_not_declared"),
         (lambda c: c["persona"].update(system_prompt="Chào {{ten}}"), "persona.system_prompt", "unknown_placeholder"),
@@ -130,6 +130,29 @@ def test_schema_value_errors_have_specific_codes_and_vietnamese_messages():
         assert _vietnamese(matches[0]), matches[0]
     unknown = next(i for i in _issues(cases[2][0]) if i.code == "unknown_placeholder")
     assert "ten" in unknown.message
+
+
+def test_whole_snapshot_rules_point_at_the_field_to_fix():
+    def show_only(c):
+        c["tools"] = [t for t in c["tools"] if t["name"] != "knowledge.search"]
+        c["tools"].append({"name": "knowledge.show", "version": 1, "params": {"max_cards": 1,
+                          "display": [{"field": "source_url", "label": "Nguồn"}]}})
+
+    def slow_model(c):
+        c["model"].update(timeout_ms=30000, max_retries=2)
+        c["limits"].update(turn_timeout_ms=1000)
+
+    start = next(i for i, t in enumerate(SEED["tools"]) if t["name"] == "assessment.start")
+    cases = [
+        (show_only, "tools", "show_requires_search"),
+        (slow_model, "model.timeout_ms", "timeout_exceeds_turn"),
+        (lambda c: c["tools"].append(c["tools"][0]), "tools", "duplicate_tool"),
+        (lambda c: c.update(allowed_activity_profiles=["other.profile"]),
+         f"tools[{start}].params.experiences", "profile_not_allowed"),
+    ]
+    for patch, path, code in cases:
+        issues = _issues(patch)
+        assert any(i.path == path and i.code == code and _vietnamese(i) for i in issues), (code, issues)
 
 
 def test_every_issue_message_is_vietnamese_never_english_fallback():

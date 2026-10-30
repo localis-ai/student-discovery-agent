@@ -1,4 +1,7 @@
+import base64
 import hashlib
+import json
+from pathlib import Path
 
 import httpx
 import jwt
@@ -11,6 +14,8 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 KEY = b"k" * 32
 CONTENT = {"greeting_text": "Chào", "allowed_activity_profiles": ["riasec.mean.bounds.v2"]}
 TARGET = "/api/v1/internal/releases/active?kind=agent&environment=demo"
+GOLDEN = json.loads((Path(__file__).resolve().parents[5] / "contracts/fixtures/runtime-delivery-token.json")
+                    .read_text(encoding="utf-8"))
 
 
 def source(handler):
@@ -47,11 +52,34 @@ def test_signed_request_returns_the_descriptor():
     assert jwt.get_unverified_header(request.headers["x-caller-context"])["kid"] == "runtime"
 
 
+@pytest.mark.parametrize("case", GOLDEN["cases"], ids=lambda case: case["environment"])
+def test_tokens_match_the_fixture_studio_api_verifies(case):
+    """studio-api's delivery-auth.test.ts verifies these same tokens; a change on either side breaks one of them."""
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return envelope(descriptor(environment=case["environment"]))
+
+    golden = HttpProductReleaseSource("http://studio-api:3001", base64.b64decode(GOLDEN["key_base64"]), GOLDEN["kid"],
+                                      client=httpx.Client(transport=httpx.MockTransport(handler),
+                                                          base_url="http://studio-api:3001"),
+                                      clock=lambda: GOLDEN["now"])
+    golden.resolve_active_agent(case["environment"])
+    assert seen["request"].url.raw_path.decode() == case["target"]
+    assert seen["request"].headers["x-caller-context"] == case["token"]
+
+
 @pytest.mark.parametrize("response,status", [
     (lambda r: envelope(descriptor(content_hash="sha256:" + "0" * 64)), 503),
     (lambda r: envelope(descriptor(kind="experience")), 503),
+    (lambda r: envelope(descriptor(environment="production")), 503),
+    (lambda r: envelope(descriptor(delivery_schema_version="agent.snapshot.v2")), 503),
     (lambda r: envelope("RES_EXPERIENCE_NOT_CONFIGURED", status=422, success=False), 422),
     (lambda r: httpx.Response(500, text="boom"), 503),
+    (lambda r: httpx.Response(200, text="<html>proxy page</html>"), 503),
+    (lambda r: envelope("AUTH_CALLER_CONTEXT_INVALID", status=401, success=False), 503),
+    (lambda r: envelope("AUTHZ_FORBIDDEN", status=403, success=False), 503),
 ])
 def test_bad_or_missing_releases_fail_closed(response, status):
     with pytest.raises(RuntimeSessionError) as error:

@@ -15,8 +15,9 @@ const reportSchema = z.object({
 export type AgentValidation = z.infer<typeof reportSchema>;
 export type AgentIssue = AgentValidation['issues'][number];
 
-const unavailable = (kind: string) =>
-  new ProductError(503, 'SYS_UNAVAILABLE', 'Agent validation is unavailable', kind === 'dependency_down', { kind });
+// Only a transient outage is retryable; a rejected key or a malformed request will fail the same way again.
+const unavailable = (kind: 'dependency_down' | 'timeout' | 'not_configured' | 'misconfigured') =>
+  new ProductError(503, 'SYS_UNAVAILABLE', 'Agent validation is unavailable', kind === 'dependency_down' || kind === 'timeout', { kind });
 
 /** The runtime owns agent schema rules; anything short of a well-formed report is a failure, never a pass. */
 export async function validateWithRuntime(content: Record<string, unknown>, ctx: RequestContext): Promise<AgentValidation> {
@@ -34,16 +35,23 @@ export async function validateWithRuntime(content: Record<string, unknown>, ctx:
         'x-request-id': ctx.requestId, 'x-trace-id': ctx.traceId,
       },
     });
-  } catch {
-    throw unavailable('dependency_down');
+  } catch (error) {
+    const name = error instanceof Error ? error.name : 'Error';
+    console.error('[agent] runtime validation unreachable', { error: name, requestId: ctx.requestId });
+    throw unavailable(name === 'TimeoutError' ? 'timeout' : 'dependency_down');
   }
-  const envelope = await response.json().catch(() => null) as { success?: boolean; data?: unknown } | null;
+  const envelope = await response.json().catch(() => null) as
+    { success?: boolean; data?: unknown; error?: { code?: unknown } } | null;
   const parsed = response.ok && envelope?.success ? reportSchema.safeParse(envelope.data) : null;
-  if (!parsed?.success) {
-    console.error('[agent] runtime validation failed', { status: response.status, requestId: ctx.requestId });
-    throw unavailable('dependency_down');
+  if (parsed?.success) return parsed.data;
+  const runtimeCode = typeof envelope?.error?.code === 'string' ? envelope.error.code : null;
+  console.error('[agent] runtime validation failed', { status: response.status, runtimeCode, requestId: ctx.requestId });
+  // 401/403: the runtime rejected studio's key, kid or purpose. Other 4xx: studio sent a request the runtime refuses.
+  if (response.status === 401 || response.status === 403) throw unavailable('misconfigured');
+  if (response.status >= 400 && response.status < 500) {
+    throw new ProductError(500, 'SYS_INTERNAL_ERROR', 'Agent validation request was rejected', false, { kind: 'runtime_rejected' });
   }
-  return parsed.data;
+  throw unavailable('dependency_down');
 }
 
 type Validator = typeof validateWithRuntime;

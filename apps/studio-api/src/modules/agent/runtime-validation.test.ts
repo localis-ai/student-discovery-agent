@@ -33,6 +33,31 @@ describe('validateWithRuntime', () => {
     await expect(validateWithRuntime({}, ctx)).rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE' });
   });
 
+  it.each([
+    ['an outage', () => respond(503, { success: false, error: { code: 'SYS_UNAVAILABLE' } }), 503, 'dependency_down', true],
+    ['a timeout', () => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('slow', 'TimeoutError'))), 503, 'timeout', true],
+    ['a rejected key (401)', () => respond(401, { success: false, error: { code: 'AUTH_CALLER_CONTEXT_INVALID' } }), 503, 'misconfigured', false],
+    ['a wrong purpose (403)', () => respond(403, { success: false, error: { code: 'FORBIDDEN' } }), 503, 'misconfigured', false],
+    ['a refused request (422)', () => respond(422, { success: false, error: { code: 'INVALID_INPUT' } }), 500, 'runtime_rejected', false],
+  ])('classifies %s so only transient failures ask for a retry', async (_name, arrange, status, kind, retryable) => {
+    arrange();
+    const error = await validateWithRuntime({}, ctx).catch(e => e);
+    expect(error).toMatchObject({ status, retryable, details: { kind } });
+  });
+
+  it('logs the runtime error code and the fetch failure name', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    respond(403, { success: false, error: { code: 'FORBIDDEN' } });
+    await validateWithRuntime({}, ctx).catch(() => {});
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+    await validateWithRuntime({}, ctx).catch(() => {});
+    expect(log.mock.calls).toEqual([
+      ['[agent] runtime validation failed', { status: 403, runtimeCode: 'FORBIDDEN', requestId: 'r' }],
+      ['[agent] runtime validation unreachable', { error: 'TypeError', requestId: 'r' }],
+    ]);
+    log.mockRestore();
+  });
+
   it('is 503 when the runtime is not configured', async () => {
     vi.stubEnv('STUDIO_RUNTIME_SIGNING_KEY', '');
     await expect(validateWithRuntime({}, ctx)).rejects.toMatchObject({ status: 503 });

@@ -25,8 +25,14 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
   const current = useAgentRelease(active.release_id);
   const publish = usePublish();
   const [note, setNote] = useState('');
-  // One key per open dialog: a retry after a network error replays instead of publishing twice.
-  const [key] = useState(() => actionKey('publish'));
+  // One key per attempt: a retry after a network error replays instead of publishing twice, but the note is part
+  // of the request, so editing it after a failure starts a new attempt rather than clashing with the old key.
+  const [key, setKey] = useState(() => actionKey('publish'));
+  const [failed, setFailed] = useState(false);
+  const changeNote = (value: string) => {
+    setNote(value);
+    if (failed) { setKey(actionKey('publish')); setFailed(false); }
+  };
   const changed = useMemo(() => (current.data ? changedSections(current.data.content, draft.content) : []), [current.data, draft.content]);
   // A restore can make an older release active; the next version follows the newest release (list is newest-first).
   const releases = useAgentReleases(null);
@@ -52,6 +58,7 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
         onOpenChange(false);
         return;
       }
+      setFailed(true);
       toast.error(errorMessage(error));
     }
   };
@@ -67,14 +74,15 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
           <div>
             <p className="font-medium">Thay đổi so với v{active.version}:</p>
             <ul className="mt-1 list-inside list-disc text-muted-foreground">
-              {!current.data ? <li>Đang tải…</li>
+              {current.isError ? <li className="text-destructive">Không tải được v{active.version} để so sánh; vẫn có thể phát hành.</li>
+                : !current.data ? <li>Đang tải…</li>
                 : changed.length ? changed.map(id => <li key={id}>{SECTIONS.find(s => s.id === id)?.label}</li>)
                 : <li>Không có thay đổi nội dung</li>}
             </ul>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="publish-note">Ghi chú phát hành</Label>
-            <Textarea id="publish-note" rows={2} maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="Ví dụ: đổi lời chào mùa tuyển sinh" />
+            <Textarea id="publish-note" rows={2} maxLength={500} value={note} onChange={e => changeNote(e.target.value)} placeholder="Ví dụ: đổi lời chào mùa tuyển sinh" />
           </div>
         </div>
         <DialogFooter>

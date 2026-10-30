@@ -10,4 +10,11 @@ describe('errorMessage', () => {
     expect(errorMessage(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409 }), { 409: 'Trùng ID' })).toBe('Trùng ID');
     expect(errorMessage(new Error('Lỗi form'))).toBe('Lỗi form');
   });
+
+  it('does not tell the admin to retry a misconfiguration that shares the 503 status', () => {
+    const misconfigured = new ApiError({ code: 'SYS_UNAVAILABLE', message: 'x', httpStatus: 503, details: { kind: 'misconfigured' } });
+    expect(errorMessage(misconfigured)).toMatch(/Thử lại sẽ không được/);
+    const outage = new ApiError({ code: 'SYS_UNAVAILABLE', message: 'x', httpStatus: 503, details: { kind: 'dependency_down' } });
+    expect(errorMessage(outage)).toBe('Dịch vụ tạm thời không sẵn sàng, hãy thử lại sau ít phút.');
+  });
 });

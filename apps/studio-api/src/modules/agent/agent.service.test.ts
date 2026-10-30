@@ -104,6 +104,17 @@ describe('publish', () => {
     expect(repo.withAgentLock).not.toHaveBeenCalled();
     expect(repo.insertRelease).not.toHaveBeenCalled();
   });
+
+  it('409s when the draft changes between validation and the lock, so unvalidated content never ships', async () => {
+    vi.mocked(repo.getDraft)
+      .mockResolvedValueOnce(draftRow({ greeting_text: 'validated' }, 2))
+      .mockResolvedValueOnce(draftRow({ greeting_text: 'edited meanwhile' }, 3));
+    vi.mocked(repo.lockActive).mockResolvedValue(active('agr_1'));
+    await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0006' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 409, code: 'CONFLICT_REVISION', details: { kind: 'revision_conflict' } });
+    expect(repo.insertRelease).not.toHaveBeenCalled();
+    expect(repo.pointActive).not.toHaveBeenCalled();
+  });
 });
 
 describe('activeDescriptor', () => {
@@ -117,7 +128,7 @@ describe('restore', () => {
   beforeEach(() => {
     vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
     vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
-    setAgentValidator(async () => ({ valid: true, content_hash: 'h', issues: [] }));
+    setAgentValidator(async content => ({ valid: true, content_hash: computeContentHash(content), issues: [] }));
   });
 
   it('restores an older release after re-validating it', async () => {
@@ -127,6 +138,23 @@ describe('restore', () => {
     const res = await restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0001' }, 'admin', ctx);
     expect(res.data).toMatchObject({ release_id: 'agr_1', version: 1, revision: 3 });
     expect(repo.insertAudit).toHaveBeenCalledWith(db, expect.objectContaining({ action: 'agent.release.restore', before_ref: 'agr_2', after_ref: 'agr_1' }));
+  });
+
+  it('refuses a release that no longer validates and keeps the pointer', async () => {
+    vi.mocked(repo.findRelease).mockResolvedValue(release('agr_1', 1, { greeting_text: 'a' }));
+    const issues = [{ path: 'tools[6].params.knowledge_base_id', code: 'knowledge_base_not_found', message: 'Không tìm thấy' }];
+    setAgentValidator(async content => ({ valid: false, content_hash: computeContentHash(content), issues }));
+    await expect(restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0003' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 422, code: 'PUBLISH_GATE_FAILED', details: { issues } });
+    expect(repo.pointActive).not.toHaveBeenCalled();
+  });
+
+  it('never restores when the report hash does not match the release, like publish', async () => {
+    vi.mocked(repo.findRelease).mockResolvedValue(release('agr_1', 1, { greeting_text: 'a' }));
+    setAgentValidator(async () => ({ valid: true, content_hash: computeContentHash({ greeting_text: 'other' }), issues: [] }));
+    await expect(restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0004' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 503, details: { kind: 'hash_mismatch' } });
+    expect(repo.withAgentLock).not.toHaveBeenCalled();
   });
 
   it('replays a stored result without touching state, and rejects a reused key for another release', async () => {

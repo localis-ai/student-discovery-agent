@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_runtime.agent.validation import AgentValidationResult, Issue
@@ -10,7 +11,7 @@ from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVe
 from agent_runtime.main import create_app
 from agent_runtime.sessions.schemas.common import RuntimePolicy
 from tests.helpers.clock import FakeClock
-from tests.helpers.signing import sign_service_request
+from tests.helpers.signing import sign_request, sign_service_request
 
 NOW = datetime(2026, 10, 28, tzinfo=UTC)
 STUDENT_KEY = b"student-test-key-at-least-32-bytes!!"
@@ -27,17 +28,22 @@ class StubValidator:
 STUB = StubValidator()
 
 
-def call(purpose="agent.validate", target=TARGET, validator=STUB):
+def call(purpose="agent.validate", target=TARGET, validator=STUB, payload=None, student=False):
     runtime = RuntimeContainer(policy=RuntimePolicy(environment="demo"),
                                verifier=CallerVerifier({"s": STUDENT_KEY}, FakeClock(NOW)),
                                service_verifier=ServiceVerifier({"studio": STUDIO_KEY}, FakeClock(NOW)),
                                agent_validation=validator)
-    body = json.dumps({"content": {"greeting_text": "x"}}).encode()
-    token = sign_service_request(RawRequestContext("POST", target, body), now=NOW, key=STUDIO_KEY, kid="studio",
-                                 purpose=purpose)
+    body = json.dumps({"content": {"greeting_text": "x"}} if payload is None else payload).encode()
+    context = RawRequestContext("POST", target, body)
+    if student:
+        token = sign_request(context, owner_id="owner_" + "a" * 24, now=NOW, key=STUDENT_KEY, kid="s")
+        caller = "sda-product-bff"
+    else:
+        token = sign_service_request(context, now=NOW, key=STUDIO_KEY, kid="studio", purpose=purpose)
+        caller = "sda-studio-api"
     with TestClient(create_app(runtime)) as client:
         return client.post(target, content=body, headers={
-            "X-Internal-Caller": "sda-studio-api", "X-Caller-Context": token, "Content-Type": "application/json"})
+            "X-Internal-Caller": caller, "X-Caller-Context": token, "Content-Type": "application/json"})
 
 
 def test_validation_result_is_returned_with_200():
@@ -57,3 +63,12 @@ def test_validate_token_cannot_call_retrieval():
 
 def test_missing_validator_is_503():
     assert call(validator=None).json()["error"]["code"] == "SYS_UNAVAILABLE"
+
+
+def test_a_student_token_cannot_call_validate():
+    assert call(student=True).status_code == 403
+
+
+@pytest.mark.parametrize("payload", [{}, {"content": {"greeting_text": "x"}, "extra": True}])
+def test_body_must_be_exactly_a_content_object(payload):
+    assert call(payload=payload).status_code == 422

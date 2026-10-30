@@ -56,7 +56,9 @@ class HttpProductReleaseSource:
             raise _unavailable()
         try:
             descriptor = ReleaseDescriptor.model_validate(body.get("data"))
-        except ValidationError:
+        except ValidationError as error:
+            logger.error("agent release delivery rejected: invalid descriptor at {}",
+                         ", ".join(".".join(map(str, item["loc"])) for item in error.errors()[:5]))
             raise _unavailable() from None
         mismatch = (descriptor.kind != "agent" or descriptor.environment != environment
                     or descriptor.delivery_schema_version != "agent.snapshot.v1")

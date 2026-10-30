@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from agent_runtime.infrastructure.llm.openai_embedding import OpenAICompatibleEmbedding
 from agent_runtime.knowledge.embedding import DocumentText, EmbeddingUnavailable
@@ -51,11 +52,18 @@ def test_server_errors_and_rate_limits_retry_but_client_errors_do_not():
     embedding, requests = adapter(503, 429, 4, max_retries=2)
     assert embedding.embed_query("x") == [0.0] * 4
     embedding, requests = adapter(400, max_retries=2)
-    assert embedding.embed_query("x") == EmbeddingUnavailable("provider_error") and len(requests) == 1
+    assert embedding.embed_query("x") == EmbeddingUnavailable("provider_error", "http 400") and len(requests) == 1
     embedding, _ = adapter(429, 429, max_retries=1)
-    assert embedding.embed_query("x") == EmbeddingUnavailable("rate_limited")
+    assert embedding.embed_query("x") == EmbeddingUnavailable("rate_limited", "http 429")
     embedding, _ = adapter(httpx.ReadTimeout("slow"), max_retries=0)
     assert embedding.embed_query("x") == EmbeddingUnavailable("timeout")
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_rejected_key_is_not_retried_and_keeps_its_status(status):
+    embedding, requests = adapter(status, max_retries=2)
+    assert embedding.embed_query("x") == EmbeddingUnavailable("provider_error", f"http {status}")
+    assert len(requests) == 1
 
 
 def test_a_vector_of_the_wrong_size_is_an_invalid_response():

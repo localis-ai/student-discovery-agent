@@ -114,7 +114,9 @@ def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> s
                 others |= {_decode_key(value) for value in raw.values()}
             else:
                 others.add(_decode_key(secret.get_secret_value()))
-        except Exception:
+        except Exception:  # an unreadable key cannot be compared, so the collision check is incomplete
+            logger.error("runtime key unreadable, delivery key collision check skips it: %s",
+                         "RUNTIME_STUDIO_KEYRING" if is_keyring else "RUNTIME_CURSOR_SIGNING_KEY")
             continue
     return others
 
@@ -123,13 +125,17 @@ def _choose_agent_source(settings: Settings, local, student_keys: dict[str, byte
     """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
     if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
         return local
+    # Fail closed, but say why: names of settings only, never their values.
     if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
         return None
     try:
         delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
     except Exception:
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
         return None
     if delivery_key in _other_runtime_keys(settings, student_keys):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
         return None
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 

@@ -56,4 +56,32 @@ describe('PublishDialog', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['agent'] });
     expect(onConflict).toHaveBeenCalled();
   });
+
+  it('replays the same key on a plain retry but starts a new attempt when the note changes after a failure', async () => {
+    vi.mocked(agentApi.getRelease).mockResolvedValue({ content: {} } as never);
+    vi.mocked(agentApi.publish).mockReset().mockRejectedValueOnce(new Error('network')).mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue({ version: 2 } as never);
+    wrap(<PublishDialog open onOpenChange={() => {}} draft={draft} active={active} onIssues={() => {}} />);
+    const button = await screen.findByRole('button', { name: 'Phát hành v2' });
+    fireEvent.click(button);
+    await waitFor(() => expect(agentApi.publish).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(agentApi.publish).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Ghi chú phát hành'), { target: { value: 'thêm ghi chú' } });
+    fireEvent.click(button);
+    await waitFor(() => expect(agentApi.publish).toHaveBeenCalledTimes(3));
+    const [first, retry, edited] = vi.mocked(agentApi.publish).mock.calls.map(c => c[0].idempotency_key);
+    expect(retry).toBe(first);
+    expect(edited).not.toBe(first);
+  });
+
+  it('says the active version could not load instead of loading forever', async () => {
+    vi.mocked(agentApi.getRelease).mockRejectedValue(new ApiError({ code: 'SYS_UNAVAILABLE', message: 'x', httpStatus: 503 }));
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PublishDialog open onOpenChange={() => {}} draft={draft} active={active} onIssues={() => {}} /></QueryClientProvider>);
+    expect(await screen.findByText(/Không tải được v1 để so sánh/)).toBeInTheDocument();
+    expect(screen.queryByText('Đang tải…')).not.toBeInTheDocument();
+  });
 });
