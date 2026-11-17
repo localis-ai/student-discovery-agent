@@ -1,4 +1,5 @@
 """Chatflow agent content shared by the chatflow integration suites."""
+from agent_runtime.workflow.constants import STAGE_VARIABLE
 from tests.helpers.chat import _agent_content
 
 
@@ -10,7 +11,7 @@ def chatflow_content(workflow):
     return content
 
 
-STAGE = {"name": "stage", "type": "enum", "values": ["welcome", "explore"], "default": "welcome"}
+STAGE = STAGE_VARIABLE
 FLOW = {"entry": "start", "variables": [STAGE],
         "nodes": [{"id": "start", "type": "start"},
                   {"id": "begin", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "explore"}]}},
