@@ -89,6 +89,7 @@ def test_outcome_is_derived_from_the_action_and_whether_the_activity_completed()
     assert interaction_outcome(request("submit_answer"), draft(completion=object())) == "assessment_completed"
     assert interaction_outcome(request("confirm_answer"), draft()) == "answer_confirmed"
     assert interaction_outcome(request("edit_answer"), draft()) == "answer_edited"
+    assert interaction_outcome(request("select_majors"), draft()) == "selection_made"
     assert interaction_outcome(request("something_else"), draft()) == "none"
 
 
