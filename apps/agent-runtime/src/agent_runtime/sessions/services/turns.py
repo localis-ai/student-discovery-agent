@@ -76,6 +76,8 @@ class TurnService:
         self.store = store
         self.profile = profile
         self.handler = handler
+        if self.profile is not None and getattr(self.handler, "profile", None) is None:
+            self.handler.profile = self.profile
         self.models = models or (lambda provider: UnconfiguredModel())
         # Cancel polling reads the same rows the store writes.
         self.responses = responses or ResponseService(store.uow, clock=store.access.clock)

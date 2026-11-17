@@ -17,7 +17,12 @@ from agent_runtime.sessions.schemas.activity import (
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import ValidatedRelease
 from agent_runtime.sessions.schemas.result import CurrentResultRef, ResultSnapshotInput
-from agent_runtime.sessions.schemas.turn import ConversationTurnResult, SetNameInteraction, SupportedInteraction
+from agent_runtime.sessions.schemas.turn import (
+    ConversationTurnResult,
+    SelectMajorsInteraction,
+    SetNameInteraction,
+    SupportedInteraction,
+)
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft, TurnSnapshot
 from agent_runtime.sessions.services.blocks import project_blocks
 
@@ -51,6 +56,8 @@ def activity_block(activity: ActivityRecord, draft: TurnDraft):
             "activity_id": activity.id, "result_id": bundle.result_id, "result_revision": bundle.result_revision,
             "data": bundle.card.model_dump(mode="json")})
     question = state.current_question
+    if question is None:
+        return None
     return _BLOCK.validate_python({"block_id": uuid4().hex, "type": "assessment_question",
         "schema_version": state.schema_version, "activity_id": activity.id, "question_id": question.question_id,
         "title": question.title, "options": [option.model_dump(mode="json") for option in question.options],
@@ -84,13 +91,22 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
         turn_id = uuid4().hex
         payload = request.payload
         is_name = isinstance(request, SetNameInteraction)
+        is_select_majors = isinstance(request, SelectMajorsInteraction)
         user = NewMessage(message_id=input_message_id, turn_id=turn_id, role="user", blocks=(),
             text=draft.next_state.display_name if is_name else None,
             interaction=StoredInteraction(activity_id=activity.id, action=request.action,
-                question_id=None if is_name else payload.question_id,
-                option_id=None if is_name else payload.option_id))
+                question_id=None if (is_name or is_select_majors) else payload.question_id,
+                option_id=None if (is_name or is_select_majors) else payload.option_id,
+                major_ids=payload.major_ids if is_select_majors else None))
+        act_block = activity_block(activity, draft)
+        assistant_blocks = (*lead_blocks, act_block) if act_block is not None else lead_blocks
+        if not assistant_blocks:
+            assistant_blocks = (_BLOCK.validate_python({
+                "block_id": uuid4().hex, "type": "text", "schema_version": 1,
+                "content": "Lựa chọn ngành của bạn đã được ghi nhận.",
+            }),)
         assistant = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="assistant",
-                               blocks=(*lead_blocks, activity_block(activity, draft)))
+                               blocks=assistant_blocks)
         new_result = _new_result(snapshot, draft, committed_at)
         next_activity = ActivityRecord.model_validate(activity.model_dump(mode="json") | {
             "revision": activity.revision + 1, "state": draft.next_state.model_dump(mode="json")})

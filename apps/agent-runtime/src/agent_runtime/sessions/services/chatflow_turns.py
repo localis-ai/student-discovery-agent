@@ -24,7 +24,7 @@ from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.validator import knowledge_base_ids
 
 _OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited"}
+             "edit_answer": "answer_edited", "select_majors": "selection_made"}
 
 
 def interaction_outcome(request, draft) -> str:
@@ -115,7 +115,8 @@ def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, mo
                   "revision": draft.completion.result_revision}
     # sys.query stays empty (the student typed nothing); the model's user turn is the code-owned summary.
     summary = interaction_summary(request.action, display_name=draft.next_state.display_name,
-                                  option_id=getattr(getattr(request, "payload", None), "option_id", None))
+                                  option_id=getattr(getattr(request, "payload", None), "option_id", None),
+                                  major_ids=getattr(getattr(request, "payload", None), "major_ids", None))
     return _execute(post, query="", interaction=request.action, outcome=interaction_outcome(request, draft),
                     explain=False, result=result, user_text=summary, model=model,
                     toolbox=toolbox, knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,

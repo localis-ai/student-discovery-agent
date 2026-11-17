@@ -37,7 +37,8 @@ from agent_runtime.workflow.trace import NodeRunTrace, Redaction
 
 KEEP_SECONDS = 24 * 3600
 _OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited", "explain_result": "explain_requested"}
+             "edit_answer": "answer_edited", "explain_result": "explain_requested",
+             "select_majors": "selection_made"}
 _BLOCK_TYPES = ["text", "markdown", "suggestions", "assessment_question", "assessment_clarification",
                 "personality_card", "knowledge_card"]
 
