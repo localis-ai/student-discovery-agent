@@ -5,6 +5,7 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.turn import ConversationTurnResult
 from agent_runtime.sessions.services.turn_input import (
     is_supported,
+    parse_message_input,
     parse_turn_input,
     turn_fingerprint,
     validate_display_name,
@@ -91,3 +92,41 @@ def test_result_example_matches_model():
     result = ConversationTurnResult.model_validate(turn_examples()["question_result"])
     assert result.blocks[0].type == "assessment_question"
     assert result.model_dump(mode="json")["committed_at"] == "2026-10-20T03:00:05Z"
+
+
+def test_select_majors_turn_input():
+    valid = {
+        "type": "interaction",
+        "activity_id": "act-1",
+        "action": "select_majors",
+        "payload": {"major_ids": ["cntt", "marketing", "kinh_te"]},
+        "expected_revision": 1,
+        "idempotency_key": "key-123",
+    }
+    parsed = parse_turn_input(valid)
+    assert parsed.action == "select_majors"
+    assert parsed.payload.major_ids == ("cntt", "marketing", "kinh_te")
+    assert is_supported(parsed)
+
+    # message input roundtrip
+    msg_input = {
+        "schema_version": 1,
+        "expected_revision": 1,
+        "idempotency_key": "key-123",
+        "content": [{
+            "type": "interaction",
+            "activity_id": "act-1",
+            "action": "select_majors",
+            "payload": {"major_ids": ["cntt", "marketing"]},
+        }],
+    }
+    parsed_msg = parse_message_input(msg_input)
+    assert parsed_msg.action == "select_majors"
+    assert parsed_msg.payload.major_ids == ("cntt", "marketing")
+
+    # invalid: empty major_ids
+    _invalid_input(valid | {"payload": {"major_ids": []}})
+    # invalid: > 5 major_ids
+    _invalid_input(valid | {"payload": {"major_ids": ["1", "2", "3", "4", "5", "6"]}})
+    # invalid: whitespace-only major_id
+    _invalid_input(valid | {"payload": {"major_ids": ["  "]}})

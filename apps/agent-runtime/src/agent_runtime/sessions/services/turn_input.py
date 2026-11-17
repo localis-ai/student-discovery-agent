@@ -10,6 +10,7 @@ from agent_runtime.sessions.schemas.responses import InteractionPart, MessageInp
 from agent_runtime.sessions.schemas.turn import (
     ConversationTurnInput,
     OptionAnswerPayload,
+    SelectMajorsInteraction,
     SetNameInteraction,
     SubmitAnswerInteraction,
 )
@@ -70,8 +71,11 @@ def to_message_body(request: ConversationTurnInput) -> dict:
 
 
 def is_supported(request: ConversationTurnInput) -> bool:
-    return isinstance(request, SetNameInteraction) or (
-        isinstance(request, SubmitAnswerInteraction) and isinstance(request.payload, OptionAnswerPayload))
+    return (
+        isinstance(request, SetNameInteraction)
+        or (isinstance(request, SubmitAnswerInteraction) and isinstance(request.payload, OptionAnswerPayload))
+        or isinstance(request, SelectMajorsInteraction)
+    )
 
 
 def normalize_display_name(value: str) -> str:
