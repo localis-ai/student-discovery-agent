@@ -3,6 +3,8 @@ from dataclasses import make_dataclass
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.turn import SelectMajorsInteraction, SelectMajorsPayload
@@ -78,9 +80,8 @@ def test_in_memory_profile_port_ranking_and_revision():
 # Unit tests: TurnHandler.prepare with select_majors
 # ---------------------------------------------------------------------------
 
-def test_turn_handler_prepare_select_majors(valid_v2_doc):
-    profile = InMemoryProfilePort(initial_revision=1)
-    handler = TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY), profile=profile)
+def test_turn_handler_prepare_select_majors_is_pure(valid_v2_doc):
+    handler = TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY))
 
     snapshot = make_turn_snapshot(valid_v2_doc)
     request = SelectMajorsInteraction(
@@ -97,9 +98,7 @@ def test_turn_handler_prepare_select_majors(valid_v2_doc):
     # Activity state is preserved
     assert draft.next_state.status == snapshot.activity.state.status
 
-    # Profile was updated and revision was bumped
-    assert profile.revision == 2
-    assert profile.snapshot()["interested_career_groups"] == ["cntt", "marketing", "kinh_te"]
+    # prepare has no side effect: the profile is written by TurnService only after the commit
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +106,7 @@ def test_turn_handler_prepare_select_majors(valid_v2_doc):
 # ---------------------------------------------------------------------------
 
 def test_finalize_turn_select_majors(valid_v2_doc):
-    profile = InMemoryProfilePort(initial_revision=1)
-    handler = TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY), profile=profile)
+    handler = TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY))
 
     snapshot = make_turn_snapshot(valid_v2_doc)
     request = SelectMajorsInteraction(
@@ -144,8 +142,8 @@ def test_interaction_summary_for_select_majors():
     summary = interaction_summary("select_majors", major_ids=["cntt", "marketing", "kinh_te"])
     assert summary == "[Học sinh chọn ngành: cntt, marketing, kinh_te]"
 
-    summary_empty = interaction_summary("select_majors", major_ids=[])
-    assert summary_empty == "[Học sinh chọn ngành: ]"
+    with pytest.raises(ValueError):
+        interaction_summary("select_majors", major_ids=[])
 
 
 def test_interaction_outcome_for_select_majors():
@@ -185,8 +183,7 @@ def captured_scope(monkeypatch):
 
 def test_chatflow_interaction_turn_exposes_profile_and_selection_made(monkeypatch):
     seen = captured_scope(monkeypatch)
-    profile = InMemoryProfilePort(initial_revision=1)
-    profile.record_career_groups(["cntt", "marketing", "kinh_te"])
+    profile = InMemoryProfilePort(initial_revision=1)  # nothing recorded yet: the commit has not happened
 
     activity_view = Activity(state=SimpleNamespace(status="completed", display_name="Nam", current_question=None))
     parent = SimpleNamespace(
@@ -240,5 +237,5 @@ def test_chatflow_interaction_turn_exposes_profile_and_selection_made(monkeypatc
     assert scope.get("sys.interaction") == "select_majors"
     assert scope.get("sys.interaction_outcome") == "selection_made"
     assert scope.get("profile.interested_career_groups") == ["cntt", "marketing", "kinh_te"]
-    assert scope.get("profile.profile_revision") == 2
+    assert profile.revision == 1  # the graph sees the ranking through the scope overlay, not a profile write
     assert ports.user_text == "[Học sinh chọn ngành: cntt, marketing, kinh_te]"

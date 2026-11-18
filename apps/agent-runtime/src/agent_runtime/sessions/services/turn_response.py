@@ -56,8 +56,6 @@ def activity_block(activity: ActivityRecord, draft: TurnDraft):
             "activity_id": activity.id, "result_id": bundle.result_id, "result_revision": bundle.result_revision,
             "data": bundle.card.model_dump(mode="json")})
     question = state.current_question
-    if question is None:
-        return None
     return _BLOCK.validate_python({"block_id": uuid4().hex, "type": "assessment_question",
         "schema_version": state.schema_version, "activity_id": activity.id, "question_id": question.question_id,
         "title": question.title, "options": [option.model_dump(mode="json") for option in question.options],
@@ -98,8 +96,8 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
                 question_id=None if (is_name or is_select_majors) else payload.question_id,
                 option_id=None if (is_name or is_select_majors) else payload.option_id,
                 major_ids=payload.major_ids if is_select_majors else None))
-        act_block = activity_block(activity, draft)
-        assistant_blocks = (*lead_blocks, act_block) if act_block is not None else lead_blocks
+        # A major selection leaves the activity as it was, so it renders no activity block of its own.
+        assistant_blocks = lead_blocks if is_select_majors else (*lead_blocks, activity_block(activity, draft))
         if not assistant_blocks:
             assistant_blocks = (_BLOCK.validate_python({
                 "block_id": uuid4().hex, "type": "text", "schema_version": 1,
@@ -111,8 +109,13 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
         next_activity = ActivityRecord.model_validate(activity.model_dump(mode="json") | {
             "revision": activity.revision + 1, "state": draft.next_state.model_dump(mode="json")})
         next_parent = parent.model_copy(update={"revision": parent.revision + 1})
-        current = (CurrentResultRef(result_id=new_result.result_id, result_revision=new_result.result_revision)
-                   if new_result else None)
+        if new_result:
+            current = CurrentResultRef(result_id=new_result.result_id, result_revision=new_result.result_revision)
+        elif draft.next_state.current_result_id is not None:  # a finished activity keeps the result it already has
+            current = CurrentResultRef(result_id=draft.next_state.current_result_id,
+                                       result_revision=snapshot.next_result_revision - 1)
+        else:
+            current = None
         result = ConversationTurnResult(conversation_id=parent.id, revision=next_parent.revision, turn_id=turn_id,
             message_id=assistant.message_id, committed_at=committed_at,
             activity=project_activity(next_parent, next_activity, snapshot.release, current),

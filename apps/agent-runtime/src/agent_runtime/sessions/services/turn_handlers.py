@@ -15,7 +15,6 @@ from agent_runtime.sessions.schemas.release import ValidatedRelease
 from agent_runtime.sessions.schemas.turn import SelectMajorsInteraction, SetNameInteraction, SupportedInteraction
 from agent_runtime.sessions.schemas.turn_execution import CompletionBundle, CompletionContext, TurnDraft, TurnSnapshot
 from agent_runtime.sessions.services.turn_input import validate_display_name
-from agent_runtime.workflow.ports import ProfilePort
 
 MAX_COUNTER = 9007199254740991
 _STATE = TypeAdapter(ActivityState)
@@ -87,19 +86,16 @@ def _view_question(question: JsonObject | None) -> AssessmentQuestion:
 
 
 class TurnHandler:
-    def __init__(self, engine: AssessmentEngine, completion: CompletionPort | None = None,
-                 profile: ProfilePort | None = None):
+    def __init__(self, engine: AssessmentEngine, completion: CompletionPort | None = None):
         self.engine = engine
         self.completion = completion
-        self.profile = profile
 
     def prepare(self, snapshot: TurnSnapshot, request: SupportedInteraction) -> TurnDraft:
         parent, activity, state = snapshot.parent, snapshot.activity, snapshot.activity.state
         if parent.revision >= MAX_COUNTER or activity.revision >= MAX_COUNTER:
             raise RuntimeSessionError(500, "INTERNAL_ERROR")
         if isinstance(request, SelectMajorsInteraction):
-            if self.profile is not None:
-                self.profile.record_career_groups(request.payload.major_ids)
+            # Pure: the choice is stored with the interaction message; the profile is written after the commit.
             return TurnDraft(next_state=state, completion=None)
         if isinstance(request, SetNameInteraction):
             if state.status != "collecting_name":

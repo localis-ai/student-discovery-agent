@@ -37,6 +37,12 @@ class NullProfilePort:
         return 0
 
 
+def rank_career_groups(major_ids: Sequence[str], limit: int = 3) -> tuple[str, ...]:
+    """Clean, dedupe keeping first occurrence, and keep the top ``limit`` (DEC-26: order is the ranking)."""
+    cleaned = [m.strip() for m in major_ids if isinstance(m, str) and m.strip()]
+    return tuple(dict.fromkeys(cleaned))[:limit]
+
+
 class InMemoryProfilePort:
     """In-memory student profile with ordered interested_career_groups and revision tracking (DEC-26)."""
 
@@ -60,8 +66,7 @@ class InMemoryProfilePort:
         Order is semantic data: changing order increments profile_revision.
         Preserving order does not increment profile_revision.
         """
-        cleaned = [m.strip() for m in major_ids if isinstance(m, str) and m.strip()]
-        deduped = tuple(dict.fromkeys(cleaned))[:3]
+        deduped = rank_career_groups(major_ids)
         current = tuple(self._profile.get("interested_career_groups") or ())
         if current != deduped:
             self._profile["interested_career_groups"] = list(deduped)

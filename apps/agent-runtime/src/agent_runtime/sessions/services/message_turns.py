@@ -96,8 +96,9 @@ def interaction_summary(action: str, *, display_name: str | None = None, option_
     if action == "set_name":
         return f"[Học sinh nhập tên: {display_name}]"
     if action == "select_majors":
-        majors_str = ", ".join(major_ids or ())
-        return f"[Học sinh chọn ngành: {majors_str}]"
+        if not major_ids:
+            raise ValueError("select_majors needs at least one major")
+        return f"[Học sinh chọn ngành: {', '.join(major_ids)}]"
     return f"[Học sinh chọn đáp án {option_id}]"
 
 

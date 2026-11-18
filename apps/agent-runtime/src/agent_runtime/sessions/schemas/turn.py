@@ -96,9 +96,14 @@ class EditAnswerInteraction(_InteractionBase):
     payload: OptionAnswerPayload
 
 
+MAX_SELECTED_MAJORS = 3  # DEC-26: the student ranks their top three majors
+
+
 class SelectMajorsPayload(ContractModel):
-    major_ids: Annotated[tuple[NonEmptyText, ...], Field(min_length=1, max_length=5)]
-    block_id: OpaqueId | None = None
+    # Ordered by the student's ranking. The runtime has no major catalogue yet, so ids are only bounded, not matched.
+    major_ids: Annotated[tuple[Annotated[NonEmptyText, Field(max_length=64)], ...],
+                         Field(min_length=1, max_length=MAX_SELECTED_MAJORS)]
+    block_id: OpaqueId | None = None  # echoes the UI block the choice came from; correlation only
 
 
 class SelectMajorsInteraction(_InteractionBase):

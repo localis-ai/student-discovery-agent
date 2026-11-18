@@ -126,7 +126,9 @@ def test_select_majors_turn_input():
 
     # invalid: empty major_ids
     _invalid_input(valid | {"payload": {"major_ids": []}})
-    # invalid: > 5 major_ids
-    _invalid_input(valid | {"payload": {"major_ids": ["1", "2", "3", "4", "5", "6"]}})
+    # invalid: more than the three DEC-26 ranks
+    _invalid_input(valid | {"payload": {"major_ids": ["1", "2", "3", "4"]}})
+    # invalid: an id longer than 64 characters
+    _invalid_input(valid | {"payload": {"major_ids": ["x" * 65]}})
     # invalid: whitespace-only major_id
     _invalid_input(valid | {"payload": {"major_ids": ["  "]}})

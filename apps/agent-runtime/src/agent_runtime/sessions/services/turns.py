@@ -13,7 +13,7 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.responses import TurnResponse
-from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
+from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput, SelectMajorsInteraction
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft
 from agent_runtime.sessions.schemas.workflow import Workflow
 from agent_runtime.sessions.services.chatflow_turns import (
@@ -76,8 +76,6 @@ class TurnService:
         self.store = store
         self.profile = profile
         self.handler = handler
-        if self.profile is not None and getattr(self.handler, "profile", None) is None:
-            self.handler.profile = self.profile
         self.models = models or (lambda provider: UnconfiguredModel())
         # Cancel polling reads the same rows the store writes.
         self.responses = responses or ResponseService(store.uow, clock=store.access.clock)
@@ -190,8 +188,11 @@ class TurnService:
             # begin returns a snapshot only for supported interactions.
             draft = self.handler.prepare(snapshot, request)  # a rejected interaction raises here; no graph runs
             if begun.chatflow is None:  # mode = agent: a button press never calls the model
-                return self.store.commit(caller, begun, draft)
-            return self._run_interaction(caller, begun, draft, on_event, observed)
+                response = self.store.commit(caller, begun, draft)
+            else:
+                response = self._run_interaction(caller, begun, draft, on_event, observed)
+            self._record_selection(request)
+            return response
         agent = snapshot.agent
         if agent.model:
             observed["provider"] = agent.model.provider
@@ -208,6 +209,16 @@ class TurnService:
             raise TurnCancelled()
         plan = plan_from_run(snapshot, run, request, handler=self.handler, persistence=self.store.persistence)
         return self.store.commit_message(caller, begun, plan)
+
+    def _record_selection(self, request) -> None:
+        """Project a committed major selection into the profile. The choice is already durable on the interaction
+        message, so a projection failure is logged and never fails the committed turn."""
+        if self.profile is None or not isinstance(request, SelectMajorsInteraction):
+            return
+        try:
+            self.profile.record_career_groups(request.payload.major_ids)
+        except Exception as error:
+            logger.warning("profile projection of selected majors failed: %s", type(error).__name__)
 
     def _run_interaction(self, caller: VerifiedCaller, begun: Begun, draft: TurnDraft, on_event,
                          observed: dict) -> TurnResponse:
