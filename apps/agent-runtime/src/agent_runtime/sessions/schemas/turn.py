@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from pydantic import Field, field_validator, model_validator
 
 from .activity import ActivityView, TypedBlock
-from .common import ContractModel, IdempotencyKey, JsonSafeInt, OpaqueId, PositiveRevision, UtcDatetime
+from .common import ContractModel, IdempotencyKey, JsonSafeInt, NonEmptyText, OpaqueId, PositiveRevision, UtcDatetime
 from .conversation import InputVersion
 
 
@@ -96,13 +96,32 @@ class EditAnswerInteraction(_InteractionBase):
     payload: OptionAnswerPayload
 
 
+MAX_SELECTED_MAJORS = 3  # DEC-26: the student ranks their top three majors
+
+
+class SelectMajorsPayload(ContractModel):
+    # Ordered by the student's ranking. The runtime has no major catalogue yet, so ids are only bounded, not matched.
+    major_ids: Annotated[tuple[Annotated[NonEmptyText, Field(max_length=64)], ...],
+                         Field(min_length=1, max_length=MAX_SELECTED_MAJORS)]
+    block_id: OpaqueId | None = None  # echoes the UI block the choice came from; correlation only
+
+
+class SelectMajorsInteraction(_InteractionBase):
+    action: Literal["select_majors"]
+    payload: SelectMajorsPayload
+
+
 InteractionTurnInput = Annotated[
-    SetNameInteraction | SubmitAnswerInteraction | ConfirmAnswerInteraction | EditAnswerInteraction,
+    SetNameInteraction
+    | SubmitAnswerInteraction
+    | ConfirmAnswerInteraction
+    | EditAnswerInteraction
+    | SelectMajorsInteraction,
     Field(discriminator="action"),
 ]
 ConversationTurnInput = Annotated[MessageTurnInput | InteractionTurnInput, Field(discriminator="type")]
-# B-02 executes only these two shapes; SubmitAnswerInteraction must carry an option payload.
-SupportedInteraction = SetNameInteraction | SubmitAnswerInteraction
+# B-02 executes only these shapes; SubmitAnswerInteraction must carry an option payload.
+SupportedInteraction = SetNameInteraction | SubmitAnswerInteraction | SelectMajorsInteraction
 
 
 class ConversationTurnResult(ContractModel):

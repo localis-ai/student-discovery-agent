@@ -88,12 +88,17 @@ def _block_text(block) -> str | None:
     return None  # suggestions are UI affordances, not conversation
 
 
-def interaction_summary(action: str, *, display_name: str | None = None, option_id: str | None = None) -> str:
+def interaction_summary(action: str, *, display_name: str | None = None, option_id: str | None = None,
+                        major_ids: Sequence[str] | None = None) -> str:
     """The user turn a model sees for a button press: one source for history and an interaction's graph."""
     if action == "explain_result":
         return EXPLAIN_REQUEST_TEXT
     if action == "set_name":
         return f"[Học sinh nhập tên: {display_name}]"
+    if action == "select_majors":
+        if not major_ids:
+            raise ValueError("select_majors needs at least one major")
+        return f"[Học sinh chọn ngành: {', '.join(major_ids)}]"
     return f"[Học sinh chọn đáp án {option_id}]"
 
 
@@ -105,8 +110,10 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
             if view.text and view.interaction is None:
                 history.append(UserMessage(view.text))
             elif view.interaction:
-                history.append(UserMessage(interaction_summary(view.interaction.action, display_name=view.text,
-                                                               option_id=view.interaction.option_id)))
+                history.append(UserMessage(interaction_summary(
+                    view.interaction.action, display_name=view.text,
+                    option_id=view.interaction.option_id,
+                    major_ids=getattr(view.interaction, "major_ids", None))))
         elif view.role == "assistant":
             parts = [text for text in map(_block_text, view.blocks) if text]
             if parts:

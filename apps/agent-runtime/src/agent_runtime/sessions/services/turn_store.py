@@ -22,6 +22,7 @@ from agent_runtime.sessions.schemas.turn import (
     ConversationTurnInput,
     ConversationTurnResult,
     MessageTurnInput,
+    SelectMajorsInteraction,
     SupportedInteraction,
 )
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft, TurnSnapshot
@@ -149,7 +150,9 @@ class TurnStore:
         if request.expected_activity_revision is not None and request.expected_activity_revision != activity.revision:
             raise self._conflict(session, parent, "activity", request.expected_activity_revision,
                                  activity.revision)
-        if activity.state.status not in OPEN_STATES or not is_supported(request):
+        # A major selection is a profile choice, not an assessment step: it is also valid once the activity is done.
+        needs_open = not isinstance(request, SelectMajorsInteraction)
+        if (needs_open and activity.state.status not in OPEN_STATES) or not is_supported(request):
             raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
         release = self.snapshots.get(session, activity.experience_snapshot)
         return TurnSnapshot(parent=parent, activity=activity, release=release,

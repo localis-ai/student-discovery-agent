@@ -2,7 +2,7 @@
 from dataclasses import replace
 from typing import Any
 
-from agent_runtime.sessions.schemas.turn import MessageTurnInput
+from agent_runtime.sessions.schemas.turn import MessageTurnInput, SelectMajorsInteraction
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft
 from agent_runtime.sessions.schemas.workflow import Workflow
 from agent_runtime.sessions.services.message_turns import (
@@ -19,12 +19,12 @@ from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
 from agent_runtime.workflow.implicit import implicit_workflow
-from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort
+from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort, rank_career_groups
 from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.validator import knowledge_base_ids
 
 _OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited"}
+             "edit_answer": "answer_edited", "select_majors": "selection_made"}
 
 
 def interaction_outcome(request, draft) -> str:
@@ -60,7 +60,8 @@ def _result_of(snapshot: MessageSnapshot) -> dict | None:
 def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, outcome: str, explain: bool,
              result: dict | None, user_text: str, model, toolbox, knowledge_port,
              profile: ProfilePort | None, emit, should_stop, deadline, clock,
-             knowledge_fields: dict | None, reply_required: bool = True) -> tuple[WorkflowRun, Budget, Workflow]:
+             knowledge_fields: dict | None, reply_required: bool = True,
+             profile_overlay: dict[str, Any] | None = None) -> tuple[WorkflowRun, Budget, Workflow]:
     """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks.
 
     Returns the run, the Budget it used (its counters feed the trace) and the workflow that ran.
@@ -75,7 +76,8 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
         "turn_index": snapshot.user_turns,
         "client_blocks": [block.type for block in snapshot.parent.capability_snapshot.supported_blocks],
         "activity_status": activity.state.status if activity else None}
-    scope = Scope(sys=sys_values, conv=snapshot.parent.conv_vars, profile=profile.snapshot(), result=result,
+    scope = Scope(sys=sys_values, conv=snapshot.parent.conv_vars,
+                  profile={**profile.snapshot(), **(profile_overlay or {})}, result=result,
                   variables=workflow.variables)
     show = agent.tool("knowledge.show")
     ports = Ports(agent=agent, model=model, tools=toolbox, knowledge=knowledge_port,
@@ -114,13 +116,17 @@ def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, mo
                   "career_groups": list(draft.completion.card.career_groups),
                   "revision": draft.completion.result_revision}
     # sys.query stays empty (the student typed nothing); the model's user turn is the code-owned summary.
+    selected = request.payload.major_ids if isinstance(request, SelectMajorsInteraction) else None
     summary = interaction_summary(request.action, display_name=draft.next_state.display_name,
-                                  option_id=getattr(getattr(request, "payload", None), "option_id", None))
+                                  option_id=getattr(getattr(request, "payload", None), "option_id", None),
+                                  major_ids=selected)
+    # The profile is written after the commit, so the graph sees the ranking the student just chose via an overlay.
+    overlay = {"interested_career_groups": list(rank_career_groups(selected))} if selected else None
     return _execute(post, query="", interaction=request.action, outcome=interaction_outcome(request, draft),
                     explain=False, result=result, user_text=summary, model=model,
                     toolbox=toolbox, knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,
                     deadline=deadline, clock=clock, knowledge_fields=knowledge_fields,
-                    reply_required=False)  # the handler's own block is the reply
+                    reply_required=False, profile_overlay=overlay)  # the handler's own block is the reply
 
 
 def plan_from_run(snapshot: MessageSnapshot, run: WorkflowRun, request: MessageTurnInput, *, handler,
