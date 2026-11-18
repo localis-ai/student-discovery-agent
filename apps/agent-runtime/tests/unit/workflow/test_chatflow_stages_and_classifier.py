@@ -5,10 +5,12 @@ import pytest
 
 from agent_runtime.agent.model import FakeModel, ModelReply
 from agent_runtime.workflow.constants import (
+    BASE_STAGE_VALUES,
     JOURNEY_CLASSIFIER_LABELS,
+    JOURNEY_STAGE_VALUES,
     STAGE_CLASSIFIER_LABELS,
     STAGE_VALUES,
-    STAGE_VARIABLE,
+    stage_variable,
 )
 from agent_runtime.workflow.executor import run_workflow
 from agent_runtime.workflow.validator import validate_workflow
@@ -34,22 +36,33 @@ def edge(id, source, handle, target):
 # 1. Verification of DEC-28 Stage Enum Values & Canonical Definitions
 # ---------------------------------------------------------------------------
 
-def test_dec28_stage_values_include_all_required_stages():
-    expected = ("welcome", "assessment", "explore", "pick_majors", "need", "fee", "job", "followup")
-    assert STAGE_VALUES == expected
-    assert STAGE_VARIABLE["name"] == "stage"
-    assert STAGE_VARIABLE["type"] == "enum"
-    assert STAGE_VARIABLE["default"] == "welcome"
-    assert set(expected).issubset(set(STAGE_VARIABLE["values"]))
+def test_dec28_extends_the_srs_stages_and_never_removes_one():
+    # SRS 85-workflow lists the original stages; DEC-28 only adds the five journey stages.
+    assert BASE_STAGE_VALUES == ("welcome", "assessment", "explore", "profile", "match", "report", "handoff")
+    assert JOURNEY_STAGE_VALUES == ("pick_majors", "need", "fee", "job", "followup")
+    assert STAGE_VALUES == BASE_STAGE_VALUES + JOURNEY_STAGE_VALUES
+    variable = stage_variable()
+    assert (variable["name"], variable["type"], variable["default"]) == ("stage", "enum", "welcome")
+    assert variable["values"] == list(STAGE_VALUES)
 
 
-@pytest.mark.parametrize("stage", [
-    "welcome", "assessment", "explore", "pick_majors", "need", "fee", "job", "followup",
-])
+def test_stage_variable_returns_an_independent_copy():
+    first = stage_variable()
+    first["values"].append("custom")
+    first["default"] = "fee"
+    assert stage_variable()["values"] == list(STAGE_VALUES) and stage_variable()["default"] == "welcome"
+
+
+def test_stage_classifier_labels_only_name_journey_stages():
+    assert {label["id"] for label in STAGE_CLASSIFIER_LABELS} <= set(JOURNEY_STAGE_VALUES)
+    assert {label["id"] for label in STAGE_CLASSIFIER_LABELS} <= set(STAGE_VALUES)
+
+
+@pytest.mark.parametrize("stage", STAGE_VALUES)
 def test_validator_accepts_all_dec28_stages_in_assign(stage):
     wf = {
         "entry": "start",
-        "variables": [STAGE_VARIABLE],
+        "variables": [stage_variable()],
         "nodes": [
             {"id": "start", "type": "start"},
             {"id": "set_stage", "type": "assign", "config": {
@@ -70,7 +83,7 @@ def test_validator_accepts_all_dec28_stages_in_assign(stage):
 def test_validator_rejects_invalid_stage_in_assign(bad_stage):
     wf = {
         "entry": "start",
-        "variables": [STAGE_VARIABLE],
+        "variables": [stage_variable()],
         "nodes": [
             {"id": "start", "type": "start"},
             {"id": "set_stage", "type": "assign", "config": {
@@ -87,13 +100,11 @@ def test_validator_rejects_invalid_stage_in_assign(bad_stage):
     assert ("workflow.nodes[1].config.assignments[0].value", "workflow_assign_invalid") in found
 
 
-@pytest.mark.parametrize("stage", [
-    "welcome", "assessment", "explore", "pick_majors", "need", "fee", "job", "followup",
-])
+@pytest.mark.parametrize("stage", STAGE_VALUES)
 def test_validator_accepts_all_dec28_stages_in_if_else(stage):
     wf = {
         "entry": "start",
-        "variables": [STAGE_VARIABLE],
+        "variables": [stage_variable()],
         "nodes": [
             {"id": "start", "type": "start"},
             {"id": "gate", "type": "if_else", "config": {
@@ -116,7 +127,7 @@ def test_validator_accepts_all_dec28_stages_in_if_else(stage):
 def test_validator_rejects_invalid_stage_in_if_else(bad_stage):
     wf = {
         "entry": "start",
-        "variables": [STAGE_VARIABLE],
+        "variables": [stage_variable()],
         "nodes": [
             {"id": "start", "type": "start"},
             {"id": "gate", "type": "if_else", "config": {
@@ -141,7 +152,7 @@ def test_validator_rejects_invalid_stage_in_if_else(bad_stage):
 
 def test_journey_classifier_labels_specification():
     ids = [label["id"] for label in JOURNEY_CLASSIFIER_LABELS]
-    assert ids == ["hoi_hoc_phi", "viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"]
+    assert ids == ["hoi_hoc_phi", "hoi_viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"]
 
     stage_label_ids = [label["id"] for label in STAGE_CLASSIFIER_LABELS]
     assert stage_label_ids == ["fee", "job", "pick_majors", "need", "followup"]
@@ -165,16 +176,17 @@ def build_journey_classifier_flow(omit_handle=None):
         {"id": "classify", "type": "intent_classifier", "config": {"labels": labels}},
         {"id": "reply", "type": "answer", "config": {"text": "Kết quả"}},
     ]
-    return {"entry": "start", "variables": [STAGE_VARIABLE], "nodes": nodes, "edges": edges}
+    return {"entry": "start", "variables": [stage_variable()], "nodes": nodes, "edges": edges}
 
 
-def test_validator_passes_when_all_journey_labels_are_wired():
+def test_validator_passes_when_all_journey_labels_are_wired_and_error_stays_optional():
     wf = build_journey_classifier_flow(omit_handle=None)
+    assert not any(e["source_handle"] == "error" for e in wf["edges"])  # the optional handle is left unwired
     issues = check(wf)
     assert issues == []
 
 
-@pytest.mark.parametrize("idx,label_id", enumerate(["hoi_hoc_phi", "viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"]))
+@pytest.mark.parametrize("idx,label_id", enumerate(["hoi_hoc_phi", "hoi_viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"]))
 def test_validator_reports_unwired_classifier_label_at_exact_position(idx, label_id):
     wf = build_journey_classifier_flow(omit_handle=label_id)
     issues = check(wf)
@@ -198,27 +210,20 @@ def test_validator_reports_unwired_other_handle_on_classifier_node():
     assert "other" in issue.message
 
 
-def test_unwired_error_handle_remains_optional():
-    # Neither e_error is added, nor does validator complain about error
-    wf = build_journey_classifier_flow(omit_handle=None)
-    issues = check(wf)
-    assert not any(i.code == "workflow_unwired_label" for i in issues)
-
-
 # ---------------------------------------------------------------------------
 # 3. Intent Classifier Node Execution with Journey Labels
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("label_id", ["hoi_hoc_phi", "viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"])
+@pytest.mark.parametrize("label_id", ["hoi_hoc_phi", "hoi_viec_lam", "chon_nganh", "tu_van_nhu_cau", "hoi_tiep"])
 def test_classifier_node_executes_and_returns_journey_label(label_id):
     node_dict = {
         "id": "classify",
         "type": "intent_classifier",
         "config": {"labels": list(JOURNEY_CLASSIFIER_LABELS)},
     }
-    wf = workflow([node_dict], [], variables=[STAGE_VARIABLE])
+    wf = workflow([node_dict], [], variables=[stage_variable()])
     model = FakeModel(ModelReply(text=label_id))
-    spec, result, _, _ = run_node(node_dict, wf, model=model, scope=scope_for(wf, query="câu hỏi của học sinh"))
+    _, result, _, _ = run_node(node_dict, wf, model=model, scope=scope_for(wf, query="câu hỏi của học sinh"))
     assert result.handle == label_id
     assert result.output == {"label": label_id}
 
@@ -229,9 +234,9 @@ def test_classifier_node_fallback_to_other_on_unrecognized():
         "type": "intent_classifier",
         "config": {"labels": list(JOURNEY_CLASSIFIER_LABELS)},
     }
-    wf = workflow([node_dict], [], variables=[STAGE_VARIABLE])
+    wf = workflow([node_dict], [], variables=[stage_variable()])
     model = FakeModel(ModelReply(text="hoan_toan_xa_la"))
-    spec, result, _, _ = run_node(node_dict, wf, model=model, scope=scope_for(wf, query="chào bot"))
+    _, result, _, _ = run_node(node_dict, wf, model=model, scope=scope_for(wf, query="chào bot"))
     assert result.handle == "other"
     assert result.output == {"label": "other"}
 
@@ -240,34 +245,24 @@ def test_classifier_node_fallback_to_other_on_unrecognized():
 # 4. End-to-End Chatflow Workflow Execution with Stage Transitions
 # ---------------------------------------------------------------------------
 
-def test_chatflow_journey_stage_transitions_end_to_end():
-    labels = list(STAGE_CLASSIFIER_LABELS)  # fee, job, pick_majors, need, followup
+def _stage_router():
+    """start -> classifier -> one ``assign conv.stage`` per stage label -> reply; an unknown label keeps the stage."""
+    ids = [label["id"] for label in STAGE_CLASSIFIER_LABELS]
     nodes = [
         {"id": "start", "type": "start"},
-        {"id": "ask", "type": "intent_classifier", "config": {"labels": labels}},
-        {"id": "set_fee", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "fee"}]}},
-        {"id": "set_job", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "job"}]}},
-        {"id": "set_pick", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "pick_majors"}]}},
-        {"id": "set_need", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "need"}]}},
-        {"id": "set_follow", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": "followup"}]}},
+        {"id": "ask", "type": "intent_classifier", "config": {"labels": list(STAGE_CLASSIFIER_LABELS)}},
+        *({"id": f"set_{i}", "type": "assign", "config": {"assignments": [{"variable": "conv.stage", "value": i}]}}
+          for i in ids),
         {"id": "reply", "type": "answer", "config": {"text": "Giai đoạn hiện tại: {{conv.stage}}"}},
     ]
-    edges = [
-        ("start", "next", "ask"),
-        ("ask", "fee", "set_fee"),
-        ("ask", "job", "set_job"),
-        ("ask", "pick_majors", "set_pick"),
-        ("ask", "need", "set_need"),
-        ("ask", "followup", "set_follow"),
-        ("ask", "other", "reply"),
-        ("set_fee", "next", "reply"),
-        ("set_job", "next", "reply"),
-        ("set_pick", "next", "reply"),
-        ("set_need", "next", "reply"),
-        ("set_follow", "next", "reply"),
-    ]
+    edges = [("start", "next", "ask"), ("ask", "other", "reply")]
+    for i in ids:
+        edges += [("ask", i, f"set_{i}"), (f"set_{i}", "next", "reply")]
+    return workflow(nodes, edges, variables=[stage_variable()])
 
-    wf = workflow(nodes, edges, variables=[STAGE_VARIABLE])
+
+def test_chatflow_journey_stage_transitions_end_to_end():
+    wf = _stage_router()
 
     # 1. Validate workflow cleanly
     wf_dict = wf.model_dump(mode="json")
@@ -301,3 +296,21 @@ def test_chatflow_journey_stage_transitions_end_to_end():
     run = run_workflow(wf, scope, ports_for(model=model), budget=budget_for(wf))
     assert run.status == "completed"
     assert run.conv == {"stage": "welcome"}
+
+
+@pytest.mark.parametrize("label_id", [label["id"] for label in STAGE_CLASSIFIER_LABELS])
+def test_every_stage_label_routes_to_its_own_stage(label_id):
+    wf = _stage_router()
+    scope = scope_for(wf, query="x", conv={"stage": "welcome"})
+    run = run_workflow(wf, scope, ports_for(model=FakeModel(ModelReply(text=label_id))), budget=budget_for(wf))
+    assert run.status == "completed" and run.conv == {"stage": label_id}
+
+
+def test_switching_between_flows_only_reassigns_the_stage():
+    wf = _stage_router()
+    conv = {"stage": "welcome"}
+    for label_id in ("fee", "job", "fee", "followup"):  # QT-17: no back edge, just assign on every turn
+        scope = scope_for(wf, query="x", conv=conv)
+        run = run_workflow(wf, scope, ports_for(model=FakeModel(ModelReply(text=label_id))), budget=budget_for(wf))
+        assert run.status == "completed" and run.conv == {"stage": label_id}
+        conv = run.conv

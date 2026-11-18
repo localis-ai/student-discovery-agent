@@ -6,6 +6,7 @@ from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.workflow import nodes as _nodes  # noqa: F401
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import Budget, BudgetExceeded
+from agent_runtime.workflow.constants import stage_variable
 from agent_runtime.workflow.effects import AssignConv
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import _live_nodes, run_workflow
@@ -13,7 +14,7 @@ from agent_runtime.workflow.nodes.answer import AnswerConfig
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeError, NodeSpec
 from tests.unit.workflow.helpers import MIN, ids, ports_for, scope_for, workflow
 
-STAGE = {"name": "stage", "type": "enum", "values": ["welcome", "assessment", "explore"], "default": "welcome"}
+STAGE = stage_variable()
 
 
 def run(wf, *, stop=None, events=None, snapshot=None, **scope_args):
