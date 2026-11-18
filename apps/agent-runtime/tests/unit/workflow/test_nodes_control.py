@@ -6,6 +6,7 @@ from agent_runtime.agent.loop import TextDelta
 from agent_runtime.sessions.schemas.activity import TextBlock
 from agent_runtime.sessions.schemas.workflow import WorkflowNode
 from agent_runtime.workflow import registry
+from agent_runtime.workflow.constants import stage_variable
 from agent_runtime.workflow.effects import AssignConv
 from agent_runtime.workflow.nodes.base import NodeContext, NodeError, RunState
 from tests.unit.workflow.helpers import budget_for, ids, ports_for, scope_for, workflow
@@ -23,7 +24,7 @@ def run(node_dict, wf, *, scope=None, state=None, **scope_args):
     return spec, spec.run(ctx, config), scope, deltas
 
 
-STAGE = {"name": "stage", "type": "enum", "values": ["welcome", "assessment"], "default": "welcome"}
+STAGE = stage_variable()
 OFFERED = {"name": "offered", "type": "string_list", "default": []}
 COUNT = {"name": "count", "type": "number", "default": 0}
 LABEL = {"name": "label", "type": "string", "default": ""}
