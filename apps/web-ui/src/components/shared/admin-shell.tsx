@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -20,14 +21,26 @@ export interface AdminShellProps {
   knowledgeNav?: React.ReactNode;
 }
 
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/** Logo and wordmark, the same pairing as the Studio sign-in page. */
+function Brand({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Link href="/admin/agent" onClick={onNavigate} className={cn('flex items-center gap-2.5 rounded-md px-2 py-1', FOCUS)}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-card p-1">
+        <Image src="/Logo-IHRD.png" alt="" width={24} height={24} className="h-full w-full object-contain" />
+      </span>
+      <span className="text-base font-semibold text-brand">Agent Studio</span>
+    </Link>
+  );
+}
+
 function SidebarBody({ pathname, account, knowledgeNav, onNavigate }: {
   pathname: string; account?: React.ReactNode; knowledgeNav?: React.ReactNode; onNavigate?: () => void;
 }) {
   return (
     <div className="flex h-full flex-col gap-4 px-3 py-4">
-      <Link href="/admin/agent" onClick={onNavigate} className="rounded-md px-2 text-base font-semibold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        Agent Studio
-      </Link>
+      <Brand onNavigate={onNavigate} />
       <nav aria-label="Điều hướng chính" className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
         {NAV.map(({ key, href, label, icon: Icon, match }) => {
           const inSection = match(pathname);
@@ -40,7 +53,9 @@ function SidebarBody({ pathname, account, knowledgeNav, onNavigate }: {
                 onClick={onNavigate}
                 aria-current={current ? 'page' : undefined}
                 className={cn(
-                  'flex h-8 items-center gap-2 rounded-md px-2 text-13 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'relative flex h-9 items-center gap-2.5 rounded-md px-3 text-13 transition-colors', FOCUS,
+                  // The bar marks the section you are in, whether or not a nested item is the current page.
+                  inSection && 'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary',
                   current && 'bg-primary-subtle font-medium text-primary',
                   inSection && !current && 'font-medium text-primary hover:bg-primary-subtle',
                   !inSection && 'text-sidebar-foreground hover:bg-primary-subtle',
@@ -74,7 +89,7 @@ export function AdminShell({ children, account, knowledgeNav }: AdminShellProps)
           <IconButton label="Mở menu" side="right" onClick={() => setOpen(true)} aria-expanded={open}>
             <Menu className="h-4 w-4" aria-hidden />
           </IconButton>
-          <span className="text-sm font-semibold text-brand">Agent Studio</span>
+          <Brand />
         </header>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="left" className="w-[260px] bg-sidebar p-0">
