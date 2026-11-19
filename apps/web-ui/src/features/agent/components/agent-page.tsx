@@ -31,7 +31,6 @@ export function AgentPage() {
   const draft = useAgentDraft();
   return (
     <div className="space-y-4">
-      <PageTitle title="Agent" description="Cấu hình trợ lý tư vấn: lời chào, persona, model và công cụ." />
       {draft.data ? (
         // Once loaded, a failed background refetch must not unmount the editor and drop unsaved edits.
         <>
@@ -43,8 +42,11 @@ export function AgentPage() {
           <AgentEditor draft={draft.data} />
         </>
       ) : (
-        // Explicit type: in this branch `draft` is narrowed to "no data yet".
-        <QueryState<AgentDraft> query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+        // Explicit type: in this branch `draft` is narrowed to "no data yet". The editor brings its own header.
+        <>
+          <PageTitle title="Agent" description="Cấu hình trợ lý tư vấn: lời chào, persona, model và công cụ." />
+          <QueryState<AgentDraft> query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+        </>
       )}
     </div>
   );
@@ -224,17 +226,28 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const tabs = (
+    <div role="tablist" aria-label="Trang Agent" className="flex gap-1 rounded-lg bg-muted p-0.5 text-sm">
+      {(['config', 'versions'] as const).map(id => (
+        <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => { if (!jsonError) setTab(id); }}
+          className={tab === id ? 'rounded-md bg-background px-3 py-1 font-medium shadow-sm' : 'rounded-md px-3 py-1 text-muted-foreground hover:text-foreground'}>
+          {id === 'config' ? 'Cấu hình' : 'Phiên bản'}
+        </button>
+      ))}
+    </div>
+  );
+
   const statusBar = (compact: boolean) => (
     <AgentStatusBar compact={compact} active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)}
-      canPublish={Boolean(active.data)} onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
+      canPublish={Boolean(active.data)} onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)}
+      onShowVersions={() => { if (jsonError) return; openChatflow(false); setTab('versions'); }}
+      title={compact ? undefined : 'Agent'} center={compact ? undefined : tabs} />
   );
 
   return (
     <div className="space-y-4">
       {/* The open editor shows the same actions in its header. */}
       {!(chatflowOpen && mode === 'chatflow' && tab === 'config') && statusBar(false)}
-
-      <ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />
 
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-sm">
@@ -248,21 +261,13 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
         </div>
       )}
 
-      <div role="tablist" className="flex gap-4 border-b text-sm">
-        {(['config', 'versions'] as const).map(id => (
-          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => { if (!jsonError) setTab(id); }}
-            className={tab === id ? 'border-b-2 border-primary pb-2 font-medium' : 'pb-2 text-muted-foreground'}>
-            {id === 'config' ? 'Cấu hình' : 'Phiên bản'}
-          </button>
-        ))}
-      </div>
-
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
           validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
           chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)}
-          onBeforeDebugRun={async () => Boolean(await persist())} />
+          onBeforeDebugRun={async () => Boolean(await persist())}
+          modeSwitch={<ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}

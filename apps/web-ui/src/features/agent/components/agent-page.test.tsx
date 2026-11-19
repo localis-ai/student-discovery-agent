@@ -50,6 +50,15 @@ beforeEach(() => {
 });
 
 describe('AgentPage', () => {
+  it('shows the live release behind the publish button instead of on the page', async () => {
+    render(<AgentPage />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Agent' })).toBeInTheDocument();
+    expect(screen.queryByText(/Đang dùng v1/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Bản đang dùng' }));
+    expect(await screen.findByText('Đang dùng v1')).toBeInTheDocument();
+    expect(screen.getByText(/bởi admin/)).toBeInTheDocument();
+  });
+
   it('switches to Chatflow and seeds a minimal workflow', async () => {
     render(<AgentPage />);
     fireEvent.click(screen.getByRole('radio', { name: 'Chatflow' }));
@@ -267,7 +276,9 @@ describe('AgentPage', () => {
     fireEvent.change(editor, { target: { value: '{ "entry": ' } });
     expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Kiểm tra' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('tab', { name: 'Phiên bản' }));
+    // Version history is reached from the publish button; it must not leave the broken JSON either.
+    fireEvent.click(screen.getByRole('button', { name: 'Bản đang dùng' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem lịch sử phiên bản' }));
     expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
 
     const editedWorkflow = {

@@ -34,7 +34,7 @@ const CHATFLOW_TABS: ReadonlyArray<{ id: ChatflowTab; label: string }> = [
 export function ConfigTab({
   config, onChange, onReplace, section, onSection, onJsonValidity, validation, onBindKb, mode,
   chatflowOpen = false, onChatflowOpen = () => {}, chatflowActions,
-  onBeforeDebugRun,
+  onBeforeDebugRun, modeSwitch,
 }: {
   config: AgentConfig; onChange: (path: Path, value: unknown) => void; onReplace: (next: AgentConfig) => void;
   section: SectionId; onSection: (id: SectionId) => void; onJsonValidity: (error: string | null) => void;
@@ -44,6 +44,8 @@ export function ConfigTab({
   /** Draft actions (save, validate, publish) shown in the editor's header. */
   chatflowActions?: ReactNode;
   onBeforeDebugRun?: () => Promise<boolean>;
+  /** Agent/Chatflow switch, shown above the section list: it is changed rarely and asks for confirmation. */
+  modeSwitch?: ReactNode;
 }) {
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -164,12 +166,16 @@ export function ConfigTab({
         </ChatflowEditor>
       )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+        {/* min-w-0: the section list scrolls sideways on narrow screens instead of widening the page. */}
+        <div className="min-w-0 space-y-3">
+        {modeSwitch}
         <SectionNav
           active={section}
           onSelect={id => { onSection(id); if (id === 'chatflow' && !jsonError) onChatflowOpen(true); }}
           issues={issues}
           sections={visibleSections}
         />
+        </div>
         {/* The canvas needs the room; form sections keep a readable line length. */}
         <div className={section === 'chatflow' ? 'min-w-0' : 'max-w-3xl'}>
           {/* Hidden behind the open editor anyway; one canvas at a time. */}
