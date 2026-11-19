@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { signingKey, signServiceRequest } from '@/modules/knowledge/runtime-client';
+import {
+  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError,
+} from '@/infrastructure/runtime/internal-runtime';
 
 export const VALIDATE_TARGET = '/api/v1/internal/agent-snapshots:validate';
 // A persona gate can run a few hundred stubbed turns, so validation gets more room than a lookup.
@@ -33,34 +34,28 @@ const unavailable = (kind: 'dependency_down' | 'timeout' | 'not_configured' | 'm
 export async function validateWithRuntime(
   content: Record<string, unknown>, ctx: RequestContext, options: { personas?: boolean } = {},
 ): Promise<AgentValidation> {
-  const env = getKnowledgeEnv();
-  const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
-  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
   const body = JSON.stringify(options.personas === false ? { content, personas: false } : { content });
-  const token = await signServiceRequest('POST', VALIDATE_TARGET, body, key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'agent.validate');
   let response: Response;
   try {
-    response = await fetch(new URL(VALIDATE_TARGET, env.RUNTIME_INTERNAL_URL), {
-      method: 'POST', body, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        'content-type': 'application/json', 'x-internal-caller': 'sda-studio-api', 'x-caller-context': token,
-        'x-request-id': ctx.requestId, 'x-trace-id': ctx.traceId,
-      },
+    response = await callRuntimeAsStudio({
+      method: 'POST', target: VALIDATE_TARGET, purpose: 'agent.validate', body, timeoutMs: TIMEOUT_MS, ctx,
     });
   } catch (error) {
-    const name = error instanceof Error ? error.name : 'Error';
-    console.error('[agent] runtime validation unreachable', { error: name, requestId: ctx.requestId });
-    throw unavailable(name === 'TimeoutError' ? 'timeout' : 'dependency_down');
+    if (!(error instanceof RuntimeCallError)) throw error;
+    if (error.kind !== 'not_configured') {
+      console.error('[agent] runtime validation unreachable', { error: error.causeName, requestId: ctx.requestId });
+    }
+    throw unavailable(error.kind);
   }
-  const envelope = await response.json().catch(() => null) as
-    { success?: boolean; data?: unknown; error?: { code?: unknown } } | null;
+  const envelope = await readEnvelope(response);
   const parsed = response.ok && envelope?.success ? reportSchema.safeParse(envelope.data) : null;
   if (parsed?.success) return parsed.data;
-  const runtimeCode = typeof envelope?.error?.code === 'string' ? envelope.error.code : null;
-  console.error('[agent] runtime validation failed', { status: response.status, runtimeCode, requestId: ctx.requestId });
-  // 401/403: the runtime rejected studio's key, kid or purpose. Other 4xx: studio sent a request the runtime refuses.
-  if (response.status === 401 || response.status === 403) throw unavailable('misconfigured');
-  if (response.status >= 400 && response.status < 500) {
+  console.error('[agent] runtime validation failed', {
+    status: response.status, runtimeCode: envelope?.error?.code ?? null, requestId: ctx.requestId,
+  });
+  const failure = classifyRuntimeStatus(response.status);
+  if (failure === 'misconfigured') throw unavailable('misconfigured');
+  if (failure === 'rejected') {
     throw new ProductError(500, 'SYS_INTERNAL_ERROR', 'Agent validation request was rejected', false, { kind: 'runtime_rejected' });
   }
   throw unavailable('dependency_down');

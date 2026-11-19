@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { signingKey, signServiceRequest } from '@/modules/knowledge/runtime-client';
+import {
+  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError,
+} from '@/infrastructure/runtime/internal-runtime';
 
 export const NODE_TYPES_TARGET = '/api/v1/internal/workflow/node-types';
 const TIMEOUT_MS = 5_000;
@@ -57,34 +58,21 @@ const unavailable = (kind: UnavailableKind) =>
  * after verifying the contract shape so Studio never keeps a separate node schema.
  */
 export async function fetchWorkflowNodeTypes(ctx: RequestContext): Promise<WorkflowNodeTypeCatalog> {
-  const env = getKnowledgeEnv();
-  const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
-  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
-  const token = await signServiceRequest(
-    'GET', NODE_TYPES_TARGET, '', key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'agent.validate',
-  );
   let response: Response;
   try {
-    response = await fetch(new URL(NODE_TYPES_TARGET, env.RUNTIME_INTERNAL_URL), {
-      method: 'GET',
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        accept: 'application/json',
-        'x-internal-caller': 'sda-studio-api',
-        'x-caller-context': token,
-        'x-request-id': ctx.requestId,
-        'x-trace-id': ctx.traceId,
-      },
+    response = await callRuntimeAsStudio({
+      method: 'GET', target: NODE_TYPES_TARGET, purpose: 'agent.validate', body: '', timeoutMs: TIMEOUT_MS, ctx,
+      accept: 'application/json',
     });
   } catch (error) {
-    const name = error instanceof Error ? error.name : 'Error';
-    console.error('[agent] runtime node-types unreachable', { error: name, requestId: ctx.requestId });
-    throw unavailable(name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'dependency_down');
+    if (!(error instanceof RuntimeCallError)) throw error;
+    if (error.kind !== 'not_configured') {
+      console.error('[agent] runtime node-types unreachable', { error: error.causeName, requestId: ctx.requestId });
+    }
+    throw unavailable(error.kind);
   }
 
-  const envelope = await response.json().catch(() => null) as
-    { success?: boolean; data?: unknown; error?: { code?: unknown } } | null;
+  const envelope = await readEnvelope(response);
 
   if (response.ok) {
     if (envelope?.success) {
@@ -103,10 +91,12 @@ export async function fetchWorkflowNodeTypes(ctx: RequestContext): Promise<Workf
     throw unavailable('bad_runtime_response');
   }
 
-  const runtimeCode = typeof envelope?.error?.code === 'string' ? envelope.error.code : null;
-  console.error('[agent] runtime node-types failed', { status: response.status, runtimeCode, requestId: ctx.requestId });
-  if (response.status === 401 || response.status === 403) throw unavailable('misconfigured');
-  if (response.status >= 400 && response.status < 500) throw unavailable('bad_runtime_response');
+  console.error('[agent] runtime node-types failed', {
+    status: response.status, runtimeCode: envelope?.error?.code ?? null, requestId: ctx.requestId,
+  });
+  const failure = classifyRuntimeStatus(response.status);
+  if (failure === 'misconfigured') throw unavailable('misconfigured');
+  if (failure === 'rejected') throw unavailable('bad_runtime_response');
   throw unavailable('dependency_down');
 }
 

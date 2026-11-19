@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { decodeProtectedHeader, jwtVerify } from 'jose';
 import { getAgentEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
-import { signingKey } from '@/modules/knowledge/runtime-client';
+import { signingKey } from '@/infrastructure/runtime/signing';
 
 const MAX_CLOCK_SKEW_SECONDS = 30;
 const invalid = () => new ProductError(401, 'AUTH_CALLER_CONTEXT_INVALID', 'Invalid caller context');
