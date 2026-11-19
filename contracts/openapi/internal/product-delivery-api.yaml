@@ -3,7 +3,8 @@ info:
   title: Student Discovery Internal Product Delivery
   version: 1.0.0
   description: |
-    Studio API (Product) endpoint read only by agent-runtime to load the active agent release.
+    Studio API (Product) endpoint read only by agent-runtime to load the active agent release and the active
+    release of an experience.
     Not routed by the public gateway. The caller proves itself with a short-lived runtime-signed token.
 servers:
   - url: /api/v1/internal
@@ -14,16 +15,22 @@ paths:
   /releases/active:
     get:
       operationId: internalReadActiveRelease
-      summary: Active agent release descriptor for an environment
+      summary: Active agent or experience release descriptor for an environment
       description: |
-        Only kind=agent is delivered, and only for the environment configured by AGENT_DELIVERY_ENVIRONMENT (default demo);
-        any other kind or environment, or a malformed environment, returns 422 VAL_INVALID_REQUEST.
-        No active release returns 422 RES_EXPERIENCE_NOT_CONFIGURED. Missing verification key configuration
+        kind=agent delivers the active agent; kind=experience delivers the active release of experience_id. Both only
+        for the environment configured by AGENT_DELIVERY_ENVIRONMENT (default demo); any other kind or environment, a
+        malformed environment, kind=experience without experience_id, or experience_id with kind=agent returns 422
+        VAL_INVALID_REQUEST. No active release returns 422 RES_EXPERIENCE_NOT_CONFIGURED. Missing verification key configuration
         returns 503 SYS_UNAVAILABLE (details.kind not_configured). Bad or missing token returns 401
         AUTH_CALLER_CONTEXT_INVALID; a valid token with another purpose returns 403 AUTHZ_FORBIDDEN.
       parameters:
-        - {name: kind, in: query, required: true, schema: {type: string, enum: [agent]}}
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [agent, experience]}}
         - {name: environment, in: query, required: true, schema: {type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$"}}
+        - name: experience_id
+          in: query
+          required: false
+          description: Required when kind=experience; not allowed otherwise.
+          schema: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
       responses:
         '200':
           description: Active release descriptor.
@@ -53,6 +60,10 @@ components:
       description: Must equal sda-agent-runtime; the header alone grants no permission.
   schemas:
     ActiveDelivery:
+      oneOf:
+        - $ref: '#/components/schemas/ActiveAgentDelivery'
+        - $ref: '#/components/schemas/ActiveExperienceDelivery'
+    ActiveAgentDelivery:
       type: object
       additionalProperties: false
       required: [environment, kind, release_id, content_hash, delivery_schema_version, content, is_demo]
@@ -64,6 +75,21 @@ components:
         delivery_schema_version: {type: string, enum: [agent.snapshot.v1]}
         content: {type: object, additionalProperties: true, description: agent.snapshot.v1 content}
         is_demo: {type: boolean, enum: [true]}
+    ActiveExperienceDelivery:
+      type: object
+      additionalProperties: false
+      required: [environment, kind, release_id, content_hash, delivery_schema_version, content, is_demo,
+                 definition_schema_version, engine_version]
+      properties:
+        environment: {type: string}
+        kind: {type: string, enum: [experience]}
+        release_id: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
+        content_hash: {type: string, pattern: "^sha256:[a-f0-9]{64}$", description: The release definition_hash.}
+        delivery_schema_version: {type: string, enum: [experience.snapshot.v1]}
+        content: {type: object, additionalProperties: true, description: The released experience definition.}
+        is_demo: {type: boolean}
+        definition_schema_version: {type: string, minLength: 1}
+        engine_version: {type: string, minLength: 1}
     ActiveDeliveryEnvelope:
       oneOf:
         - allOf:

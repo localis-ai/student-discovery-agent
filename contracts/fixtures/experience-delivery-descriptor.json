@@ -1,0 +1,20 @@
+{
+  "description": "One kind=experience delivery descriptor. studio-api checks it against product-delivery-api.yaml and its canonical hash; agent-runtime checks ReleaseDescriptor validation and calculate_content_hash.",
+  "descriptor": {
+    "environment": "demo",
+    "kind": "experience",
+    "release_id": "exp_rel_0123456789abcdef",
+    "content_hash": "sha256:b43fe4396b28ff37fe2b9aeff49884e08d29712dbe8518805680c6375d394523",
+    "delivery_schema_version": "experience.snapshot.v1",
+    "content": {
+      "schema_version": "2.0",
+      "definition_id": "riasec_fixture",
+      "definition_version": "1.0.0",
+      "engine_version": "career-assessment-v1",
+      "is_demo": true
+    },
+    "is_demo": true,
+    "definition_schema_version": "2.0",
+    "engine_version": "career-assessment-v1"
+  }
+}
