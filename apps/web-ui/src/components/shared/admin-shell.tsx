@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -23,14 +22,11 @@ export interface AdminShellProps {
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-/** Logo and wordmark, the same pairing as the Studio sign-in page. */
+/** Studio is its own product: the wordmark carries no student-chat (IHRD) branding. */
 function Brand({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <Link href="/admin/agent" onClick={onNavigate} className={cn('flex items-center gap-2.5 rounded-md px-2 py-1', FOCUS)}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-card p-1">
-        <Image src="/Logo-IHRD.png" alt="" width={24} height={24} className="h-full w-full object-contain" />
-      </span>
-      <span className="text-base font-semibold text-brand">Agent Studio</span>
+    <Link href="/admin/agent" onClick={onNavigate} className={cn('rounded-md px-2 py-1 text-base font-semibold text-brand', FOCUS)}>
+      Agent Studio
     </Link>
   );
 }
