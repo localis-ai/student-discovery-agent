@@ -36,6 +36,12 @@ vi.mock('../api/debug-run', () => ({ streamDebugRun: vi.fn() }));
 vi.mock('./publish-dialog', () => ({
   PublishDialog: ({ onConflict }: { onConflict?: () => void }) => <button type="button" onClick={onConflict}>Giả lập 409 khi phát hành</button>,
 }));
+// The history itself is covered in version-history.test.tsx; here only the drawer around it matters.
+vi.mock('./version-history', () => ({
+  VersionHistory: ({ onCopyToDraft }: { onCopyToDraft: (content: Record<string, unknown>) => void }) => (
+    <button type="button" onClick={() => onCopyToDraft({ greeting_text: 'Từ v1' })}>Chép bản giả</button>
+  ),
+}));
 vi.mock('@/features/knowledge', async original => ({
   ...(await original<typeof import('@/features/knowledge')>()),
   useKnowledgeBases: () => ({ data: [{ id: 'kb_x', name: 'KB X' }] }),
@@ -50,6 +56,16 @@ beforeEach(() => {
 });
 
 describe('AgentPage', () => {
+  it('opens version history in a side drawer and closes it after copying a version into the draft', async () => {
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Phiên bản' }));
+    expect(await screen.findByRole('dialog', { name: 'Lịch sử phiên bản' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chép bản giả' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Lịch sử phiên bản' })).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Lời chào')).toHaveValue('Từ v1');
+    expect(screen.getByTestId('draft-state')).toHaveTextContent('Chưa lưu');
+  });
+
   it('shows the live release behind the publish button instead of on the page', async () => {
     render(<AgentPage />);
     expect(screen.getByRole('heading', { level: 1, name: 'Agent' })).toBeInTheDocument();
