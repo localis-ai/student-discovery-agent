@@ -9,7 +9,7 @@ import {
   idempotencyRecords,
 } from '@/infrastructure/db/schema';
 import { computeContentHash } from '@/shared/canonical';
-import { encodeCursor, decodeCursor } from '@/modules/experiences/cursor';
+import { encodeCursor, decodeCursor } from '@/http/cursor';
 import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
 
 type ProductTransaction = Parameters<Parameters<ProductDatabase['transaction']>[0]>[0];

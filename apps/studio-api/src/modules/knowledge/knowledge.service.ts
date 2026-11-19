@@ -2,7 +2,7 @@ import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
-import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
+import { decodeCursor, encodeCursor } from '@/http/cursor';
 import type {
   CreateFieldInput, CreateKnowledgeBaseInput, DocumentContent, ListDocumentsQuery, PatchFieldInput,
   PatchKnowledgeBaseInput, SearchInput,

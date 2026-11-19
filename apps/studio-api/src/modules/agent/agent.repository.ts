@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { ProductError } from '@/http/errors';
 import { agentActive, agentDraft, agentReleases, auditEvents } from '@/infrastructure/db/schema';
-import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
+import { decodeCursor, encodeCursor } from '@/http/cursor';
 import {
   findIdempotencyRecord, saveIdempotencyRecord, withIdempotencyLock, type ProductExecutor,
 } from '@/modules/experiences/experiences.repository';

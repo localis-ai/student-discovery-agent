@@ -3,7 +3,7 @@ import type { components } from '@/generated/api/admin-api';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { hashPassword } from '@/modules/auth/password';
 import { ProductError, transportError } from '@/http/errors';
-import { encodeCursor, decodeCursor } from '@/modules/experiences/cursor';
+import { encodeCursor, decodeCursor } from '@/http/cursor';
 import type { RequestContext } from '@/http/types';
 import { toAdminProfile, type AdminUserProfile } from '@/modules/users/users.profile';
 import { findUserById, insertUser, updateUserRow } from '@/modules/users/users.repository';
