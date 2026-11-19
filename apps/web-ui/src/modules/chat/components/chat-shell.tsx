@@ -292,7 +292,7 @@ export function ChatShell() {
   const greeting = splitGreeting(initialBotText);
 
   return (
-    <div className="relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-0 font-sans text-foreground antialiased transition-colors duration-300 selection:bg-primary/20 dark:bg-ink md:p-3">
+    <div className="chat-theme relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-0 font-sans text-foreground antialiased transition-colors duration-300 selection:bg-primary/20 dark:bg-ink md:p-3">
       <ChatSidebar
         threads={threads}
         activeThreadId={conversationId ?? 'new'}

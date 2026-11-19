@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* One blue scale for Studio and student chat: navy ink (--brand, headings, wordmark) and IHRD blue (--primary, actions and
-   links, #4963a8). shadcn names kept; values are HSL channels. */
+/* Studio is its own product with its own colour: plum (--primary, #7b3a88) for actions, links and focus, a dark plum ink
+   (--brand) for the wordmark. Student chat keeps IHRD blue through .chat-theme below. shadcn names kept; HSL channels. */
 @layer base {
   :root {
     --background: 220 45% 98%;
@@ -12,9 +12,9 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 224 39% 47%;
+    --primary: 290 40% 38%;
     --primary-foreground: 0 0% 100%;
-    --primary-subtle: 224 45% 95%;
+    --primary-subtle: 290 40% 96%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 215 25% 27%;
     --muted: 210 40% 96%;
@@ -26,10 +26,10 @@
     --destructive-subtle: 0 86% 97%;
     --border: 214 32% 91%;
     --input: 213 27% 84%;
-    --ring: 224 39% 47%;
+    --ring: 290 40% 38%;
     --sidebar: 0 0% 100%;
     --sidebar-foreground: 215 25% 27%;
-    --brand: 218 54% 19%;
+    --brand: 288 35% 22%;
     --status-success: 152 77% 39%;
     --status-warning: 34 94% 50%;
     --status-danger: 4 86% 58%;
@@ -47,9 +47,9 @@
     --card-foreground: 210 40% 96%;
     --popover: 222 40% 10%;
     --popover-foreground: 210 40% 96%;
-    --primary: 226 100% 74%;
+    --primary: 290 60% 76%;
     --primary-foreground: 222 47% 11%;
-    --primary-subtle: 225 35% 20%;
+    --primary-subtle: 290 30% 20%;
     --secondary: 217 33% 15%;
     --secondary-foreground: 214 32% 82%;
     --muted: 217 33% 15%;
@@ -61,10 +61,10 @@
     --destructive-subtle: 4 50% 15%;
     --border: 217 25% 20%;
     --input: 217 20% 28%;
-    --ring: 226 100% 74%;
+    --ring: 290 60% 76%;
     --sidebar: 222 40% 10%;
     --sidebar-foreground: 214 32% 82%;
-    --brand: 214 40% 88%;
+    --brand: 290 40% 88%;
     --status-success: 152 60% 45%;
     --status-warning: 34 94% 55%;
     --status-danger: 4 92% 69%;
@@ -72,6 +72,21 @@
     --warning-subtle: 19 84% 15%;
     --warning-foreground: 34 94% 60%;
     --success-foreground: 152 60% 55%;
+  }
+
+  /* Student chat: IHRD blue (#4963a8; #7c9bff in dark), scoped so Studio keeps its own colour. */
+  .chat-theme {
+    --primary: 224 39% 47%;
+    --primary-foreground: 0 0% 100%;
+    --primary-subtle: 224 45% 95%;
+    --ring: 224 39% 47%;
+  }
+
+  .dark .chat-theme {
+    --primary: 226 100% 74%;
+    --primary-foreground: 222 47% 11%;
+    --primary-subtle: 225 35% 20%;
+    --ring: 226 100% 74%;
   }
 
   * {
