@@ -22,7 +22,7 @@ import {
   type OnNodesChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { CircleAlert, LayoutGrid, Maximize, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, CircleAlert, LayoutGrid, Maximize, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/features/knowledge';
 import { cn } from '@/lib/utils/cn';
@@ -225,8 +225,18 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
       data-position={`${Math.round(data.position.x)},${Math.round(data.position.y)}`}
       title={data.description}
       style={{ width: CARD_WIDTH }}
-      className={cn('group rounded-xl border bg-card pb-2 text-card-foreground shadow-sm transition-shadow hover:shadow-md', ring)}
+      className={cn('group relative rounded-xl border bg-card pb-2 text-card-foreground shadow-sm transition-shadow hover:shadow-md', ring)}
     >
+      {/* Corner badges stay readable when the canvas is zoomed out, where a border colour alone is lost. */}
+      {data.invalid ? (
+        <span role="img" aria-label="Node có lỗi" className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm ring-2 ring-card">
+          <CircleAlert className="size-3.5" aria-hidden />
+        </span>
+      ) : data.highlighted && !data.active ? (
+        <span role="img" aria-label="Đã chạy qua" className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-card">
+          <Check className="size-3.5" strokeWidth={3} aria-hidden />
+        </span>
+      ) : null}
       <Handle
         type="target"
         position={Position.Left}
@@ -237,10 +247,9 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
       <div className="flex items-center gap-2.5 px-3 pt-3">
         <NodeIcon type={data.nodeType} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-13 font-semibold leading-tight">{data.label}</div>
+          <div className="truncate text-sm font-semibold leading-tight">{data.label}</div>
           {data.typeTitle ? <div className="truncate text-[11px] leading-tight text-muted-foreground">{data.typeTitle}</div> : null}
         </div>
-        {data.invalid ? <CircleAlert aria-label="Node có lỗi" className="size-4 shrink-0 text-destructive" /> : null}
         {!data.readOnly && !data.isEntry && data.onRequestDelete ? (
           <button
             type="button"

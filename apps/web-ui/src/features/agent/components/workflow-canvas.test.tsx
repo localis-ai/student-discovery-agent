@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_WORKFLOW_NODES } from '../model/workflow/edit';
 import type { AgentIssue, ChatflowWorkflow, NodeTypeCatalog } from '../types';
@@ -343,5 +343,9 @@ describe('WorkflowCanvas', () => {
     expect(screen.getByTestId('workflow-node-start').className).toContain('ring-primary/20');
     expect(screen.getByTestId('workflow-node-classify').className).toContain('animate-pulse');
     expect(screen.getByTestId('workflow-node-answer').className).not.toContain('ring-primary/20');
+    // Visited nodes carry a badge; the running one pulses instead.
+    expect(within(screen.getByTestId('workflow-node-start')).getByLabelText('Đã chạy qua')).toBeInTheDocument();
+    expect(within(screen.getByTestId('workflow-node-classify')).queryByLabelText('Đã chạy qua')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('workflow-node-answer')).queryByLabelText('Đã chạy qua')).not.toBeInTheDocument();
   });
 });

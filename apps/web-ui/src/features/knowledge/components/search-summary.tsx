@@ -38,7 +38,7 @@ export function SearchSummary({ count, elapsedMs, degraded, settings, fields }: 
   ].filter(Boolean);
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border bg-sidebar px-3 py-2">
-      <p role="status" className="text-13 font-medium">{parts.join(' · ')}</p>
+      <p role="status" className="text-sm font-medium">{parts.join(' · ')}</p>
       {recap && <p className="text-xs text-muted-foreground">{recap}</p>}
     </div>
   );

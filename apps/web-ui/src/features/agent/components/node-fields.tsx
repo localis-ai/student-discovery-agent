@@ -166,7 +166,7 @@ function FieldShell({ id, label, required, hint, action, children }: {
   return (
     <div className="space-y-1.5">
       <div className="flex min-h-5 items-center justify-between gap-2">
-        <Label htmlFor={id} className="text-13 font-medium">
+        <Label htmlFor={id} className="text-sm font-medium">
           {label}
           {required ? <span aria-hidden className="ml-0.5 text-destructive">*</span> : null}
         </Label>
@@ -304,7 +304,7 @@ function BooleanField({ name, property, value, disabled, onChange }: FieldProps)
   const id = fieldId(name);
   return (
     <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id} className="text-13 font-medium">{label}</Label>
+      <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
       <Switch
         id={id}
         aria-label={label}
@@ -471,7 +471,7 @@ function ObjectListField(props: FieldProps) {
   return (
     <div role="group" aria-label={label} className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-13 font-medium">
+        <span className="text-sm font-medium">
           {label}
           {required ? <span aria-hidden className="ml-0.5 text-destructive">*</span> : null}
         </span>
@@ -510,7 +510,7 @@ function ObjectListField(props: FieldProps) {
       ))}
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-13 text-muted-foreground hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
         disabled={disabled || items.length >= max}
         onClick={() => onChange([...items, defaultItem(itemSchema)])}
       >
@@ -551,7 +551,7 @@ function ConditionField(props: FieldProps) {
   return (
     <div role="group" aria-label={label} className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-13 font-medium">
+        <span className="text-sm font-medium">
           {label}
           {required ? <span aria-hidden className="ml-0.5 text-destructive">*</span> : null}
         </span>
@@ -560,11 +560,11 @@ function ConditionField(props: FieldProps) {
         </button>
       </div>
       {draft.rows.length > 1 ? (
-        <div className="flex items-center gap-2 text-13">
+        <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">Đúng khi</span>
           <select
             aria-label="Cách kết hợp điều kiện"
-            className="h-8 rounded-md border border-input bg-background px-2 text-13"
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
             value={draft.logic}
             disabled={disabled}
             onChange={(event) => update({ ...draft, logic: event.target.value as 'and' | 'or' })}
@@ -604,7 +604,7 @@ function ConditionField(props: FieldProps) {
             <div className="flex items-center gap-1.5">
               <select
                 aria-label={`Phép so sánh ${index + 1}`}
-                className="h-8 w-36 shrink-0 rounded-md border border-input bg-background px-2 text-13"
+                className="h-8 w-36 shrink-0 rounded-md border border-input bg-background px-2 text-sm"
                 value={row.operator}
                 disabled={disabled}
                 onChange={(event) => setRow(index, { operator: event.target.value as ConditionRow['operator'] })}
@@ -630,7 +630,7 @@ function ConditionField(props: FieldProps) {
       })}
       <button
         type="button"
-        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-13 text-muted-foreground hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
         disabled={disabled}
         onClick={() => update({ ...draft, rows: [...draft.rows, { variable: '', operator: '==', value: '' }] })}
       >
@@ -665,10 +665,10 @@ function ToolsField({ name, property, value, disabled, onChange }: FieldProps) {
   const toggle = (tool: string, on: boolean) => onChange(on ? [...chosen, tool] : chosen.filter((item) => item !== tool));
   return (
     <div role="group" aria-label={label} className="space-y-1.5">
-      <span className="text-13 font-medium">{label}</span>
+      <span className="text-sm font-medium">{label}</span>
       <div className="divide-y rounded-lg border">
         {[...TOOL_CATALOG.map((tool) => ({ name: tool.name, label: tool.label })), ...unknown.map((item) => ({ name: item, label: item }))].map((tool) => (
-          <label key={tool.name} className="flex items-center justify-between gap-3 px-3 py-2 text-13">
+          <label key={tool.name} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
             <span>
               {tool.label} <span className="font-mono text-xs text-muted-foreground">{tool.name}</span>
             </span>

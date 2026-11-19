@@ -23,9 +23,6 @@ export default {
         card: ['var(--font-card)', ...fontFamily.sans],
         'card-title': ['var(--font-card-title)', ...fontFamily.serif],
       },
-      fontSize: {
-        13: ['0.8125rem', { lineHeight: '1.25rem' }],
-      },
       keyframes: {
         'message-pop': {
           '0%': { opacity: '0', transform: 'translateY(16px) scale(0.97)' },

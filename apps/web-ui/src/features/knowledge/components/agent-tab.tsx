@@ -19,12 +19,12 @@ export function AgentTab({ kb }: { kb: string }) {
   return (
     <div className="space-y-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
-        <p className="text-13 text-muted-foreground">Bật công cụ tìm kiếm của agent với knowledge base này. Bạn kiểm tra và phát hành ở trang Agent.</p>
+        <p className="text-sm text-muted-foreground">Bật công cụ tìm kiếm của agent với knowledge base này. Bạn kiểm tra và phát hành ở trang Agent.</p>
         <Button asChild size="sm"><Link href={`/admin/agent?section=tools&kb=${encodeURIComponent(kb)}`}>Gắn vào agent</Link></Button>
       </div>
       <ErrorText error={error} />
       {warnings.length > 0 && (
-        <div role="status" className="flex gap-2 rounded-xl bg-warning-subtle px-4 py-3 text-13 text-warning-foreground">
+        <div role="status" className="flex gap-2 rounded-xl bg-warning-subtle px-4 py-3 text-sm text-warning-foreground">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <ul className="space-y-1">{warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>
         </div>
@@ -32,7 +32,7 @@ export function AgentTab({ kb }: { kb: string }) {
       {data && TOOLS.map(tool => (
         <div key={tool} className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-13 font-medium">{tool}</span>
+            <span className="font-mono text-sm font-medium">{tool}</span>
             <CopyButton value={JSON.stringify(data[tool], null, 2)} iconOnly variant="ghost" label={`Copy ${tool}`} className="h-8 w-8" />
           </div>
           <JsonCode value={data[tool]} />

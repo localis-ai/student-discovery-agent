@@ -34,7 +34,7 @@ const CHATFLOW_TABS: ReadonlyArray<{ id: ChatflowTab; label: string }> = [
 export function ConfigTab({
   config, onChange, onReplace, section, onSection, onJsonValidity, validation, onBindKb, mode,
   chatflowOpen = false, onChatflowOpen = () => {}, chatflowActions,
-  onBeforeDebugRun,
+  onBeforeDebugRun, modeSwitch,
 }: {
   config: AgentConfig; onChange: (path: Path, value: unknown) => void; onReplace: (next: AgentConfig) => void;
   section: SectionId; onSection: (id: SectionId) => void; onJsonValidity: (error: string | null) => void;
@@ -44,6 +44,8 @@ export function ConfigTab({
   /** Draft actions (save, validate, publish) shown in the editor's header. */
   chatflowActions?: ReactNode;
   onBeforeDebugRun?: () => Promise<boolean>;
+  /** Agent/Chatflow switch, shown above the section list: it is changed rarely and asks for confirmation. */
+  modeSwitch?: ReactNode;
 }) {
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function ConfigTab({
           closeDisabled={Boolean(jsonError)}
           actions={chatflowActions}
           tabs={
-            <div role="tablist" aria-label="Chế độ xem Chatflow" className="flex gap-1 rounded-lg bg-muted p-0.5 text-13">
+            <div role="tablist" aria-label="Chế độ xem Chatflow" className="flex gap-1 rounded-lg bg-muted p-0.5 text-sm">
               {CHATFLOW_TABS.map(tab => (
                 <button key={tab.id} role="tab" aria-selected={chatflowTab === tab.id} type="button"
                   onClick={() => { if (!jsonError) setChatflowTab(tab.id); }}
@@ -153,30 +155,34 @@ export function ConfigTab({
               ) : null}
             />
           ) : workflowMalformed ? (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-13 text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
               Workflow chưa đúng cấu trúc (cần mảng nodes, mỗi node có id và type) — sửa ở tab JSON.
             </p>
           ) : (
-            <p className="rounded-lg border border-dashed p-6 text-13 text-muted-foreground">
+            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
               Bản nháp Chatflow chưa có workflow.
             </p>
           )}
         </ChatflowEditor>
       )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+        {/* min-w-0: the section list scrolls sideways on narrow screens instead of widening the page. */}
+        <div className="min-w-0 space-y-3">
+        {modeSwitch}
         <SectionNav
           active={section}
           onSelect={id => { onSection(id); if (id === 'chatflow' && !jsonError) onChatflowOpen(true); }}
           issues={issues}
           sections={visibleSections}
         />
+        </div>
         {/* The canvas needs the room; form sections keep a readable line length. */}
         <div className={section === 'chatflow' ? 'min-w-0' : 'max-w-3xl'}>
           {/* Hidden behind the open editor anyway; one canvas at a time. */}
           {section === 'chatflow' && !(chatflowOpen && mode === 'chatflow') && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-13 text-muted-foreground">Sơ đồ chatflow được sửa trong trình chỉnh sửa gần toàn màn hình.</p>
+                <p className="text-sm text-muted-foreground">Sơ đồ chatflow được sửa trong trình chỉnh sửa gần toàn màn hình.</p>
                 <Button size="sm" onClick={() => onChatflowOpen(true)}>
                   <Maximize2 className="size-4" /> Mở trình chỉnh sửa
                 </Button>
@@ -184,7 +190,7 @@ export function ConfigTab({
               {workflow ? (
                 <WorkflowCanvas className="h-[420px] w-full" workflow={workflow} catalog={catalog} issues={workflowIssues} readOnly showPalette={false} />
               ) : (
-                <p className="rounded-lg border border-dashed p-6 text-13 text-muted-foreground">
+                <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
                   {workflowMalformed ? 'Workflow chưa đúng cấu trúc, mở trình chỉnh sửa để sửa ở tab JSON.' : 'Bản nháp Chatflow chưa có workflow.'}
                 </p>
               )}

@@ -2,18 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Knowledge Studio tokens (plan §2, navy palette from the UI feedback round). shadcn names kept; values are HSL channels. */
+/* Studio is its own product with its own colour: wood green (--primary, #347951) for actions, links and focus, a dark
+   green ink (--brand) for the wordmark. Student chat keeps IHRD blue through .chat-theme below. shadcn names kept; HSL channels. */
 @layer base {
   :root {
-    --background: 210 40% 98%;
+    --background: 220 45% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 214 52% 25%;
+    --primary: 145 40% 34%;
     --primary-foreground: 0 0% 100%;
-    --primary-subtle: 213 36% 95%;
+    --primary-subtle: 145 35% 95%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 215 25% 27%;
     --muted: 210 40% 96%;
@@ -25,10 +26,10 @@
     --destructive-subtle: 0 86% 97%;
     --border: 214 32% 91%;
     --input: 213 27% 84%;
-    --ring: 214 52% 25%;
+    --ring: 145 40% 34%;
     --sidebar: 0 0% 100%;
     --sidebar-foreground: 215 25% 27%;
-    --brand: 214 52% 25%;
+    --brand: 150 40% 16%;
     --status-success: 152 77% 39%;
     --status-warning: 34 94% 50%;
     --status-danger: 4 86% 58%;
@@ -46,9 +47,9 @@
     --card-foreground: 210 40% 96%;
     --popover: 222 40% 10%;
     --popover-foreground: 210 40% 96%;
-    --primary: 213 60% 72%;
+    --primary: 145 45% 62%;
     --primary-foreground: 222 47% 11%;
-    --primary-subtle: 214 40% 18%;
+    --primary-subtle: 145 30% 18%;
     --secondary: 217 33% 15%;
     --secondary-foreground: 214 32% 82%;
     --muted: 217 33% 15%;
@@ -60,10 +61,10 @@
     --destructive-subtle: 4 50% 15%;
     --border: 217 25% 20%;
     --input: 217 20% 28%;
-    --ring: 213 60% 72%;
+    --ring: 145 45% 62%;
     --sidebar: 222 40% 10%;
     --sidebar-foreground: 214 32% 82%;
-    --brand: 213 60% 72%;
+    --brand: 145 35% 85%;
     --status-success: 152 60% 45%;
     --status-warning: 34 94% 55%;
     --status-danger: 4 92% 69%;
@@ -73,7 +74,7 @@
     --success-foreground: 152 60% 55%;
   }
 
-  /* Student chat: IHRD blue of the login shell (#4963a8; #7c9bff in dark), scoped so Studio keeps its navy. */
+  /* Student chat: IHRD blue (#4963a8; #7c9bff in dark), scoped so Studio keeps its own colour. */
   .chat-theme {
     --primary: 224 39% 47%;
     --primary-foreground: 0 0% 100%;
@@ -100,17 +101,6 @@
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

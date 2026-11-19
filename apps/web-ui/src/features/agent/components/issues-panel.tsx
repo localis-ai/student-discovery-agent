@@ -70,7 +70,7 @@ export function IssuesPanel({ state, onOpenSection, workflow, onOpenWorkflowIssu
   const workflowGroups = workflow ? groupWorkflowIssues(indexed.filter(item => sectionOf(item.issue.path) === 'chatflow'), workflow) : [];
 
   return (
-    <section aria-label="Kết quả kiểm tra" className="rounded-lg border p-4 text-13">
+    <section aria-label="Kết quả kiểm tra" className="rounded-lg border p-4 text-sm">
       <p className="flex items-center gap-2 font-medium">
         {state.valid ? <CheckCircle2 className="h-4 w-4 text-status-success" aria-hidden /> : <AlertCircle className="h-4 w-4 text-destructive" aria-hidden />}
         {state.valid ? 'Cấu hình hợp lệ' : `${state.issues.length} lỗi cần sửa`}

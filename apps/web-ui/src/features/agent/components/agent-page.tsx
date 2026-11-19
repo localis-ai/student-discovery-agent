@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { History } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { ConfirmDialog, PageTitle, QueryState, errorMessage, knowledgeApi, useUnsavedGuard } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
 import { canonical, setIn, type Path } from '../model/config';
@@ -15,7 +18,7 @@ import { AgentStatusBar, type DraftState } from './agent-status-bar';
 import { ConfigTab } from './config-tab';
 import type { ValidationState } from './issues-panel';
 import { PublishDialog } from './publish-dialog';
-import { VersionsTab } from './versions-tab';
+import { VersionHistory } from './version-history';
 import { ModeSwitch } from './mode-switch';
 
 const minimalChatflow = {
@@ -31,20 +34,22 @@ export function AgentPage() {
   const draft = useAgentDraft();
   return (
     <div className="space-y-4">
-      <PageTitle title="Agent" description="Cấu hình trợ lý tư vấn: lời chào, persona, model và công cụ." />
       {draft.data ? (
         // Once loaded, a failed background refetch must not unmount the editor and drop unsaved edits.
         <>
           {draft.error && (
-            <p role="status" className="rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-2 text-13">
+            <p role="status" className="rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-2 text-sm">
               Không tải lại được bản nháp: {errorMessage(draft.error)}. Nội dung đang sửa vẫn được giữ.
             </p>
           )}
           <AgentEditor draft={draft.data} />
         </>
       ) : (
-        // Explicit type: in this branch `draft` is narrowed to "no data yet".
-        <QueryState<AgentDraft> query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+        // Explicit type: in this branch `draft` is narrowed to "no data yet". The editor brings its own header.
+        <>
+          <PageTitle title="Agent" description="Cấu hình trợ lý tư vấn: lời chào, persona, model và công cụ." />
+          <QueryState<AgentDraft> query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+        </>
       )}
     </div>
   );
@@ -61,7 +66,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [section, setSection] = useState<SectionId>(
     params.get('section') === 'tools' ? 'tools' : draft.content.mode === 'chatflow' ? 'chatflow' : 'persona',
   );
-  const [tab, setTab] = useState<'config' | 'versions'>('config');
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [validation, setValidation] = useState<ValidationState | null>(null);
   const [conflict, setConflict] = useState<AgentDraft | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -224,20 +229,28 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // A broken JSON editor holds edits that `config` lacks: copying a version over it would lose them.
+  const showVersions = () => { if (!jsonError) setVersionsOpen(true); };
+  const versionsButton = (
+    <Button variant="ghost" size="sm" onClick={showVersions} disabled={Boolean(jsonError)}>
+      <History className="size-4" aria-hidden /> Phiên bản
+    </Button>
+  );
+
   const statusBar = (compact: boolean) => (
     <AgentStatusBar compact={compact} active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)}
-      canPublish={Boolean(active.data)} onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
+      canPublish={Boolean(active.data)} onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)}
+      onShowVersions={showVersions}
+      title={compact ? undefined : 'Agent'} center={compact ? undefined : versionsButton} />
   );
 
   return (
     <div className="space-y-4">
       {/* The open editor shows the same actions in its header. */}
-      {!(chatflowOpen && mode === 'chatflow' && tab === 'config') && statusBar(false)}
-
-      <ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />
+      {!(chatflowOpen && mode === 'chatflow') && statusBar(false)}
 
       {conflict && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-13">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-sm">
           <span>
             Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}), bởi {conflict.updated_by} lúc {new Date(conflict.updated_at).toLocaleString('vi-VN')}.
           </span>
@@ -248,29 +261,25 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
         </div>
       )}
 
-      <div role="tablist" className="flex gap-4 border-b text-sm">
-        {(['config', 'versions'] as const).map(id => (
-          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => { if (!jsonError) setTab(id); }}
-            className={tab === id ? 'border-b-2 border-primary pb-2 font-medium' : 'pb-2 text-muted-foreground'}>
-            {id === 'config' ? 'Cấu hình' : 'Phiên bản'}
-          </button>
-        ))}
-      </div>
+      <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
+        section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
+        validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
+        chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)}
+        onBeforeDebugRun={async () => Boolean(await persist())}
+        modeSwitch={<ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />} />
 
-      {tab === 'config' ? (
-        <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
-          section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
-          validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
-          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)}
-          onBeforeDebugRun={async () => Boolean(await persist())} />
-      ) : (
-        <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
-      )}
+      <Sheet open={versionsOpen} onOpenChange={setVersionsOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+          <SheetTitle>Lịch sử phiên bản</SheetTitle>
+          <SheetDescription className="mb-4 text-sm text-muted-foreground">Mỗi lần phát hành là một phiên bản cố định. Chép một bản vào nháp để sửa tiếp.</SheetDescription>
+          <VersionHistory active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setVersionsOpen(false); }} />
+        </SheetContent>
+      </Sheet>
 
       {publishing && active.data && (
         <PublishDialog open={publishing} onOpenChange={setPublishing} draft={base} active={active.data}
           onConflict={() => void reloadDraft()}
-          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision, workflow: base.content.workflow as ChatflowWorkflow | undefined }); setTab('config'); }} />
+          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision, workflow: base.content.workflow as ChatflowWorkflow | undefined }); }} />
       )}
 
       <ConfirmDialog open={guard.open} onOpenChange={guard.onOpenChange} onConfirm={guard.onConfirm}

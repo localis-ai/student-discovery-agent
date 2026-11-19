@@ -122,7 +122,7 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
           <span className="font-medium text-foreground/80">{typeTitle}</span>
           <span className="rounded bg-muted px-1.5 py-0.5 font-mono">ID: {node.id}</span>
         </p>
-        {definition?.description ? <p className="text-13 text-muted-foreground">{definition.description}</p> : null}
+        {definition?.description ? <p className="text-sm text-muted-foreground">{definition.description}</p> : null}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -159,7 +159,7 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
                 const label = handleLabel(handle);
                 return (
                   <div key={handle.id} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-2">
-                    <label htmlFor={`node-handle-${handle.id}`} className="flex min-w-0 items-center gap-2 text-13">
+                    <label htmlFor={`node-handle-${handle.id}`} className="flex min-w-0 items-center gap-2 text-sm">
                       <span aria-hidden className={cn('size-2 shrink-0 rounded-full', isErrorHandle(handle) ? 'bg-destructive/70' : swatch)} />
                       <span className="truncate">{label}</span>
                       {label !== handle.id ? <code className="truncate text-[11px] text-muted-foreground">{handle.id}</code> : null}
@@ -167,7 +167,7 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
                     <select
                       id={`node-handle-${handle.id}`}
                       aria-label={`Khi ${handle.id}`}
-                      className={cn('h-8 w-full rounded-md border border-input bg-background px-2 text-13', !edge && 'text-muted-foreground')}
+                      className={cn('h-8 w-full rounded-md border border-input bg-background px-2 text-sm', !edge && 'text-muted-foreground')}
                       value={edge?.target ?? ''}
                       disabled={readOnly}
                       onChange={(event) => {

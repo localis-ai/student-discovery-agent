@@ -35,7 +35,7 @@ export function NodePalette({ catalog, onAddNode, disabled, nodeCount = 0 }: Nod
         <button
           type="button"
           data-testid="workflow-node-palette"
-          className="flex items-center gap-1.5 rounded-xl border bg-card px-3 py-2 text-13 font-medium shadow-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted"
+          className="flex items-center gap-1.5 rounded-xl border bg-card px-3 py-2 text-sm font-medium shadow-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted"
         >
           <Plus className="size-4" /> Thêm node
         </button>
@@ -64,7 +64,7 @@ export function NodePalette({ catalog, onAddNode, disabled, nodeCount = 0 }: Nod
               >
                 <NodeIcon type={item.type} size="sm" className="mt-0.5" />
                 <span className="min-w-0">
-                  <span className="block text-13 font-medium">{label}</span>
+                  <span className="block text-sm font-medium">{label}</span>
                   {item.description ? <span className="block text-xs text-muted-foreground">{item.description}</span> : null}
                 </span>
               </button>

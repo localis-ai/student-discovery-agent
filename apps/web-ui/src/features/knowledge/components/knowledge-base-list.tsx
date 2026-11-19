@@ -50,7 +50,7 @@ function KnowledgeBaseCard({ kb }: { kb: KnowledgeBase }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <p className={cn('line-clamp-2 text-13', kb.description ? 'text-muted-foreground' : 'italic text-muted-foreground/70')}>
+      <p className={cn('line-clamp-2 text-sm', kb.description ? 'text-muted-foreground' : 'italic text-muted-foreground/70')}>
         {kb.description || 'Chưa có mô tả.'}
       </p>
       <div className="mt-auto flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
@@ -106,12 +106,12 @@ export function KnowledgeBaseList() {
                 <button type="button" onClick={() => setCreating(true)} className={cn(CARD, FOCUS, 'items-start justify-center border-dashed bg-card hover:border-primary hover:bg-primary-subtle/50')}>
                   <Plus className="h-5 w-5 text-primary" aria-hidden />
                   <span className="text-sm font-semibold">Tạo knowledge base</span>
-                  <span className="text-13 text-muted-foreground">Nhập tài liệu để agent tra cứu</span>
+                  <span className="text-sm text-muted-foreground">Nhập tài liệu để agent tra cứu</span>
                 </button>
                 {visible.map(kb => <KnowledgeBaseCard key={kb.id} kb={kb} />)}
               </div>
-              {data.length === 0 && <p className="mt-4 text-13 text-muted-foreground">Chưa có knowledge base nào. Tạo một cái rồi nhập tài liệu vào để agent dùng.</p>}
-              {data.length > 0 && visible.length === 0 && <p className="mt-4 text-13 text-muted-foreground">Không có knowledge base nào khớp “{filter.trim()}”.</p>}
+              {data.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Chưa có knowledge base nào. Tạo một cái rồi nhập tài liệu vào để agent dùng.</p>}
+              {data.length > 0 && visible.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Không có knowledge base nào khớp “{filter.trim()}”.</p>}
             </>
           );
         }}

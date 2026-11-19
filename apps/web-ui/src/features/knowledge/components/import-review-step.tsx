@@ -30,7 +30,7 @@ export function ImportPreviewTable({ rows }: ImportPreviewTableProps) {
 
   return (
     <div className="space-y-3">
-      <div role="status" aria-live="polite" aria-label="Tóm tắt xem trước" className="flex flex-wrap items-center gap-1 text-13">
+      <div role="status" aria-live="polite" aria-label="Tóm tắt xem trước" className="flex flex-wrap items-center gap-1 text-sm">
         {ACTIONS.map(({ action, label, tone }, index) => (
           <span key={action} className="inline-flex items-center gap-1">
             {index > 0 && <span aria-hidden className="text-muted-foreground">·</span>}
@@ -111,15 +111,15 @@ export function ImportResult({ kb, report }: ImportResultProps) {
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {OUTCOMES.map(({ key, label }) => (
           <div key={key} className="rounded-xl border px-4 py-3">
-            <dt className="text-13 text-muted-foreground">{label}</dt>
+            <dt className="text-sm text-muted-foreground">{label}</dt>
             <dd className={cn('text-lg font-semibold', (key === 'conflict' || key === 'failed') && report[key] > 0 && 'text-destructive')}>{report[key]}</dd>
           </div>
         ))}
       </dl>
       {problems.length > 0 && (
         <div className="rounded-xl border">
-          <p className="border-b px-4 py-2 text-13 font-medium">Dòng chưa ghi được</p>
-          <ul className="divide-y text-13">
+          <p className="border-b px-4 py-2 text-sm font-medium">Dòng chưa ghi được</p>
+          <ul className="divide-y text-sm">
             {problems.map(row => (
               <li key={row.row} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2">
                 <span className="text-muted-foreground">{`#${row.row}`}</span>

@@ -19,7 +19,7 @@ export interface StatusDotProps {
 /** Colour is decoration only; the text always carries the status. */
 export function StatusDot({ tone, children, className }: StatusDotProps) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5 text-13', className)}>
+    <span className={cn('inline-flex items-center gap-1.5 text-sm', className)}>
       <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', DOT[tone])} />
       {children}
     </span>

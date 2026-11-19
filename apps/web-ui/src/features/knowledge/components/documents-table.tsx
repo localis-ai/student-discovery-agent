@@ -254,7 +254,7 @@ export function DocumentsTable({ kb, onOpenDocument, filters, isFiltered, onClea
             </Table>
           </Frame>
           {(page > 0 || data.next_cursor) && (
-            <nav aria-label="Phân trang tài liệu" className="flex items-center justify-end gap-2 text-13 text-muted-foreground">
+            <nav aria-label="Phân trang tài liệu" className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
               {turning
                 ? <span role="status" className="inline-flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />Đang tải…</span>
                 : <span>Trang {page + 1}</span>}

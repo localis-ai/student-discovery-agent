@@ -58,7 +58,7 @@ export function AdminLoginForm() {
     <>
       <div className="mb-6 space-y-1.5">
         <h1 className="text-xl font-semibold tracking-tight">Đăng nhập Studio</h1>
-        <p className="text-13 text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Dành cho quản trị viên quản lý tri thức và cấu hình agent.
         </p>
       </div>
@@ -87,7 +87,7 @@ export function AdminLoginForm() {
         {error && (
           <div
             role="alert"
-            className="rounded-md border border-destructive/20 bg-destructive-subtle px-3 py-2 text-13 text-destructive"
+            className="rounded-md border border-destructive/20 bg-destructive-subtle px-3 py-2 text-sm text-destructive"
           >
             {loginErrorMessage(error)}
           </div>

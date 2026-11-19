@@ -17,7 +17,7 @@ export interface ImportStepperProps {
 
 export function ImportStepper({ current, skipMapping }: ImportStepperProps) {
   return (
-    <ol aria-label="Các bước nhập file" className="mb-6 flex items-center gap-2 text-13">
+    <ol aria-label="Các bước nhập file" className="mb-6 flex items-center gap-2 text-sm">
       {STEPS.map(({ step, label }, index) => {
         const skipped = step === 2 && skipMapping;
         const done = step < current && !skipped;

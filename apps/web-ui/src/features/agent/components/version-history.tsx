@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils/cn';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,9 +15,10 @@ import type { AgentActive, AgentConfig, AgentIssue, AgentReleaseSummary } from '
 import { AuditList } from './audit-list';
 import { WorkflowCanvas } from './workflow-canvas';
 
-export interface VersionsTabProps { active: AgentActive | null; onCopyToDraft: (content: AgentConfig) => void }
+export interface VersionHistoryProps { active: AgentActive | null; onCopyToDraft: (content: AgentConfig) => void }
 
-export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
+/** Releases as a timeline, newest first, for the side drawer of the Agent page. */
+export function VersionHistory({ active, onCopyToDraft }: VersionHistoryProps) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const releases = useAgentReleases(cursors.at(-1) ?? null);
   const client = useQueryClient();
@@ -53,28 +55,28 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
   return (
     <div className="space-y-6">
       <QueryState query={releases}>{page => (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-13">
-            <thead className="bg-muted/50 text-left text-muted-foreground">
-              <tr><th className="p-2">Phiên bản</th><th className="p-2">Ghi chú</th><th className="p-2">Người phát hành</th><th className="p-2">Thời điểm</th><th className="p-2" /></tr>
-            </thead>
-            <tbody>
-              {page.items.map(release => (
-                <tr key={release.id} className="border-t">
-                  <td className="p-2 font-medium">v{release.version} {release.is_active && <span className="ml-1 rounded bg-primary-subtle px-1.5 text-xs text-primary">Đang dùng</span>}</td>
-                  <td className="p-2">{release.note ?? '—'}</td>
-                  <td className="p-2">{release.created_by}</td>
-                  <td className="p-2">{fullDateTime(release.created_at)}</td>
-                  <td className="space-x-1 whitespace-nowrap p-2 text-right">
-                    <Button size="sm" variant="ghost" onClick={() => setViewing(release.id)}>Xem</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setCopying(release.id)}>Chép vào nháp</Button>
-                    {active && !release.is_active && <Button size="sm" variant="outline" aria-label={`Khôi phục v${release.version}`} onClick={() => setRestoring({ release, key: actionKey('restore') })}>Khôi phục</Button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex justify-end gap-2 border-t p-2">
+        <div>
+          {/* The rail behind the dots reads as a timeline; the live release has a filled dot. */}
+          <ol aria-label="Các phiên bản" className="relative space-y-1 before:absolute before:bottom-5 before:left-[17px] before:top-5 before:w-px before:bg-border">
+            {page.items.map(release => (
+              <li key={release.id} className={cn('relative rounded-lg py-2.5 pl-9 pr-2', release.is_active && 'bg-primary-subtle/60')}>
+                <span aria-hidden className={cn('absolute left-3 top-4 size-2.5 rounded-full border-2',
+                  release.is_active ? 'border-status-success bg-status-success' : 'border-muted-foreground/50 bg-background')} />
+                <p className="flex items-center gap-2 text-sm font-semibold">
+                  v{release.version}
+                  {release.is_active && <span className="rounded bg-card px-1.5 text-xs font-medium text-success-foreground">Đang dùng</span>}
+                </p>
+                {release.note && <p className="mt-0.5 text-sm">{release.note}</p>}
+                <p className="mt-0.5 text-xs text-muted-foreground">{release.created_by}, {fullDateTime(release.created_at)}</p>
+                <div className="-ml-2 mt-1.5 flex flex-wrap gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => setViewing(release.id)}>Xem</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setCopying(release.id)}>Chép vào nháp</Button>
+                  {active && !release.is_active && <Button size="sm" variant="outline" aria-label={`Khôi phục v${release.version}`} onClick={() => setRestoring({ release, key: actionKey('restore') })}>Khôi phục</Button>}
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-2 flex justify-end gap-2 border-t pt-2">
             <Button size="sm" variant="ghost" disabled={cursors.length < 2} onClick={() => setCursors(c => c.slice(0, -1))}>Trước</Button>
             <Button size="sm" variant="ghost" disabled={!page.next_cursor} onClick={() => setCursors(c => [...c, page.next_cursor])}>Sau</Button>
           </div>

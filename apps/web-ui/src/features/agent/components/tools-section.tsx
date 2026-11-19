@@ -34,7 +34,7 @@ export function ToolsSection({ config, onChange, issues, onBindKb }: SectionProp
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium">{tool.label} <span className="font-mono text-xs text-muted-foreground">{tool.name}</span></p>
-                <p className="text-13 text-muted-foreground">{tool.description}</p>
+                <p className="text-sm text-muted-foreground">{tool.description}</p>
               </div>
               <Switch id={fieldId(['tools', index >= 0 ? index : tool.name])} aria-label={`Bật ${tool.label}`} checked={on} onCheckedChange={value => toggle(tool.name, value)} />
             </div>
@@ -58,7 +58,7 @@ export function ToolsSection({ config, onChange, issues, onBindKb }: SectionProp
         );
       })}
       {unknown.length > 0 && (
-        <div role="note" className="rounded-lg border border-dashed p-4 text-13 text-muted-foreground">
+        <div role="note" className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
           Tool chưa có trong danh mục (giữ nguyên, sửa ở tab JSON): {unknown.map(t => <code key={t.name} className="mr-2">{t.name}</code>)}
         </div>
       )}

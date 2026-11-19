@@ -70,7 +70,7 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
           <DialogTitle>Phát hành v{next}</DialogTitle>
           <DialogDescription>Bản mới áp dụng cho hội thoại mở sau khi phát hành; hội thoại đang diễn ra giữ nguyên.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 text-13">
+        <div className="space-y-3 text-sm">
           <div>
             <p className="font-medium">Thay đổi so với v{active.version}:</p>
             <ul className="mt-1 list-inside list-disc text-muted-foreground">

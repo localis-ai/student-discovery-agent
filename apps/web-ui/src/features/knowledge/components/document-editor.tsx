@@ -186,12 +186,12 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
 
   const header = (
     <div className="mb-4 flex items-center justify-between gap-3">
-      <Link href={kbHref(kb, 'documents')} className="inline-flex items-center gap-1 rounded-md text-13 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href={kbHref(kb, 'documents')} className="inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ArrowLeft className="h-4 w-4" aria-hidden />Tài liệu
       </Link>
       <div className="flex items-center gap-3">
         {isDirty && (
-          <span className="inline-flex items-center gap-1.5 text-13 text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-status-warning" />Chưa lưu
           </span>
         )}
@@ -266,7 +266,7 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
                   <div className="mt-2 max-w-sm">
                     <label htmlFor="doc-id" className="mb-1 block text-xs font-medium text-foreground">ID tài liệu</label>
                     <Input
-                      id="doc-id" autoComplete="off" spellCheck={false} className="h-8 font-mono text-13"
+                      id="doc-id" autoComplete="off" spellCheck={false} className="h-8 font-mono text-sm"
                       aria-invalid={!!errors.id || idTaken} aria-describedby={errors.id || idTaken ? errorId('id') : undefined}
                       {...form.register('id', { onChange: () => { if (idTaken) save.reset(); } })}
                     />
@@ -312,7 +312,7 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
                 <button
                   key={value} type="button" aria-pressed={mode === value} onClick={() => setMode(value)}
                   className={cn(
-                    'rounded px-3 py-1 text-13 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'rounded px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     mode === value ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >

@@ -55,14 +55,14 @@ function SettingsForm({ kb }: { kb: KnowledgeBase }) {
       <div className={ROW}>
         <span className="text-sm font-medium md:pt-2">ID</span>
         <div className="flex items-center gap-2">
-          <code className="font-mono text-13">{kb.id}</code>
+          <code className="font-mono text-sm">{kb.id}</code>
           <CopyButton value={kb.id} iconOnly variant="ghost" label="Copy ID" className="h-8 w-8" />
         </div>
       </div>
       <div className={ROW}>
         <span className="text-sm font-medium">Embedding model</span>
         <div>
-          <p className="font-mono text-13">{kb.embedding_model}</p>
+          <p className="font-mono text-sm">{kb.embedding_model}</p>
           <p className="text-xs text-muted-foreground">Không đổi được sau khi tạo.</p>
         </div>
       </div>
@@ -83,7 +83,7 @@ function DangerZone({ kb }: { kb: KnowledgeBase }) {
     <section aria-labelledby="kb-danger-heading" className="mt-10">
       <h2 id="kb-danger-heading" className="mb-3 text-base font-semibold text-destructive">Vùng nguy hiểm</h2>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 p-4">
-        <p className="min-w-[14rem] flex-1 text-13 text-muted-foreground">
+        <p className="min-w-[14rem] flex-1 text-sm text-muted-foreground">
           Xoá knowledge base cùng toàn bộ tài liệu của nó. Không hoàn tác được; không xoá được khi agent đang dùng.
         </p>
         <Button type="button" variant="destructive" onClick={() => setOpen(true)}>Xoá knowledge base</Button>
@@ -104,7 +104,7 @@ export function KnowledgeSettings({ kb }: { kb: string }) {
       </section>
       <section aria-labelledby="kb-agent-heading" className="mt-10">
         <h2 id="kb-agent-heading" className="text-base font-semibold">Dùng cho agent</h2>
-        <p className="mb-4 text-13 text-muted-foreground">Agent đọc knowledge base này qua hai tool trong cấu hình release.</p>
+        <p className="mb-4 text-sm text-muted-foreground">Agent đọc knowledge base này qua hai tool trong cấu hình release.</p>
         <div className="border-t pt-4"><AgentTab kb={kb} /></div>
       </section>
       {base.data && <DangerZone kb={base.data} />}

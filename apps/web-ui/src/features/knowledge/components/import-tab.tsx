@@ -140,7 +140,7 @@ export function ImportTab({ kb }: { kb: string }) {
           {mode === 'csv' && <ErrorText error={fields.error} />}
           {footer(
             <>
-              {waitingFields && fields.isLoading && <span role="status" className="self-center text-13 text-muted-foreground">Đang tải metadata…</span>}
+              {waitingFields && fields.isLoading && <span role="status" className="self-center text-sm text-muted-foreground">Đang tải metadata…</span>}
               <Button type="button" disabled={!ready || waitingFields} onClick={() => (mode === 'csv' ? goToMapping() : goToReview())}>Tiếp tục</Button>
             </>,
           )}
@@ -158,7 +158,7 @@ export function ImportTab({ kb }: { kb: string }) {
         <>
           <ErrorText error={readError} />
           <ErrorText error={preview.error} />
-          {preview.isPending && <p role="status" className="py-8 text-center text-13 text-muted-foreground">Đang xem trước…</p>}
+          {preview.isPending && <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang xem trước…</p>}
           {commit.data
             ? <ImportResult kb={kb} report={commit.data} />
             : preview.data && <ImportPreviewTable key={importKey} rows={preview.data.rows} />}

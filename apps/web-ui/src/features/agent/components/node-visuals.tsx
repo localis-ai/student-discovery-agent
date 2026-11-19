@@ -24,18 +24,30 @@ interface NodeVisual {
   swatch: string;
 }
 
+// One hue per family of nodes, so the colour says what a step does; the icon tells nodes of one family apart.
 // Full class strings, so Tailwind's scanner keeps them.
+const ENTRY = { tile: 'bg-primary text-primary-foreground', dot: '!bg-primary', swatch: 'bg-primary' };
+const FLOW = { tile: 'bg-cyan-600 text-white', dot: '!bg-cyan-600', swatch: 'bg-cyan-600' };
+const AI = { tile: 'bg-indigo-600 text-white', dot: '!bg-indigo-600', swatch: 'bg-indigo-600' };
+// Violet, not green: green is Studio's own colour (the start node), so knowledge must not read as the entry.
+const KNOWLEDGE = { tile: 'bg-violet-600 text-white', dot: '!bg-violet-600', swatch: 'bg-violet-600' };
+const OUTPUT = { tile: 'bg-orange-500 text-white', dot: '!bg-orange-500', swatch: 'bg-orange-500' };
+
 const VISUALS: Record<string, NodeVisual> = {
-  start: { icon: Play, tile: 'bg-primary text-primary-foreground', dot: '!bg-primary', swatch: 'bg-primary' },
-  if_else: { icon: Split, tile: 'bg-cyan-600 text-white', dot: '!bg-cyan-600', swatch: 'bg-cyan-600' },
-  intent_classifier: { icon: Tags, tile: 'bg-violet-600 text-white', dot: '!bg-violet-600', swatch: 'bg-violet-600' },
-  llm: { icon: Sparkles, tile: 'bg-indigo-600 text-white', dot: '!bg-indigo-600', swatch: 'bg-indigo-600' },
-  agent: { icon: Bot, tile: 'bg-blue-600 text-white', dot: '!bg-blue-600', swatch: 'bg-blue-600' },
-  knowledge_retrieval: { icon: LibraryBig, tile: 'bg-emerald-600 text-white', dot: '!bg-emerald-600', swatch: 'bg-emerald-600' },
-  tool: { icon: Wrench, tile: 'bg-amber-500 text-white', dot: '!bg-amber-500', swatch: 'bg-amber-500' },
-  profile_propose: { icon: UserRoundPen, tile: 'bg-pink-600 text-white', dot: '!bg-pink-600', swatch: 'bg-pink-600' },
-  assign: { icon: Variable, tile: 'bg-teal-600 text-white', dot: '!bg-teal-600', swatch: 'bg-teal-600' },
-  answer: { icon: MessageSquareText, tile: 'bg-orange-500 text-white', dot: '!bg-orange-500', swatch: 'bg-orange-500' },
+  start: { icon: Play, ...ENTRY },
+  // Flow control: decides where the turn goes next or sets state for later steps.
+  if_else: { icon: Split, ...FLOW },
+  intent_classifier: { icon: Tags, ...FLOW },
+  assign: { icon: Variable, ...FLOW },
+  // Model calls.
+  llm: { icon: Sparkles, ...AI },
+  agent: { icon: Bot, ...AI },
+  profile_propose: { icon: UserRoundPen, ...AI },
+  // Knowledge and tools the turn reads from.
+  knowledge_retrieval: { icon: LibraryBig, ...KNOWLEDGE },
+  tool: { icon: Wrench, ...KNOWLEDGE },
+  // What the student sees.
+  answer: { icon: MessageSquareText, ...OUTPUT },
 };
 
 const UNKNOWN: NodeVisual = { icon: Box, tile: 'bg-muted-foreground text-background', dot: '!bg-muted-foreground', swatch: 'bg-muted-foreground' };
