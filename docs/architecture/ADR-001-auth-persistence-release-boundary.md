@@ -192,7 +192,8 @@ sequenceDiagram
    - Triệt tiêu lỗ hổng bảo mật truy cập chéo giữa các học sinh.
    - Bảo đảm tính toàn vẹn của kết quả trắc nghiệm và báo cáo hướng nghiệp.
 2. **Kế hoạch tiếp nối (Next Steps):**
-   - **Ticket A-01 (Hoàn thành / Done):** Đã triển khai TS DB migration `0002_experience_drafts_and_releases.sql`, Canonical Content Hashing (RFC 8785-aligned), Drizzle tables, Service và Routes cho Experience Metadata, Draft (optimistic locking), và Immutable Releases (kèm DB trigger cấm UPDATE/DELETE). Các hạng mục hoãn lại (deferred items): kết nối Python validation/evaluation endpoints (A-02/C-05), active release pointer / activation / rollback (FR-CFG-06).
+   - **Ticket A-01 (Hoàn thành / Done):** Đã triển khai TS DB migration `0002_experience_drafts_and_releases.sql`, Canonical Content Hashing (RFC 8785-aligned), Drizzle tables, Service và Routes cho Experience Metadata, Draft (optimistic locking), và Immutable Releases (kèm DB trigger cấm UPDATE/DELETE). Các hạng mục hoãn lại (deferred items): kết nối Python validation/evaluation endpoints (A-02/C-05).
+   - **FR-CFG-06 (Hoàn thành):** `product.experience_active` (một pointer cho mỗi experience và environment `demo`/`prod`, có `revision`), các route đọc/activate/rollback theo `experience-release-api.yaml` với chống ABA, idempotency và audit; endpoint delivery nội bộ nhận `kind=experience`; runtime đọc Experience từ Studio khi `RUNTIME_EXPERIENCE_RELEASE_SOURCE=product` (mặc định `local`). Bootstrap bằng `pnpm db:seed-experiences`. Còn mở: publish gate của Studio chưa nhận definition schema `2.0`.
    - **Ticket A-04:** Triển khai middleware quản lý Cookie `sda_owner` và ký Header nội bộ tại tầng BFF.
    - **Ticket B-01:** Triển khai middleware xác thực caller context và owner binding phía FastAPI.
    - Hoàn tất tài liệu chi tiết contract schemas tương ứng trong `contracts/openapi/`.

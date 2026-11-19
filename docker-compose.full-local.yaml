@@ -75,6 +75,8 @@ services:
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
       # The agent comes from studio-api (signed pull); experiences/ still come from the local releases dir.
       RUNTIME_AGENT_RELEASE_SOURCE: product
+      # local until Studio is seeded (pnpm db:seed-experiences), then product.
+      RUNTIME_EXPERIENCE_RELEASE_SOURCE: local
       RUNTIME_PRODUCT_URL: http://studio-api:3001
       RUNTIME_PRODUCT_SIGNING_KEY: ${SDA_LOCAL_RUNTIME_PRODUCT_KEY:?Run scripts/local-stack.sh init}
       RUNTIME_PRODUCT_SIGNING_KID: runtime
