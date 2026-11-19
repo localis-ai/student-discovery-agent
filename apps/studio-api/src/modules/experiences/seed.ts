@@ -9,7 +9,7 @@ import {
   insertExperienceRelease,
   insertExperienceWithDraft,
 } from '@/modules/experiences/experiences.repository';
-import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
+import { resourceIdSchema } from '@/http/field-schemas';
 
 /**
  * Only the release metadata. The publish gate's structural schema accepts schema 1.0 alone, while the packaged

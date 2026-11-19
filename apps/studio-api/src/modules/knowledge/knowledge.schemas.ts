@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idempotencyKeySchema } from '@/modules/experiences/experiences.schemas';
+import { idempotencyKeySchema } from '@/http/field-schemas';
 import { FIELD_TYPES } from '@/modules/knowledge/metadata';
 
 export const MAX_BODY_BYTES = 262_144;

@@ -9,7 +9,7 @@ import {
 } from '@/infrastructure/db/schema';
 import { computeContentHash } from '@/shared/canonical';
 import { encodeCursor, decodeCursor } from '@/http/cursor';
-import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
+import { resourceIdSchema } from '@/http/field-schemas';
 
 
 export type ExperienceRow = typeof experiences.$inferSelect;

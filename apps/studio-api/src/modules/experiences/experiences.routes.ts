@@ -5,6 +5,7 @@ import { ProductError } from '@/http/errors';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { activateRelease, readActivePointer, rollbackRelease } from '@/modules/experiences/activation';
+import { resourceIdSchema } from '@/http/field-schemas';
 import { readStrictJsonBody } from '@/http/json-body';
 import {
   activateReleaseSchema,
@@ -13,7 +14,6 @@ import {
   paginationQuerySchema,
   patchExperienceSchema,
   publishReleaseSchema,
-  resourceIdSchema,
   rollbackSchema,
   saveDraftSchema,
   snapshotCommandSchema,
