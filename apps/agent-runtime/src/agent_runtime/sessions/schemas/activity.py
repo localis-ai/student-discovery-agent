@@ -19,6 +19,12 @@ from .release import ReleaseKey
 from .result import CurrentResultRef, PersonalityCardData, ResultSnapshotInput
 
 ADAPTIVE_PROFILE = "riasec.mean.bounds.v2"
+_DEFINITION_PROFILES: dict[str, str | None] = {"1.0": None, "2.0": ADAPTIVE_PROFILE}
+
+
+def profile_for_schema(definition_schema_version: str) -> str | None:
+    """The algorithm profile an experience definition schema runs on; KeyError for a schema this runtime lacks."""
+    return _DEFINITION_PROFILES[definition_schema_version]
 ActivityStatus = Literal["collecting_name", "in_progress", "completed", "ended", "expired"]
 
 

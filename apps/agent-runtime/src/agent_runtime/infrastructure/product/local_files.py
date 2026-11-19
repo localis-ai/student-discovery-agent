@@ -9,10 +9,8 @@ from pathlib import Path
 
 from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.sessions.errors import RuntimeSessionError
-from agent_runtime.sessions.schemas.activity import ADAPTIVE_PROFILE
+from agent_runtime.sessions.schemas.activity import profile_for_schema
 from agent_runtime.sessions.schemas.release import ReleaseDescriptor
-
-_PROFILES = {"1.0": None, "2.0": ADAPTIVE_PROFILE}
 
 
 class LocalReleaseSource:
@@ -43,7 +41,11 @@ class LocalReleaseSource:
             raise RuntimeSessionError(422, "EXPERIENCE_NOT_CONFIGURED")
         content = self._read(self.directory / "experiences" / f"{experience_id}.json")
         version = content.get("schema_version")
-        if version not in _PROFILES or _PROFILES[version] != algorithm_profile:
+        try:
+            profile = profile_for_schema(version)
+        except (KeyError, TypeError):  # TypeError: an unhashable schema_version in a hand-edited file
+            raise RuntimeSessionError(422, "EXPERIENCE_NOT_CONFIGURED") from None
+        if profile != algorithm_profile:
             raise RuntimeSessionError(422, "EXPERIENCE_NOT_CONFIGURED")
         content_hash = calculate_content_hash(content)
         return ReleaseDescriptor(environment=environment, kind="experience",
