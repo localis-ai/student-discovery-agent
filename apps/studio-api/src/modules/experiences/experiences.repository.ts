@@ -8,7 +8,7 @@ import {
   experiences,
   idempotencyRecords,
 } from '@/infrastructure/db/schema';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { encodeCursor, decodeCursor } from '@/modules/experiences/cursor';
 import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
 

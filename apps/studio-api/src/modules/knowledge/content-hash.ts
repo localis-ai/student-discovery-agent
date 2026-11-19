@@ -1,4 +1,4 @@
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 
 /** Same JCS + SHA-256 as agent_runtime.knowledge.hashing.content_hash; metadata is keyed by field id. */
 export function knowledgeContentHash(

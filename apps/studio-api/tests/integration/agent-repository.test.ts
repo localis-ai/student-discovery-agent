@@ -4,7 +4,7 @@ import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/agent/agent.repository';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 
 let pg: PostgresHandle;
 

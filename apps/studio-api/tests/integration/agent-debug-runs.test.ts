@@ -9,7 +9,7 @@ import { call, json } from '../helpers/users-api';
 import { declaredResponseValidator } from '../helpers/openapi-response';
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { seedAgent } from '@/modules/agent/agent.service';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 import { setRuntimeCaller } from '@/modules/agent/debug-runs';
 

@@ -1,6 +1,6 @@
 import { ProductError } from '@/http/errors';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { knowledgeContentHash } from '@/modules/knowledge/content-hash';
 import type { RequestContext } from '@/http/types';
 import { kickIndexing } from '@/modules/knowledge/index-kick';

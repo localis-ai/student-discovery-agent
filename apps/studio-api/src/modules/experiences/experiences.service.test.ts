@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductError } from '@/http/errors';
 import type { ProductDatabase } from '@/infrastructure/db/client';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import * as repo from '@/modules/experiences/experiences.repository';
 import { RuntimeReportVerifier, setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
 import { setExperienceRuntimeClient } from '@/modules/experiences/runtime-client';

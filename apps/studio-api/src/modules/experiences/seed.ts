@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { ProductDatabase } from '@/infrastructure/db/client';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { findPointer, insertExperienceAudit, lockPointerKey, upsertPointer } from '@/modules/experiences/activation.repository';
 import {
   findExperienceById,
