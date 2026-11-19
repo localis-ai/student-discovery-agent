@@ -111,7 +111,7 @@ async function checkIdempotency<T>(
  * business write, then store the response. A crash or error anywhere rolls back both the write and
  * the record, so a retry with the same key and payload re-executes instead of duplicating.
  */
-async function idempotent<T>(
+export async function idempotent<T>(
   db: ProductDatabase,
   scope: string,
   key: string,

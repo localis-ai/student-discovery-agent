@@ -67,6 +67,22 @@ export const snapshotCommandSchema = z.object({
 }).strict();
 export type SnapshotCommandInput = z.infer<typeof snapshotCommandSchema>;
 
+export const environmentSchema = z.enum(['demo', 'prod']);
+
+export const activeReleaseQuerySchema = z.object({ environment: environmentSchema });
+
+export const activateReleaseSchema = z.object({
+  environment: environmentSchema,
+  expected_revision: revisionSchema,
+  expected_active_release_id: resourceIdSchema.nullable(),
+  idempotency_key: idempotencyKeySchema,
+  reason: z.string().min(1),
+}).strict();
+export type ActivateReleaseInput = z.infer<typeof activateReleaseSchema>;
+
+export const rollbackSchema = activateReleaseSchema.extend({ target_release_id: resourceIdSchema }).strict();
+export type RollbackInput = z.infer<typeof rollbackSchema>;
+
 export const paginationQuerySchema = z.object({
   cursor: z.string().min(1).max(4096).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
