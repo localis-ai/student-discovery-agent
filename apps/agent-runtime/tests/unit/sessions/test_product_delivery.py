@@ -10,6 +10,7 @@ import pytest
 from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
 from agent_runtime.sessions.errors import RuntimeSessionError
+from agent_runtime.sessions.schemas.activity import ADAPTIVE_PROFILE
 
 KEY = b"k" * 32
 CONTENT = {"greeting_text": "Chào", "allowed_activity_profiles": ["riasec.mean.bounds.v2"]}
@@ -107,3 +108,65 @@ def test_composite_routes_agent_and_experience_to_their_sources():
     composite = CompositeReleaseSource(agent=Agent(), experience=Experience())
     assert composite.resolve_active_agent("demo") == "agent"
     assert composite.resolve_active_experience("demo", "exp", None) == "experience"
+
+
+EXPERIENCE_FIXTURE = json.loads((Path(__file__).resolve().parents[5] / "contracts/fixtures/experience-delivery-descriptor.json")
+                                .read_text(encoding="utf-8"))["descriptor"]
+EXP_TARGET = "/api/v1/internal/releases/active?kind=experience&environment=demo&experience_id=exp_riasec"
+
+
+def experience(**overrides):
+    return {**EXPERIENCE_FIXTURE, **overrides}
+
+
+def test_fixture_descriptor_hashes_like_studio():
+    """studio-api's experience-delivery.test.ts checks this fixture against the contract and its own hash."""
+    assert calculate_content_hash(EXPERIENCE_FIXTURE["content"]) == EXPERIENCE_FIXTURE["content_hash"]
+
+
+def test_experience_request_is_signed_and_returns_the_descriptor_with_its_profile():
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return envelope(experience())
+
+    result = source(handler).resolve_active_experience("demo", "exp_riasec", ADAPTIVE_PROFILE)
+    assert result.kind == "experience" and result.release_id == EXPERIENCE_FIXTURE["release_id"]
+    assert result.algorithm_profile == ADAPTIVE_PROFILE
+    claims = jwt.decode(seen["request"].headers["x-caller-context"], KEY, algorithms=["HS256"],
+                        audience="sda-studio-api", issuer="sda-agent-runtime",
+                        options={"verify_exp": False, "verify_iat": False})
+    assert claims["request_target"] == EXP_TARGET == seen["request"].url.raw_path.decode()
+    assert claims["purpose"] == "release.delivery"
+
+
+@pytest.mark.parametrize("response,status", [
+    (lambda r: envelope(experience(content_hash="sha256:" + "0" * 64)), 503),
+    (lambda r: envelope(experience(kind="agent")), 503),
+    (lambda r: envelope(experience(environment="prod")), 503),
+    (lambda r: envelope(experience(delivery_schema_version="experience.snapshot.v2")), 503),
+    (lambda r: envelope(experience(definition_schema_version="1.0")), 503),
+    (lambda r: envelope(experience(engine_version="other")), 503),
+    (lambda r: envelope(experience(definition_schema_version=None)), 503),
+    (lambda r: envelope("RES_EXPERIENCE_NOT_CONFIGURED", status=422, success=False), 422),
+    (lambda r: httpx.Response(502, text="bad gateway"), 503),
+])
+def test_bad_or_missing_experience_releases_fail_closed(response, status):
+    with pytest.raises(RuntimeSessionError) as error:
+        source(response).resolve_active_experience("demo", "exp_riasec", ADAPTIVE_PROFILE)
+    assert error.value.status == status
+
+
+def test_a_profile_mismatch_is_not_configured():
+    with pytest.raises(RuntimeSessionError) as error:
+        source(lambda r: envelope(experience())).resolve_active_experience("demo", "exp_riasec", None)
+    assert (error.value.status, error.value.code) == (422, "EXPERIENCE_NOT_CONFIGURED")
+
+
+def test_an_unknown_definition_schema_is_not_configured():
+    content = {**EXPERIENCE_FIXTURE["content"], "schema_version": "9.0"}
+    body = experience(content=content, content_hash=calculate_content_hash(content), definition_schema_version="9.0")
+    with pytest.raises(RuntimeSessionError) as error:
+        source(lambda r: envelope(body)).resolve_active_experience("demo", "exp_riasec", ADAPTIVE_PROFILE)
+    assert (error.value.status, error.value.code) == (422, "EXPERIENCE_NOT_CONFIGURED")
