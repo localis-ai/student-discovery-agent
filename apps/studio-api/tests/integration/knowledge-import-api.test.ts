@@ -25,6 +25,20 @@ async function kb() {
 }
 
 const base = (kbId: string) => `/admin/knowledge-bases/${kbId}`;
+
+/** Runs `fn` with a temporary trigger on document revision inserts; `action` is the PL/pgSQL body before RETURN. */
+async function withRevisionTrigger<T>(action: string, fn: () => Promise<T>): Promise<T> {
+  await adminSql(db, `CREATE FUNCTION knowledge.test_hook() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN ${action} RETURN NEW; END $$`);
+  await adminSql(db, `CREATE TRIGGER test_hook BEFORE INSERT ON knowledge.document_revisions
+    FOR EACH ROW EXECUTE FUNCTION knowledge.test_hook()`);
+  try {
+    return await fn();
+  } finally {
+    await adminSql(db, 'DROP TRIGGER test_hook ON knowledge.document_revisions');
+    await adminSql(db, 'DROP FUNCTION knowledge.test_hook()');
+  }
+}
 const committable = (rows: Array<{ action: string; row: number; document_id: string; expected_revision: number; payload: unknown }>) =>
   rows.filter(r => r.action === 'create' || r.action === 'update')
     .map(({ row, document_id, expected_revision, payload }) => ({ row, document_id, expected_revision, payload }));
@@ -147,6 +161,53 @@ describe('knowledge import', () => {
     expect(committed.body.data.rows[1]).toMatchObject({ document_id: 'bad', outcome: 'failed', revision: null });
     expect((await api('GET', `${base(kbId)}/documents/good`, admin)).status).toBe(200);
     expect((await api('GET', `${base(kbId)}/documents/bad`, admin)).status).toBe(404);
+  });
+
+  it('serialises concurrent commits with one key: a different payload is refused before it writes anything', async () => {
+    const kbId = await kb();
+    const row = (documentId: string) => ({ row: 1, document_id: documentId, expected_revision: 0, payload: { title: 'T', body: 'B', source_url: null, metadata: {} } });
+    const key = `race-${kbId}`;
+    // Slow writes widen the window between the key lookup and storing the report.
+    const [a, b] = await withRevisionTrigger('PERFORM pg_sleep(0.3);', () => Promise.all([
+      api('POST', `${base(kbId)}/imports`, admin, { idempotency_key: key, rows: [row('race-a')] }),
+      api('POST', `${base(kbId)}/imports`, admin, { idempotency_key: key, rows: [row('race-b')] }),
+    ]));
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const docs = await adminSql(db, `SELECT id FROM knowledge.documents WHERE kb_id = $1`, [kbId]);
+    expect(docs).toHaveLength(1);
+    const winner = a.status === 200 ? a : b;
+    expect(docs[0].id).toBe(winner.body.data.rows[0].document_id);
+  });
+
+  it('answers concurrent commits with one key and one payload with the same report', async () => {
+    const kbId = await kb();
+    const body = { idempotency_key: `same-${kbId}`, rows: [
+      { row: 1, document_id: 'same-a', expected_revision: 0, payload: { title: 'T', body: 'B', source_url: null, metadata: {} } },
+    ] };
+    const [a, b] = await withRevisionTrigger('PERFORM pg_sleep(0.3);', () => Promise.all([
+      api('POST', `${base(kbId)}/imports`, admin, body),
+      api('POST', `${base(kbId)}/imports`, admin, body),
+    ]));
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(a.body.data).toEqual(b.body.data);
+    expect(a.body.data).toMatchObject({ created: 1, unchanged: 0 });
+  });
+
+  it('leaves no rows behind when a commit fails part way, so a retry with the same key starts clean', async () => {
+    const kbId = await kb();
+    const payload = { title: 'T', body: 'B', source_url: null, metadata: {} };
+    const body = { idempotency_key: `boom-${kbId}`, rows: [
+      { row: 1, document_id: `${kbId}-first`, expected_revision: 0, payload },
+      { row: 2, document_id: `${kbId}-boom`, expected_revision: 0, payload },
+    ] };
+    await withRevisionTrigger(`IF NEW.document_id = '${kbId}-boom' THEN RAISE EXCEPTION 'boom'; END IF;`, async () => {
+      expect((await api('POST', `${base(kbId)}/imports`, admin, body)).status).toBe(500);
+    });
+    expect(await adminSql(db, `SELECT id FROM knowledge.documents WHERE kb_id = $1`, [kbId])).toEqual([]);
+    expect(await adminSql(db, `SELECT id FROM knowledge.imports WHERE kb_id = $1`, [kbId])).toEqual([]);
+    const retry = await api('POST', `${base(kbId)}/imports`, admin, body);
+    expect(retry.status).toBe(200);
+    expect(retry.body.data).toMatchObject({ created: 2, conflict: 0, failed: 0 });
   });
 
   it('caps imports at 200 rows', async () => {

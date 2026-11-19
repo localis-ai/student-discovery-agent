@@ -119,47 +119,53 @@ function replay(stored: { request_hash: string; report: unknown }, requestHash: 
   return stored.report as ImportReportDTO;
 }
 
+type ReportRow = ImportReportDTO['rows'][number];
+
+async function commitRow(client: Queryable, kbId: string, item: ImportCommitInput['rows'][number]): Promise<ReportRow> {
+  const row = (outcome: Outcome, revision: number | null, error: string | null): ReportRow =>
+    ({ row: item.row, document_id: item.document_id, outcome, revision, error });
+  await client.query('SAVEPOINT import_row');
+  try {
+    const result = await putDocument(client, kbId, item.document_id, item.payload, item.expected_revision);
+    await client.query('RELEASE SAVEPOINT import_row');
+    if (result.status === 'written') return row(result.outcome, result.revision, null);
+    if (result.status === 'conflict') {
+      return row('conflict', null, `Đã bị sửa sau lúc xem trước (revision ${result.actual}, xem trước ${item.expected_revision})`);
+    }
+    return row('failed', null, result.status === 'wrong_kb' ? 'document_id đã thuộc knowledge base khác' : 'Document không còn tồn tại');
+  } catch (error) {
+    if (!(error instanceof MetadataValidationError)) throw error;
+    await client.query('ROLLBACK TO SAVEPOINT import_row');
+    return row('failed', null, error.issues.map(issue => `${issue.field}: ${issue.message}`).join('; '));
+  }
+}
+
 /**
- * One transaction per row, so a bad row never rolls back good ones. Two concurrent requests with the same key may
- * both write rows (the second then sees them as unchanged) and the first stored report wins. If the payloads differ,
- * the losing request answers 409 but may already have written its rows.
+ * One transaction for the whole import, holding an advisory lock on (kb, key) from the key lookup to the stored
+ * report: a second request with the same key waits, then replays the report or answers 409 without writing anything.
+ * A bad row rolls back to its savepoint only; any other error rolls back every row, so a retry starts clean.
+ * Rows are written in document_id order so two imports touching the same documents lock them in the same order.
  */
 export async function commitImport(kbId: string, input: ImportCommitInput, actor: string, ctx: RequestContext): Promise<ImportReportDTO> {
   const requestHash = computeContentHash(input.rows);
-  const stored = await withKnowledgeClient(async client => {
+  const { report, fresh } = await inKnowledgeTransaction(async client => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`knowledge-import:${kbId}:${input.idempotency_key}`]);
     await requireKnowledgeBase(client, kbId);
-    return findImport(client, kbId, input.idempotency_key);
+    const stored = await findImport(client, kbId, input.idempotency_key);
+    if (stored) return { report: replay(stored, requestHash), fresh: false };
+
+    const rows: ReportRow[] = new Array(input.rows.length);
+    const order = input.rows.map((_, index) => index)
+      .sort((a, b) => input.rows[a]!.document_id.localeCompare(input.rows[b]!.document_id, 'en') || a - b);
+    for (const index of order) rows[index] = await commitRow(client, kbId, input.rows[index]!);
+
+    const built: ImportReportDTO = { import_id: newId('imp'), created: 0, updated: 0, unchanged: 0, conflict: 0, failed: 0, rows };
+    for (const row of rows) built[row.outcome] += 1;
+    if (!await insertImport(client, {
+      id: built.import_id, kbId, key: input.idempotency_key, requestHash, report: built, createdBy: actor,
+    })) throw new Error('knowledge import report already stored while holding its key lock');
+    return { report: built, fresh: true };
   });
-  if (stored) return replay(stored, requestHash);
-
-  const report: ImportReportDTO = { import_id: newId('imp'), created: 0, updated: 0, unchanged: 0, conflict: 0, failed: 0, rows: [] };
-  const record = (row: number, documentId: string, outcome: Outcome, revision: number | null, error: string | null) => {
-    report[outcome] += 1;
-    report.rows.push({ row, document_id: documentId, outcome, revision, error });
-  };
-  for (const item of input.rows) {
-    try {
-      const result = await inKnowledgeTransaction(client => putDocument(client, kbId, item.document_id, item.payload, item.expected_revision));
-      if (result.status === 'written') record(item.row, item.document_id, result.outcome, result.revision, null);
-      else if (result.status === 'conflict') {
-        record(item.row, item.document_id, 'conflict', null, `Đã bị sửa sau lúc xem trước (revision ${result.actual}, xem trước ${item.expected_revision})`);
-      } else {
-        record(item.row, item.document_id, 'failed', null,
-          result.status === 'wrong_kb' ? 'document_id đã thuộc knowledge base khác' : 'Document không còn tồn tại');
-      }
-    } catch (error) {
-      if (!(error instanceof MetadataValidationError)) throw error;
-      record(item.row, item.document_id, 'failed', null, error.issues.map(issue => `${issue.field}: ${issue.message}`).join('; '));
-    }
-  }
-
-  const saved = await inKnowledgeTransaction(client => insertImport(client, {
-    id: report.import_id, kbId, key: input.idempotency_key, requestHash, report, createdBy: actor,
-  }));
-  if (saved) {
-    if (report.created + report.updated > 0) kickIndexing(ctx);
-    return report;
-  }
-  const winner = await withKnowledgeClient(client => findImport(client, kbId, input.idempotency_key));
-  return replay(winner!, requestHash);
+  if (fresh && report.created + report.updated > 0) kickIndexing(ctx);
+  return report;
 }
