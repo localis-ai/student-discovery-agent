@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { getKnowledgeEnv } from '@/config/env';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { signingKey, signServiceRequest } from '@/modules/knowledge/runtime-client';
+import {
+  callRuntimeAsStudio, readEnvelope, RuntimeCallError, type RuntimeEnvelope,
+} from '@/infrastructure/runtime/internal-runtime';
 import * as repo from '@/modules/agent/agent.repository';
 import * as runs from '@/modules/agent/debug-runs.repository';
 import { getAgentValidator } from '@/modules/agent/runtime-validation';
@@ -44,22 +45,16 @@ const unavailable = (kind: string) =>
   new ProductError(503, 'SYS_UNAVAILABLE', 'Agent debug run is unavailable', kind === 'dependency_down' || kind === 'timeout', { kind });
 
 async function callRuntime(body: string, accept: string, ctx: RequestContext): Promise<Response> {
-  const env = getKnowledgeEnv();
-  const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
-  if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
-  const token = await signServiceRequest('POST', DEBUG_TARGET, body, key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'agent.validate');
   try {
-    return await fetch(new URL(DEBUG_TARGET, env.RUNTIME_INTERNAL_URL), {
-      method: 'POST', body, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        'content-type': 'application/json', accept, 'x-internal-caller': 'sda-studio-api', 'x-caller-context': token,
-        'x-request-id': ctx.requestId, 'x-trace-id': ctx.traceId,
-      },
+    return await callRuntimeAsStudio({
+      method: 'POST', target: DEBUG_TARGET, purpose: 'agent.validate', body, timeoutMs: TIMEOUT_MS, ctx, accept,
     });
   } catch (error) {
-    const name = error instanceof Error ? error.name : 'Error';
-    console.error('[agent] runtime debug run unreachable', { error: name, requestId: ctx.requestId });
-    throw unavailable(name === 'TimeoutError' ? 'timeout' : 'dependency_down');
+    if (!(error instanceof RuntimeCallError)) throw error;
+    if (error.kind !== 'not_configured') {
+      console.error('[agent] runtime debug run unreachable', { error: error.causeName, requestId: ctx.requestId });
+    }
+    throw unavailable(error.kind);
   }
 }
 
@@ -67,8 +62,7 @@ let caller: RuntimeCaller = callRuntime;
 /** Test seam: integration tests replace the runtime call; `null` restores the real client. */
 export function setRuntimeCaller(fn: RuntimeCaller | null): void { caller = fn ?? callRuntime; }
 
-type Envelope = { success?: boolean; data?: unknown; error?: { code?: unknown } } | null;
-const readEnvelope = (response: Response) => response.json().catch(() => null) as Promise<Envelope>;
+type Envelope = RuntimeEnvelope | null;
 
 function runtimeFailure(response: Response, envelope: Envelope, ctx: RequestContext): ProductError {
   const code = typeof envelope?.error?.code === 'string' ? envelope.error.code : undefined;

@@ -3,6 +3,8 @@ import { SignJWT } from 'jose';
 import { getConversationEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
+import { RuntimeCallError, sendToRuntime } from '@/infrastructure/runtime/internal-runtime';
+import { signingKey } from '@/infrastructure/runtime/signing';
 
 export const INTERNAL_PREFIX = '/api/v1/internal';
 // A turn may call the model and tools; the runtime commits it even if we give up, so this only bounds the wait.
@@ -31,12 +33,6 @@ export async function signStudentRequest(
 const unavailable = (kind: string) =>
   new ProductError(503, 'SYS_UNAVAILABLE', 'Conversation service is unavailable', kind === 'dependency_down', { kind });
 
-function signingKey(value: string | undefined): Uint8Array | null {
-  if (!value) return null;
-  const key = Buffer.from(value, 'base64');
-  return key.length >= 32 && key.toString('base64') === value ? new Uint8Array(key) : null;
-}
-
 /**
  * Forward one student request to the runtime and hand its envelope back unchanged: the runtime already speaks
  * the public ApiResponse contract, and re-wrapping would lose its error codes and details.
@@ -51,22 +47,13 @@ export async function forwardToRuntime(
   const token = await signStudentRequest(method, target, body, ownerId, key, env.PRODUCT_RUNTIME_SIGNING_KID);
   let response: Response;
   try {
-    response = await fetch(new URL(target, env.RUNTIME_INTERNAL_URL), {
-      method,
-      body: method === 'POST' ? body : undefined,
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
-        'x-internal-caller': 'sda-product-bff',
-        'x-caller-context': token,
-        'x-request-id': ctx.requestId,
-        'x-trace-id': ctx.traceId,
-      },
+    response = await sendToRuntime({
+      baseUrl: env.RUNTIME_INTERNAL_URL, method, target, body, timeoutMs: TIMEOUT_MS, ctx, caller: 'sda-product-bff', token,
     });
   } catch (error) {
+    if (!(error instanceof RuntimeCallError)) throw error;
     // Keep the cause (DNS, refused, redirect, the 90s abort) so a 503 can be traced; never the URL or token.
-    console.error('[conversations] runtime unreachable', { error: error instanceof Error ? error.name : 'Error', requestId: ctx.requestId });
+    console.error('[conversations] runtime unreachable', { error: error.causeName, requestId: ctx.requestId });
     throw unavailable('dependency_down');
   }
   const text = await response.text();

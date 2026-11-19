@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { signingKey, signServiceRequest } from '@/modules/knowledge/runtime-client';
+import {
+  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError,
+} from '@/infrastructure/runtime/internal-runtime';
 import type { PublishReportInput } from '@/modules/experiences/experiences.reports';
 
 export const VALIDATE_TARGET = '/api/v1/internal/experience-validations:run';
@@ -83,12 +84,6 @@ async function callRuntime<T>(
   schema: z.ZodType<T>,
   ctx: RequestContext,
 ): Promise<T> {
-  const env = getKnowledgeEnv();
-  const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
-  if (!env.RUNTIME_INTERNAL_URL || !key) {
-    throw unavailable('not_configured');
-  }
-
   const body = JSON.stringify(payload);
   if (Buffer.byteLength(body, 'utf8') > RUNTIME_MAX_BODY_BYTES) {
     throw new ProductError(
@@ -97,47 +92,23 @@ async function callRuntime<T>(
       `Experience definition exceeds the ${RUNTIME_MAX_BODY_BYTES} byte limit of the runtime`,
     );
   }
-  const token = await signServiceRequest(
-    'POST',
-    target,
-    body,
-    key,
-    env.STUDIO_RUNTIME_SIGNING_KID,
-    Date.now(),
-    purpose,
-  );
 
   let response: Response;
   try {
-    response = await fetch(new URL(target, env.RUNTIME_INTERNAL_URL), {
-      method: 'POST',
-      body,
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        'content-type': 'application/json',
-        'x-internal-caller': 'sda-studio-api',
-        'x-caller-context': token,
-        'x-request-id': ctx.requestId,
-        'x-trace-id': ctx.traceId,
-      },
-    });
+    response = await callRuntimeAsStudio({ method: 'POST', target, purpose, body, timeoutMs: TIMEOUT_MS, ctx });
   } catch (error) {
-    const name = error instanceof Error ? error.name : 'Error';
+    if (!(error instanceof RuntimeCallError)) throw error;
+    if (error.kind === 'not_configured') throw unavailable('not_configured');
     console.error('[experience-runtime] request unreachable', {
       target,
       purpose,
-      error: name,
+      error: error.causeName,
       requestId: ctx.requestId,
     });
-    throw unavailable(name === 'TimeoutError' ? 'timeout' : 'dependency_down');
+    throw unavailable(error.kind);
   }
 
-  const envelope = (await response.json().catch(() => null)) as {
-    success?: boolean;
-    data?: unknown;
-    error?: { code?: string; message?: string };
-  } | null;
+  const envelope = await readEnvelope(response);
 
   if (response.ok && envelope?.success) {
     const parsed = schema.safeParse(envelope.data);
@@ -160,16 +131,15 @@ async function callRuntime<T>(
     requestId: ctx.requestId,
   });
 
-  if (response.status === 401 || response.status === 403) {
-    throw unavailable('misconfigured');
-  }
   if (response.status === 409) {
     // The runtime exposes CONFLICT_IDEMPOTENCY_KEY on the wire (error_codes.py); the internal name is kept for older runtimes.
     const isCollision = runtimeCode === 'CONFLICT_IDEMPOTENCY_KEY' || runtimeCode === 'IDEMPOTENCY_KEY_COLLISION';
     const code = isCollision ? 'IDEMPOTENCY_KEY_COLLISION' : 'REVISION_CONFLICT';
     throw new ProductError(409, code, envelope?.error?.message ?? 'Runtime reported conflict');
   }
-  if (response.status >= 400 && response.status < 500) {
+  const failure = classifyRuntimeStatus(response.status);
+  if (failure === 'misconfigured') throw unavailable('misconfigured');
+  if (failure === 'rejected') {
     throw new ProductError(500, 'SYS_INTERNAL_ERROR', 'Runtime rejected experience request', false, {
       kind: 'runtime_rejected',
     });
