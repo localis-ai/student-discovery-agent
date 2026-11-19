@@ -24,6 +24,7 @@ import { getPublishReportVerifier, type PublishReportVerifier } from '@/modules/
 import {
   getExperienceRuntimeClient,
   type EvaluationReport,
+  type ExperienceSnapshotCommandInput,
   type ValidationReport,
 } from '@/modules/experiences/runtime-client';
 import {
@@ -291,6 +292,53 @@ export async function saveExperienceDraft(
   });
 }
 
+/** The draft the caller looked at: 404 when gone, 409 when its revision or content moved on. */
+async function requireDraftSnapshot(
+  db: ProductExecutor,
+  experienceId: string,
+  expectedRevision: number,
+  contentHash: string,
+) {
+  const draft = await findDraftByExperienceId(db, experienceId);
+  if (!draft) {
+    throw new ProductError(404, 'RESOURCE_NOT_FOUND', 'Experience or draft not found');
+  }
+
+  if (draft.revision !== expectedRevision) {
+    throw new ProductError(
+      409,
+      'REVISION_CONFLICT',
+      'Draft revision does not match expected revision',
+      false,
+      {
+        kind: 'revision_conflict',
+        expected_draft_revision: expectedRevision,
+        actual_draft_revision: draft.revision,
+      },
+    );
+  }
+
+  if (draft.content_hash !== contentHash) {
+    throw new ProductError(
+      409,
+      'STALE_REPORT',
+      'Provided content hash does not match current draft content hash',
+      false,
+      {
+        expected_content_hash: contentHash,
+        actual_content_hash: draft.content_hash,
+      },
+    );
+  }
+
+  return draft;
+}
+
+/**
+ * Checks and the runtime report verification run before the transaction, so the (scope, key) advisory lock and the
+ * connection are not held during a network call. The transaction then re-reads the draft: reports are immutable and
+ * bound to the draft hash, so an unchanged draft means the verdict still stands.
+ */
 export async function publishExperienceRelease(
   db: ProductDatabase,
   experienceId: string,
@@ -307,93 +355,68 @@ export async function publishExperienceRelease(
     approval_refs: input.approval_refs,
   }, 'expected_draft_revision');
 
-  return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
-    const draft = await findDraftByExperienceId(tx, experienceId);
-    if (!draft) {
-      throw new ProductError(404, 'RESOURCE_NOT_FOUND', 'Experience or draft not found');
-    }
+  const replayed = await checkIdempotency<ExperienceReleaseDTO>(db, scope, input.idempotency_key, payloadHash);
+  if (replayed) return replayed;
 
-    if (draft.revision !== input.expected_draft_revision) {
-      throw new ProductError(
-        409,
-        'REVISION_CONFLICT',
-        'Draft revision does not match expected revision',
-        false,
-        {
-          kind: 'revision_conflict',
-          expected_draft_revision: input.expected_draft_revision,
-          actual_draft_revision: draft.revision,
-        },
-      );
-    }
+  const draft = await requireDraftSnapshot(db, experienceId, input.expected_draft_revision, input.content_hash);
 
-    if (draft.content_hash !== input.content_hash) {
-      throw new ProductError(
-        409,
-        'STALE_REPORT',
-        'Provided content hash does not match current draft content hash',
-        false,
-        {
-          expected_content_hash: input.content_hash,
-          actual_content_hash: draft.content_hash,
-        },
-      );
-    }
-
-    const parseResult = experienceDefinitionStructuralSchema.safeParse(draft.content);
-    if (!parseResult.success) {
-      throw new ProductError(
-        422,
-        'PUBLISH_GATE_FAILED',
-        'Draft content failed structural publish gate validation',
-        false,
-        {
-          kind: 'validation',
-          issues: parseResult.error.issues.map((i) => ({
-            path: i.path.join('.'),
-            code: i.code,
-            message: i.message,
-            rule_id: null,
-          })),
-        },
-      );
-    }
-
-    const def = parseResult.data;
-    const reportResult = await reports.verify(
+  const parseResult = experienceDefinitionStructuralSchema.safeParse(draft.content);
+  if (!parseResult.success) {
+    throw new ProductError(
+      422,
+      'PUBLISH_GATE_FAILED',
+      'Draft content failed structural publish gate validation',
+      false,
       {
-        experience_id: experienceId,
-        definition_hash: draft.content_hash,
-        definition_schema_version: def.schema_version,
-        engine_version: def.engine_version,
-        validation_id: input.validation_id,
-        evaluation_id: input.evaluation_id,
+        kind: 'validation',
+        issues: parseResult.error.issues.map((i) => ({
+          path: i.path.join('.'),
+          code: i.code,
+          message: i.message,
+          rule_id: null,
+        })),
       },
-      tx,
     );
-    const verdict = typeof reportResult === 'boolean' ? { verified: reportResult } : reportResult;
-    if (!verdict.verified) {
-      // Fail closed: an unverifiable report must never become an immutable release.
-      throw new ProductError(
-        422,
-        'PUBLISH_GATE_FAILED',
-        verdict.reason ?? 'Validation and evaluation reports could not be verified',
-        false,
-        {
-          kind: 'validation',
-          issues: [
-            {
-              path: 'validation_id',
-              code: 'report_unverified',
-              message:
-                verdict.reason ??
-                'No passing validation/evaluation report is verifiable for this draft hash, schema and engine',
-              rule_id: null,
-            },
-          ],
-        },
-      );
-    }
+  }
+
+  const def = parseResult.data;
+  const reportResult = await reports.verify(
+    {
+      experience_id: experienceId,
+      definition_hash: draft.content_hash,
+      definition_schema_version: def.schema_version,
+      engine_version: def.engine_version,
+      validation_id: input.validation_id,
+      evaluation_id: input.evaluation_id,
+    },
+    db,
+  );
+  const verdict = typeof reportResult === 'boolean' ? { verified: reportResult } : reportResult;
+  if (!verdict.verified) {
+    // Fail closed: an unverifiable report must never become an immutable release.
+    throw new ProductError(
+      422,
+      'PUBLISH_GATE_FAILED',
+      verdict.reason ?? 'Validation and evaluation reports could not be verified',
+      false,
+      {
+        kind: 'validation',
+        issues: [
+          {
+            path: 'validation_id',
+            code: 'report_unverified',
+            message:
+              verdict.reason ??
+              'No passing validation/evaluation report is verifiable for this draft hash, schema and engine',
+            rule_id: null,
+          },
+        ],
+      },
+    );
+  }
+
+  return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
+    await requireDraftSnapshot(tx, experienceId, input.expected_draft_revision, input.content_hash);
 
     const releaseId = `exp_rel_${randomBytes(8).toString('hex')}`;
 
@@ -474,150 +497,86 @@ function assertReportMatchesRequest(
   }
 }
 
-export async function validateExperienceDraft(
+type SnapshotReport = ValidationReport | EvaluationReport;
+
+/**
+ * The runtime call runs before the transaction. Concurrent requests with one key both call it; the runtime answers
+ * the same snapshot and key with the same report, and the idempotency lock then lets exactly one of them store it.
+ */
+async function runSnapshotCommand<R extends SnapshotReport>(
+  db: ProductDatabase,
+  experienceId: string,
+  input: SnapshotCommandInput,
+  ctx: RequestContext,
+  command: {
+    scope: string;
+    kind: 'validation' | 'evaluation';
+    run: (cmd: ExperienceSnapshotCommandInput, ctx: RequestContext) => Promise<R>;
+  },
+): Promise<ServiceResult<R>> {
+  const scope = `${command.scope}:${experienceId}`;
+  const payloadHash = computeContentHash({
+    expected_revision: input.expected_revision,
+    content_hash: input.content_hash,
+  });
+
+  const replayed = await checkIdempotency<R>(db, scope, input.idempotency_key, [payloadHash]);
+  if (replayed) return replayed;
+
+  const draft = await requireDraftSnapshot(db, experienceId, input.expected_revision, input.content_hash);
+  const report = await command.run(
+    {
+      experience_id: experienceId,
+      definition: draft.content,
+      expected_revision: input.expected_revision,
+      content_hash: input.content_hash,
+      idempotency_key: input.idempotency_key,
+    },
+    ctx,
+  );
+  assertReportMatchesRequest(report, experienceId, input);
+
+  return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
+    // The report describes the draft that was sent; it must not be stored if the draft moved meanwhile.
+    await requireDraftSnapshot(tx, experienceId, input.expected_revision, input.content_hash);
+    await insertExperienceReport(tx, {
+      id: report.id,
+      experience_id: experienceId,
+      kind: command.kind,
+      draft_revision: report.draft_revision,
+      content_hash: report.content_hash,
+      definition_schema_version: report.definition_schema_version,
+      engine_version: report.engine_version,
+      status: report.status,
+      mandatory_passed: report.mandatory_passed,
+      report: report as unknown as Record<string, unknown>,
+    });
+    return report;
+  });
+}
+
+export function validateExperienceDraft(
   db: ProductDatabase,
   experienceId: string,
   input: SnapshotCommandInput,
   ctx: RequestContext,
 ): Promise<ServiceResult<ValidationReport>> {
-  const scope = `validate:${experienceId}`;
-  const payloadHash = computeContentHash({
-    expected_revision: input.expected_revision,
-    content_hash: input.content_hash,
-  });
-
-  return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
-    const draft = await findDraftByExperienceId(tx, experienceId);
-    if (!draft) {
-      throw new ProductError(404, 'RESOURCE_NOT_FOUND', 'Experience or draft not found');
-    }
-
-    if (draft.revision !== input.expected_revision) {
-      throw new ProductError(
-        409,
-        'REVISION_CONFLICT',
-        'Draft revision does not match expected revision',
-        false,
-        {
-          kind: 'revision_conflict',
-          expected_draft_revision: input.expected_revision,
-          actual_draft_revision: draft.revision,
-        },
-      );
-    }
-
-    if (draft.content_hash !== input.content_hash) {
-      throw new ProductError(
-        409,
-        'STALE_REPORT',
-        'Provided content hash does not match current draft content hash',
-        false,
-        {
-          expected_content_hash: input.content_hash,
-          actual_content_hash: draft.content_hash,
-        },
-      );
-    }
-
-    const report = await getExperienceRuntimeClient().validate(
-      {
-        experience_id: experienceId,
-        definition: draft.content,
-        expected_revision: input.expected_revision,
-        content_hash: input.content_hash,
-        idempotency_key: input.idempotency_key,
-      },
-      ctx,
-    );
-
-    assertReportMatchesRequest(report, experienceId, input);
-    await insertExperienceReport(tx, {
-      id: report.id,
-      experience_id: experienceId,
-      kind: 'validation',
-      draft_revision: report.draft_revision,
-      content_hash: report.content_hash,
-      definition_schema_version: report.definition_schema_version,
-      engine_version: report.engine_version,
-      status: report.status,
-      mandatory_passed: report.mandatory_passed,
-      report: report as unknown as Record<string, unknown>,
-    });
-
-    return report;
+  return runSnapshotCommand(db, experienceId, input, ctx, {
+    scope: 'validate',
+    kind: 'validation',
+    run: (cmd, c) => getExperienceRuntimeClient().validate(cmd, c),
   });
 }
 
-export async function evaluateExperienceDraft(
+export function evaluateExperienceDraft(
   db: ProductDatabase,
   experienceId: string,
   input: SnapshotCommandInput,
   ctx: RequestContext,
 ): Promise<ServiceResult<EvaluationReport>> {
-  const scope = `evaluate:${experienceId}`;
-  const payloadHash = computeContentHash({
-    expected_revision: input.expected_revision,
-    content_hash: input.content_hash,
-  });
-
-  return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
-    const draft = await findDraftByExperienceId(tx, experienceId);
-    if (!draft) {
-      throw new ProductError(404, 'RESOURCE_NOT_FOUND', 'Experience or draft not found');
-    }
-
-    if (draft.revision !== input.expected_revision) {
-      throw new ProductError(
-        409,
-        'REVISION_CONFLICT',
-        'Draft revision does not match expected revision',
-        false,
-        {
-          kind: 'revision_conflict',
-          expected_draft_revision: input.expected_revision,
-          actual_draft_revision: draft.revision,
-        },
-      );
-    }
-
-    if (draft.content_hash !== input.content_hash) {
-      throw new ProductError(
-        409,
-        'STALE_REPORT',
-        'Provided content hash does not match current draft content hash',
-        false,
-        {
-          expected_content_hash: input.content_hash,
-          actual_content_hash: draft.content_hash,
-        },
-      );
-    }
-
-    const report = await getExperienceRuntimeClient().evaluate(
-      {
-        experience_id: experienceId,
-        definition: draft.content,
-        expected_revision: input.expected_revision,
-        content_hash: input.content_hash,
-        idempotency_key: input.idempotency_key,
-      },
-      ctx,
-    );
-
-    assertReportMatchesRequest(report, experienceId, input);
-    await insertExperienceReport(tx, {
-      id: report.id,
-      experience_id: experienceId,
-      kind: 'evaluation',
-      draft_revision: report.draft_revision,
-      content_hash: report.content_hash,
-      definition_schema_version: report.definition_schema_version,
-      engine_version: report.engine_version,
-      status: report.status,
-      mandatory_passed: report.mandatory_passed,
-      report: report as unknown as Record<string, unknown>,
-    });
-
-    return report;
+  return runSnapshotCommand(db, experienceId, input, ctx, {
+    scope: 'evaluate',
+    kind: 'evaluation',
+    run: (cmd, c) => getExperienceRuntimeClient().evaluate(cmd, c),
   });
 }
