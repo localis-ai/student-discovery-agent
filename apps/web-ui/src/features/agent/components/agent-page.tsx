@@ -151,8 +151,17 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     if (kbParam && !appliedKb.current) { appliedKb.current = true; void bindKb(kbParam); }
   }, [kbParam, bindKb]);
 
-  const persist = async (): Promise<AgentDraft | null> => {
-    if (save.isPending || jsonError) return null;
+  const saveInFlight = useRef<Promise<AgentDraft | null> | null>(null);
+  // A second caller (Ctrl+S, then Chạy thử) shares the save in flight instead of failing as if it could not save.
+  const persist = (): Promise<AgentDraft | null> => {
+    if (jsonError) return Promise.resolve(null);
+    if (saveInFlight.current) return saveInFlight.current;
+    const pending = saveDraft().finally(() => { saveInFlight.current = null; });
+    saveInFlight.current = pending;
+    return pending;
+  };
+
+  const saveDraft = async (): Promise<AgentDraft | null> => {
     if (!dirty) return base;
     try {
       const saved = await save.mutateAsync({ content: config, expected_revision: base.revision });
@@ -252,7 +261,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
           validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
-          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)} />
+          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)}
+          onBeforeDebugRun={async () => Boolean(await persist())} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}
