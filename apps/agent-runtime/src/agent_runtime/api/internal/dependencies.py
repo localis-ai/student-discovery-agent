@@ -124,21 +124,24 @@ def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> s
     return others
 
 
-def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
-    """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
+def _choose_release_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Where the agent and experiences come from: local files, or the signed studio-api delivery.
+
+    A missing/colliding delivery config means no source at all: product never falls back to the files.
+    """
     if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
         return local
     # Fail closed, but say why: names of settings only, never their values.
     if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
+        logger.error("release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
         return None
     try:
         delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
     except Exception:
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
+        logger.error("release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
         return None
     if delivery_key in _other_runtime_keys(settings, student_keys):
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
+        logger.error("release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
         return None
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 
@@ -220,9 +223,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
         local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
-        agent_source = _choose_agent_source(settings, local, keys)
-        product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
-                                         experience=local or ProductUnavailable())
+        release_source = _choose_release_source(settings, local, keys) or ProductUnavailable()
+        product = CompositeReleaseSource(agent=release_source, experience=release_source)
         validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
@@ -260,7 +262,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             knowledge=knowledge, agent_validation=agent_validation, debug_runs=debug_runs, evaluations=evaluations,
             knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
-            product_ready=agent_source is not None)
+            product_ready=not isinstance(release_source, ProductUnavailable))
     except Exception:
         if engine is not None:
             engine.dispose()

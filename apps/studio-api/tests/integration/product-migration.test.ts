@@ -310,7 +310,8 @@ describe('Product migration', () => {
         c.query(`DELETE FROM product.experience_releases WHERE id = 'rel-1'`),
       ).rejects.toThrow(/experience_releases is immutable/i);
 
-      await expect(c.query(`TRUNCATE product.experience_releases`)).rejects.toThrow(
+      // CASCADE: experience_active references releases, and a plain TRUNCATE would stop at that FK before the trigger.
+      await expect(c.query(`TRUNCATE product.experience_releases CASCADE`)).rejects.toThrow(
         /experience_releases is immutable/i,
       );
       expect((await c.query(`SELECT count(*)::int AS n FROM product.experience_releases`)).rows[0].n).toBe(1);
@@ -341,6 +342,7 @@ describe('Product migration', () => {
       expect(types.rows).toEqual([
         { table_name: 'agent_active', data_type: 'bigint' },
         { table_name: 'agent_draft', data_type: 'bigint' },
+        { table_name: 'experience_active', data_type: 'bigint' },
         { table_name: 'experience_drafts', data_type: 'bigint' },
         { table_name: 'experiences', data_type: 'bigint' },
       ]);

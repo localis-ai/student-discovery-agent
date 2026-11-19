@@ -1,6 +1,4 @@
 import type { Hono } from 'hono';
-import { z } from 'zod';
-import { getAgentEnv } from '@/config/env';
 import { getProductDatabase } from '@/infrastructure/db/client';
 import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
@@ -8,11 +6,10 @@ import { requireAdmin } from '@/modules/auth/auth.service';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import { ProductError } from '@/http/errors';
 import { paginationSchema, publishSchema, releaseIdSchema, restoreSchema, saveDraftSchema } from '@/modules/agent/agent.schemas';
-import { verifyDeliveryRequest } from '@/modules/agent/delivery-auth';
 import { DEBUG_BODY, debugRunIdSchema, debugRunRequestSchema, readDebugRun, runDebugRun, streamDebugRun } from '@/modules/agent/debug-runs';
 import { getNodeTypeCatalog } from '@/modules/agent/node-types';
 import {
-  activeDescriptor, getActiveAgent, getAgentRelease, listAgentAudit, listAgentReleases, publish, readDraft, restore, saveDraftContent, validateDraft,
+  getActiveAgent, getAgentRelease, listAgentAudit, listAgentReleases, publish, readDraft, restore, saveDraftContent, validateDraft,
 } from '@/modules/agent/agent.service';
 
 const ADMIN = '/api/v1/admin/agent';
@@ -99,18 +96,6 @@ export const handleListAudit = withHandler(async (req, ctx) => {
   return success({ items }, ctx, 200, pageMeta(query.limit, next_cursor));
 });
 
-const deliveryQuery = z.object({ kind: z.literal('agent'), environment: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/) }).strict();
-
-export const handleActiveDelivery = withHandler(async (req, ctx) => {
-  await verifyDeliveryRequest(req, '');
-  const parsed = deliveryQuery.safeParse(queryOf(req));
-  if (!parsed.success) throw new ProductError(422, 'VAL_INVALID_REQUEST', 'Only kind=agent is delivered');
-  if (parsed.data.environment !== getAgentEnv().AGENT_DELIVERY_ENVIRONMENT) {
-    throw new ProductError(422, 'VAL_INVALID_REQUEST', 'Unknown delivery environment');
-  }
-  return success(await activeDescriptor(getProductDatabase(), parsed.data.environment), ctx);
-});
-
 export function registerAgentRoutes(app: Hono): void {
   app.get(`${ADMIN}/draft`, honoHandler(handleReadDraft));
   app.put(`${ADMIN}/draft`, honoHandler(handleSaveDraft));
@@ -124,5 +109,4 @@ export function registerAgentRoutes(app: Hono): void {
   app.post(`${ADMIN}/releases/:release`, honoHandler(handleReleaseAction));
   app.get(`${ADMIN}/active`, honoHandler(handleReadActive));
   app.get(`${ADMIN}/audit-logs`, honoHandler(handleListAudit));
-  app.get('/api/v1/internal/releases/active', honoHandler(handleActiveDelivery));
 }

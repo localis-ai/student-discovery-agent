@@ -48,6 +48,17 @@ BEGIN
     CONSTRAINT experience_releases_exp_id_def_ver_unique UNIQUE (experience_id, definition_version)
   );
 
+  -- One active release per (experience, environment), guarded by a monotonic revision; never deleted.
+  CREATE TABLE IF NOT EXISTS product.experience_active (
+    experience_id TEXT NOT NULL REFERENCES product.experiences(id),
+    environment TEXT NOT NULL CHECK (environment IN ('demo', 'prod')),
+    release_id TEXT NOT NULL REFERENCES product.experience_releases(id),
+    revision BIGINT NOT NULL CHECK (revision >= 1),
+    updated_by TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (experience_id, environment)
+  );
+
   CREATE TABLE IF NOT EXISTS product.idempotency_records (
     scope TEXT NOT NULL,
     key TEXT NOT NULL,

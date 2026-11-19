@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS: int = 60
     # Local development only: read active releases from this directory instead of Product.
     RUNTIME_LOCAL_RELEASES_DIR: str | None = None
-    # Where the active agent comes from: "local" reads RUNTIME_LOCAL_RELEASES_DIR/agent.json, "product" asks studio-api.
+    # Where the active agent and experiences come from: "local" reads RUNTIME_LOCAL_RELEASES_DIR (agent.json,
+    # experiences/<id>.json), "product" asks studio-api and never falls back to the files.
     RUNTIME_AGENT_RELEASE_SOURCE: Literal["local", "product"] = "product"
     RUNTIME_PRODUCT_URL: str | None = None
     # Canonical padded standard Base64, >=32 decoded bytes; distinct from every other runtime key.

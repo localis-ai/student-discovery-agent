@@ -84,6 +84,7 @@ case "${1:-help}" in
     compose up -d --no-build --wait --wait-timeout 60 db minio
     compose --profile tools run --rm --no-deps studio-api-migrate
     compose --profile tools run --rm --no-deps studio-api-seed-agent
+    compose --profile tools run --rm --no-deps studio-api-seed-experiences
     compose --profile tools run --rm --no-deps minio-init
     compose --profile tools run --rm --no-deps runtime-provision
     compose up -d --no-build --wait --wait-timeout 60

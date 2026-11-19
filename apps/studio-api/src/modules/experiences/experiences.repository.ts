@@ -372,6 +372,19 @@ export async function findReleaseById(
   return row;
 }
 
+export async function findReleaseByVersion(
+  db: ProductExecutor,
+  experienceId: string,
+  definitionVersion: string,
+): Promise<ExperienceReleaseRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(experienceReleases)
+    .where(and(eq(experienceReleases.experience_id, experienceId), eq(experienceReleases.definition_version, definitionVersion)))
+    .limit(1);
+  return row;
+}
+
 export async function listExperienceReleases(
   db: ProductExecutor,
   experienceId: string,

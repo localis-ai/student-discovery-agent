@@ -5,6 +5,9 @@
 #   docker build -f infra/render/agent-runtime.Dockerfile -t sda-pilot-runtime:local .
 #   PILOT_KEY_A=... PILOT_KEY_B=... PILOT_KEY_C=... PILOT_KEY_D=... \
 #     docker compose -f infra/render/docker-compose.pilot.yaml up -d
+# The runtime reads the agent and experiences from Studio; seed experiences once the stack is up:
+#   DATABASE_URL=postgresql://pilot_owner:pilot_owner@127.0.0.1:18100/sda_product \
+#     SECRET_KEY=rehearsal-only-secret-key-rehearsal-only-secret-key pnpm --dir apps/studio-api db:seed-experiences
 # Every database URL here uses the owner role (pilot_owner), so the rehearsal does NOT test the pilot_* role grants;
 # check those against Neon after scripts provision the least-privilege roles.
 # The web UI runs outside Docker the way Vercel builds it:

@@ -1,15 +1,20 @@
 import type { Hono } from 'hono';
 import { getProductDatabase } from '@/infrastructure/db/client';
 import { honoHandler, withHandler } from '@/http/handler';
+import { ProductError } from '@/http/errors';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
+import { activateRelease, readActivePointer, rollbackRelease } from '@/modules/experiences/activation';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import {
+  activateReleaseSchema,
+  activeReleaseQuerySchema,
   createExperienceSchema,
   paginationQuerySchema,
   patchExperienceSchema,
   publishReleaseSchema,
   resourceIdSchema,
+  rollbackSchema,
   saveDraftSchema,
   snapshotCommandSchema,
 } from '@/modules/experiences/experiences.schemas';
@@ -115,6 +120,36 @@ export const handleReadExperienceRelease = withHandler<ReleaseParams>(async (req
   return success(data, ctx);
 });
 
+/** `{release_id}:activate` and `{id}:rollback` arrive as one path segment; anything else on POST is a 404. */
+function actionTarget(segment: string, action: 'activate' | 'rollback'): string {
+  const suffix = `:${action}`;
+  if (!segment.endsWith(suffix)) throw new ProductError(404, 'RES_NOT_FOUND', 'Not found');
+  return resourceIdSchema.parse(segment.slice(0, -suffix.length));
+}
+
+export const handleReadActiveRelease = withHandler<IdParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const id = resourceIdSchema.parse(route.params.id);
+  const { environment } = activeReleaseQuerySchema.parse(queryOf(req));
+  return success(await readActivePointer(getProductDatabase(), id, environment), ctx);
+});
+
+export const handleActivateRelease = withHandler<ReleaseParams>(async (req, ctx, route) => {
+  const admin = await requireAdmin(req);
+  const releaseId = actionTarget(route.params.release_id, 'activate');
+  const body = activateReleaseSchema.parse(await readExperienceJsonBody(req));
+  const res = await activateRelease(getProductDatabase(), releaseId, body, admin.sub);
+  return success(res.data, ctx, res.status);
+});
+
+export const handleRollbackRelease = withHandler<IdParams>(async (req, ctx, route) => {
+  const admin = await requireAdmin(req);
+  const id = actionTarget(route.params.id, 'rollback');
+  const body = rollbackSchema.parse(await readExperienceJsonBody(req));
+  const res = await rollbackRelease(getProductDatabase(), id, body, admin.sub);
+  return success(res.data, ctx, res.status);
+});
+
 export function registerExperiencesRoutes(app: Hono): void {
   app.get('/api/v1/admin/experiences', honoHandler(handleListExperiences));
   app.post('/api/v1/admin/experiences', honoHandler(handleCreateExperience));
@@ -127,4 +162,7 @@ export function registerExperiencesRoutes(app: Hono): void {
   app.post('/api/v1/admin/experiences/:id/releases', honoHandler(handlePublishExperienceRelease));
   app.get('/api/v1/admin/experiences/:id/releases', honoHandler(handleListExperienceReleases));
   app.get('/api/v1/admin/experience-releases/:release_id', honoHandler(handleReadExperienceRelease));
+  app.post('/api/v1/admin/experiences/:id', honoHandler(handleRollbackRelease));
+  app.get('/api/v1/admin/experiences/:id/active-release', honoHandler(handleReadActiveRelease));
+  app.post('/api/v1/admin/experience-releases/:release_id', honoHandler(handleActivateRelease));
 }
