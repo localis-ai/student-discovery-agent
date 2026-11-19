@@ -1,6 +1,7 @@
 import { ProductError } from '@/http/errors';
 import { getProductDatabase, type ProductDatabase } from '@/infrastructure/db/client';
-import { findReportById, type ProductExecutor } from '@/modules/experiences/experiences.repository';
+import type { ProductExecutor } from '@/infrastructure/db/client';
+import { findReportById } from '@/modules/experiences/experiences.repository';
 import {
   getExperienceRuntimeClient,
   type ExperienceRuntimeClient,

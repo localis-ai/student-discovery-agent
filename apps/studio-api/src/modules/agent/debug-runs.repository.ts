@@ -1,6 +1,6 @@
 import { and, eq, gt, gte, sql } from 'drizzle-orm';
 import { agentDebugRuns } from '@/infrastructure/db/schema';
-import type { ProductExecutor } from '@/modules/experiences/experiences.repository';
+import type { ProductExecutor } from '@/infrastructure/db/client';
 
 export type DebugRunRow = typeof agentDebugRuns.$inferSelect;
 export type NewDebugRun = typeof agentDebugRuns.$inferInsert;

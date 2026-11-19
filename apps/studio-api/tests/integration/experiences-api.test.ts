@@ -704,7 +704,8 @@ it.each([
   ['create', 'baseline'], ['patch', 'baseline'], ['draft', 'baseline'], ['publish', 'baseline'],
   ['patch', 'explicit'], ['draft', 'explicit'], ['publish', 'explicit'],
 ] as const)('replays persisted %s outcomes with %s revision fingerprints after wire upgrade', async (operation, fingerprint) => {
-  const { insertExperienceWithDraft, insertExperienceRelease, saveIdempotencyRecord } = await import('@/modules/experiences/experiences.repository');
+  const { insertExperienceWithDraft, insertExperienceRelease } = await import('@/modules/experiences/experiences.repository');
+  const { saveIdempotencyRecord } = await import('@/infrastructure/db/idempotency');
   const { experienceDrafts, experienceReleases, idempotencyRecords } = await import('@/infrastructure/db/schema');
   const db = getProductDatabase();
   const id = `exp_upgrade_${operation}_${fingerprint}`;

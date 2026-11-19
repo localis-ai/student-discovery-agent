@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductError } from '@/http/errors';
 import type { ProductDatabase } from '@/infrastructure/db/client';
+import * as idem from '@/infrastructure/db/idempotency';
 import * as repo from '@/modules/experiences/experiences.repository';
 import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
 import { setExperienceRuntimeClient } from '@/modules/experiences/runtime-client';
 import { publishExperienceRelease } from '@/modules/experiences/experiences.service';
 
+vi.mock('@/infrastructure/db/idempotency');
 vi.mock('@/modules/experiences/experiences.repository');
 
 const mockDb = {} as ProductDatabase;
@@ -31,8 +33,8 @@ const sampleValidContent = {
 describe('Experience Validation Gate AT-03 / AT-04 Requirements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(repo.withIdempotencyLock).mockImplementation((db, _scope, _key, work) => work(db));
-    vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+    vi.mocked(idem.withIdempotencyLock).mockImplementation((db, _scope, _key, work) => work(db));
+    vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
   });
 
   afterEach(() => {

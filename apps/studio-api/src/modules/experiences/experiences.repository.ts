@@ -1,26 +1,21 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import type { ProductDatabase } from '@/infrastructure/db/client';
+import type { ProductExecutor } from '@/infrastructure/db/client';
 import { ProductError } from '@/http/errors';
 import {
   experienceDrafts,
   experienceReleases,
   experienceReports,
   experiences,
-  idempotencyRecords,
 } from '@/infrastructure/db/schema';
 import { computeContentHash } from '@/shared/canonical';
 import { encodeCursor, decodeCursor } from '@/http/cursor';
 import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
 
-type ProductTransaction = Parameters<Parameters<ProductDatabase['transaction']>[0]>[0];
-/** The pool-backed database or an open transaction; repository calls join whichever they receive. */
-export type ProductExecutor = ProductDatabase | ProductTransaction;
 
 export type ExperienceRow = typeof experiences.$inferSelect;
 export type ExperienceDraftRow = typeof experienceDrafts.$inferSelect;
 export type ExperienceReleaseRow = typeof experienceReleases.$inferSelect;
 export type ExperienceReportRow = typeof experienceReports.$inferSelect;
-export type IdempotencyRecordRow = typeof idempotencyRecords.$inferSelect;
 
 export interface ExperienceCursor {
   created_at: string;
@@ -416,50 +411,6 @@ export async function listExperienceReleases(
   }
 
   return { items: rows.map((row) => row.release), next_cursor: nextCursor };
-}
-
-export async function findIdempotencyRecord(
-  db: ProductExecutor,
-  scope: string,
-  key: string,
-): Promise<IdempotencyRecordRow | undefined> {
-  const [row] = await db
-    .select()
-    .from(idempotencyRecords)
-    .where(and(eq(idempotencyRecords.scope, scope), eq(idempotencyRecords.key, key)))
-    .limit(1);
-  return row;
-}
-
-export async function saveIdempotencyRecord(
-  db: ProductExecutor,
-  record: {
-    scope: string;
-    key: string;
-    request_hash: string;
-    response_status: number;
-    response_body: Record<string, unknown>;
-  },
-): Promise<void> {
-  // No ON CONFLICT: callers hold the key's advisory lock, so a conflict here is a real fault, not a race.
-  await db.insert(idempotencyRecords).values(record);
-}
-
-/**
- * Run `work` in one transaction that first takes a transaction-scoped advisory lock on (scope, key).
- * Requests reusing a key serialize here; under READ COMMITTED the next one then sees the committed
- * record and replays it. The record and the business write therefore commit or roll back together.
- */
-export async function withIdempotencyLock<T>(
-  db: ProductDatabase,
-  scope: string,
-  key: string,
-  work: (tx: ProductExecutor) => Promise<T>,
-): Promise<T> {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${scope}|${key}`}, 0))`);
-    return work(tx);
-  });
 }
 
 export async function insertExperienceReport(
