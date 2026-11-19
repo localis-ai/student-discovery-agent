@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
-import { readExperienceJsonBody } from '@/modules/experiences/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import {
   createFieldSchema, createKnowledgeBaseSchema, documentIdSchema, fieldNameSchema, importCommitSchema, importPreviewSchema,
   kbIdSchema, listDocumentsQuerySchema, patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, searchSchema,
@@ -30,7 +30,7 @@ export const handleListKnowledgeBases = withHandler(async (req, ctx) => {
 
 export const handleCreateKnowledgeBase = withHandler(async (req, ctx) => {
   await requireAdmin(req);
-  const body = createKnowledgeBaseSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = createKnowledgeBaseSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await createKnowledgeBase(body), ctx, 201);
 });
 
@@ -42,7 +42,7 @@ export const handleGetKnowledgeBase = withHandler<KbParams>(async (req, ctx, rou
 export const handlePatchKnowledgeBase = withHandler<KbParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const id = kbIdSchema.parse(route.params.kb_id);
-  const body = patchKnowledgeBaseSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = patchKnowledgeBaseSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await patchKnowledgeBase(id, body), ctx);
 });
 
@@ -59,7 +59,7 @@ export const handleListFields = withHandler<KbParams>(async (req, ctx, route) =>
 export const handleCreateField = withHandler<KbParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
-  const body = createFieldSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = createFieldSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await createField(kbId, body), ctx, 201);
 });
 
@@ -67,7 +67,7 @@ export const handlePatchField = withHandler<FieldParams>(async (req, ctx, route)
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const name = fieldNameSchema.parse(route.params.field_name);
-  const body = patchFieldSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = patchFieldSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await patchField(kbId, name, body), ctx);
 });
 
@@ -101,7 +101,7 @@ export const handlePutDocument = withHandler<DocParams>(async (req, ctx, route) 
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const documentId = documentIdSchema.parse(route.params.document_id);
-  const body = putDocumentSchema.parse(await readExperienceJsonBody(req, { maxBytes: DOCUMENT_BODY }));
+  const body = putDocumentSchema.parse(await readStrictJsonBody(req, { maxBytes: DOCUMENT_BODY }));
   const result = await saveDocument(kbId, documentId, body, ctx);
   return success(result.data, ctx, result.status);
 });
@@ -110,7 +110,7 @@ const statusHandler = (status: 'active' | 'archived') => withHandler<DocParams>(
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const documentId = documentIdSchema.parse(route.params.document_id);
-  const body = statusChangeSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = statusChangeSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await changeDocumentStatus(kbId, documentId, status, body.expected_revision), ctx);
 });
 export const handleArchiveDocument = statusHandler('archived');
@@ -118,7 +118,7 @@ export const handleRestoreDocument = statusHandler('active');
 
 export const handleRetryRevision = withHandler<RevisionParams>(async (req, ctx, route) => {
   await requireAdmin(req);
-  await readExperienceJsonBody(req, { optional: true, maxBytes: SMALL_BODY });
+  await readStrictJsonBody(req, { optional: true, maxBytes: SMALL_BODY });
   const kbId = kbIdSchema.parse(route.params.kb_id);
   const documentId = documentIdSchema.parse(route.params.document_id);
   const revision = revisionParamSchema.parse(route.params.revision);
@@ -130,21 +130,21 @@ const IMPORT_BODY = 5 * 1024 * 1024;
 export const handlePreviewImport = withHandler<KbParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
-  const body = importPreviewSchema.parse(await readExperienceJsonBody(req, { maxBytes: IMPORT_BODY }));
+  const body = importPreviewSchema.parse(await readStrictJsonBody(req, { maxBytes: IMPORT_BODY }));
   return success(await previewImport(kbId, body), ctx);
 });
 
 export const handleCommitImport = withHandler<KbParams>(async (req, ctx, route) => {
   const actor = await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
-  const body = importCommitSchema.parse(await readExperienceJsonBody(req, { maxBytes: IMPORT_BODY }));
+  const body = importCommitSchema.parse(await readStrictJsonBody(req, { maxBytes: IMPORT_BODY }));
   return success(await commitImport(kbId, body, actor.sub, ctx), ctx);
 });
 
 export const handleSearch = withHandler<KbParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const kbId = kbIdSchema.parse(route.params.kb_id);
-  const body = searchSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  const body = searchSchema.parse(await readStrictJsonBody(req, { maxBytes: SMALL_BODY }));
   return success(await searchKnowledgeBase(kbId, body, ctx), ctx);
 });
 

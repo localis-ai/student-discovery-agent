@@ -5,7 +5,7 @@ import { ProductError } from '@/http/errors';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { activateRelease, readActivePointer, rollbackRelease } from '@/modules/experiences/activation';
-import { readExperienceJsonBody } from '@/modules/experiences/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import {
   activateReleaseSchema,
   activeReleaseQuerySchema,
@@ -46,7 +46,7 @@ export const handleListExperiences = withHandler(async (req, ctx) => {
 
 export const handleCreateExperience = withHandler(async (req, ctx) => {
   const admin = await requireAdmin(req);
-  const body = createExperienceSchema.parse(await readExperienceJsonBody(req));
+  const body = createExperienceSchema.parse(await readStrictJsonBody(req));
   const res = await createExperience(getProductDatabase(), body, admin);
   return success(res.data, ctx, res.status);
 });
@@ -61,7 +61,7 @@ export const handleGetExperience = withHandler<IdParams>(async (req, ctx, route)
 export const handlePatchExperience = withHandler<IdParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
-  const body = patchExperienceSchema.parse(await readExperienceJsonBody(req));
+  const body = patchExperienceSchema.parse(await readStrictJsonBody(req));
   const res = await patchExperience(getProductDatabase(), id, body);
   return success(res.data, ctx, res.status);
 });
@@ -76,7 +76,7 @@ export const handleReadExperienceDraft = withHandler<IdParams>(async (req, ctx, 
 export const handleSaveExperienceDraft = withHandler<IdParams>(async (req, ctx, route) => {
   const admin = await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
-  const body = saveDraftSchema.parse(await readExperienceJsonBody(req));
+  const body = saveDraftSchema.parse(await readStrictJsonBody(req));
   const res = await saveExperienceDraft(getProductDatabase(), id, body, admin);
   return success(res.data, ctx, res.status);
 });
@@ -84,7 +84,7 @@ export const handleSaveExperienceDraft = withHandler<IdParams>(async (req, ctx, 
 export const handleValidateExperienceDraft = withHandler<IdParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
-  const body = snapshotCommandSchema.parse(await readExperienceJsonBody(req));
+  const body = snapshotCommandSchema.parse(await readStrictJsonBody(req));
   const res = await validateExperienceDraft(getProductDatabase(), id, body, ctx);
   return success(res.data, ctx, res.status);
 });
@@ -92,7 +92,7 @@ export const handleValidateExperienceDraft = withHandler<IdParams>(async (req, c
 export const handleEvaluateExperienceDraft = withHandler<IdParams>(async (req, ctx, route) => {
   await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
-  const body = snapshotCommandSchema.parse(await readExperienceJsonBody(req));
+  const body = snapshotCommandSchema.parse(await readStrictJsonBody(req));
   const res = await evaluateExperienceDraft(getProductDatabase(), id, body, ctx);
   return success(res.data, ctx, res.status);
 });
@@ -100,7 +100,7 @@ export const handleEvaluateExperienceDraft = withHandler<IdParams>(async (req, c
 export const handlePublishExperienceRelease = withHandler<IdParams>(async (req, ctx, route) => {
   const admin = await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
-  const body = publishReleaseSchema.parse(await readExperienceJsonBody(req));
+  const body = publishReleaseSchema.parse(await readStrictJsonBody(req));
   const res = await publishExperienceRelease(getProductDatabase(), id, body, admin);
   return success(res.data, ctx, res.status);
 });
@@ -137,7 +137,7 @@ export const handleReadActiveRelease = withHandler<IdParams>(async (req, ctx, ro
 export const handleActivateRelease = withHandler<ReleaseParams>(async (req, ctx, route) => {
   const admin = await requireAdmin(req);
   const releaseId = actionTarget(route.params.release_id, 'activate');
-  const body = activateReleaseSchema.parse(await readExperienceJsonBody(req));
+  const body = activateReleaseSchema.parse(await readStrictJsonBody(req));
   const res = await activateRelease(getProductDatabase(), releaseId, body, admin.sub);
   return success(res.data, ctx, res.status);
 });
@@ -145,7 +145,7 @@ export const handleActivateRelease = withHandler<ReleaseParams>(async (req, ctx,
 export const handleRollbackRelease = withHandler<IdParams>(async (req, ctx, route) => {
   const admin = await requireAdmin(req);
   const id = actionTarget(route.params.id, 'rollback');
-  const body = rollbackSchema.parse(await readExperienceJsonBody(req));
+  const body = rollbackSchema.parse(await readStrictJsonBody(req));
   const res = await rollbackRelease(getProductDatabase(), id, body, admin.sub);
   return success(res.data, ctx, res.status);
 });

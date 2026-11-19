@@ -1,7 +1,7 @@
 import { isJsonContentType } from '@/http/body';
 import { ProductError } from '@/http/errors';
 
-export const DEFAULT_MAX_EXPERIENCE_BODY_BYTES = 1024 * 1024; // 1 MB
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 
 // With the u flag, valid surrogate pairs match as one code point, so this finds only lone halves.
 const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
@@ -84,7 +84,7 @@ export function assertNoDuplicateKeys(text: string): void {
  * 5. No integers beyond Number.MAX_SAFE_INTEGER (JS rounds them while Python keeps them exact,
  *    so the content hash would differ between services)
  */
-export function parseExperienceJson(text: string): unknown {
+export function parseStrictJson(text: string): unknown {
   try {
     const parsed = JSON.parse(text, (key, value) => {
       if (LONE_SURROGATE.test(key) || (typeof value === 'string' && LONE_SURROGATE.test(value))) {
@@ -118,24 +118,24 @@ function decodeUtf8(decoder: TextDecoder, chunk?: Uint8Array): string {
   }
 }
 
-export interface ReadExperienceJsonBodyOptions {
+export interface ReadStrictJsonBodyOptions {
   optional?: boolean;
   maxBytes?: number;
 }
 
 /**
- * Reads and parses an incoming Experience JSON request body.
+ * Reads and parses an incoming JSON request body (strict: no duplicate keys, no lone surrogates).
  * - Enforces JSON Content-Type (415 VAL_UNSUPPORTED_MEDIA_TYPE).
  * - Enforces payload size limit (413 VAL_PAYLOAD_TOO_LARGE, default 1MB).
  * - Enforces required body unless opts.optional is true (400 VAL_INVALID_REQUEST).
  * - Rejects malformed JSON, non-finite numbers, duplicate keys, lone surrogates, unsafe integers
  *   and invalid UTF-8 (400 VAL_INVALID_REQUEST).
  */
-export async function readExperienceJsonBody(
+export async function readStrictJsonBody(
   req: Request,
-  opts: ReadExperienceJsonBodyOptions = {},
+  opts: ReadStrictJsonBodyOptions = {},
 ): Promise<unknown> {
-  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_EXPERIENCE_BODY_BYTES;
+  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BODY_BYTES;
 
   const contentLength = req.headers.get('content-length');
   if (contentLength !== null) {
@@ -183,5 +183,5 @@ export async function readExperienceJsonBody(
     throw new ProductError(400, 'VAL_INVALID_REQUEST', 'Request body is required');
   }
 
-  return parseExperienceJson(text);
+  return parseStrictJson(text);
 }
