@@ -124,23 +124,35 @@ def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> s
     return others
 
 
-def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
-    """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
-    if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
-        return local
+def _delivery_source(settings: Settings, student_keys: dict[str, bytes], label: str):
+    """The signed studio-api delivery; a missing/colliding delivery config means no source (fail closed)."""
     # Fail closed, but say why: names of settings only, never their values.
     if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
+        logger.error("%s release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set", label)
         return None
     try:
         delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
     except Exception:
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
+        logger.error("%s release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes", label)
         return None
     if delivery_key in _other_runtime_keys(settings, student_keys):
-        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
+        logger.error("%s release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key", label)
         return None
     return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
+
+
+def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Local files, or the signed studio-api delivery."""
+    if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
+        return local
+    return _delivery_source(settings, student_keys, "agent")
+
+
+def _choose_experience_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Local files, or the signed studio-api delivery; never a fallback from one to the other."""
+    if settings.RUNTIME_EXPERIENCE_RELEASE_SOURCE != "product":
+        return local
+    return _delivery_source(settings, student_keys, "experience")
 
 
 def _build_index_runner(settings: Settings):
@@ -221,8 +233,9 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         trace_sink = DatabaseTraceSink(uow)
         local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
         agent_source = _choose_agent_source(settings, local, keys)
+        experience_source = _choose_experience_source(settings, local, keys)
         product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
-                                         experience=local or ProductUnavailable())
+                                         experience=experience_source or ProductUnavailable())
         validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
@@ -260,7 +273,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             knowledge=knowledge, agent_validation=agent_validation, debug_runs=debug_runs, evaluations=evaluations,
             knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
-            product_ready=agent_source is not None)
+            product_ready=agent_source is not None and experience_source is not None)
     except Exception:
         if engine is not None:
             engine.dispose()

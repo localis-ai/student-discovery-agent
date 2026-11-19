@@ -5,7 +5,7 @@ import logging
 import pytest
 from pydantic import SecretStr
 
-from agent_runtime.api.internal.dependencies import _choose_agent_source
+from agent_runtime.api.internal.dependencies import _choose_agent_source, _choose_experience_source
 from agent_runtime.config.settings import Settings
 from agent_runtime.infrastructure.product.delivery import HttpProductReleaseSource
 
@@ -64,3 +64,19 @@ def test_unreadable_keyring_is_logged_because_the_collision_check_skips_it(error
     source = _choose_agent_source(settings(RUNTIME_STUDIO_KEYRING=SecretStr("{not json")), "local", STUDENT_KEYS)
     assert isinstance(source, HttpProductReleaseSource)
     assert errors() == ["runtime key unreadable, delivery key collision check skips it: RUNTIME_STUDIO_KEYRING"]
+
+
+def test_experience_source_defaults_to_local():
+    assert _choose_experience_source(settings(), "local", STUDENT_KEYS) == "local"
+
+
+def test_experience_product_mode_selects_the_http_source():
+    chosen = _choose_experience_source(settings(RUNTIME_EXPERIENCE_RELEASE_SOURCE="product"), "local", STUDENT_KEYS)
+    assert isinstance(chosen, HttpProductReleaseSource)
+
+
+def test_experience_product_mode_without_url_has_no_source_and_never_falls_back(errors):
+    chosen = _choose_experience_source(settings(RUNTIME_EXPERIENCE_RELEASE_SOURCE="product", RUNTIME_PRODUCT_URL=None),
+                                       "local", STUDENT_KEYS)
+    assert chosen is None
+    assert errors() == ["experience release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set"]
