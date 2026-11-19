@@ -1,11 +1,10 @@
 # Render build from the repository root; see .dockerignore for what is sent.
-# The agent comes from studio-api (Product delivery); only experiences are packaged under /releases.
+# The agent and experiences come from studio-api (Product delivery); no releases are packaged in the image.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
-    RUNTIME_LOCAL_RELEASES_DIR=/releases
+    PYTHONPATH=/app/src
 
 WORKDIR /app
 
@@ -16,8 +15,6 @@ COPY apps/agent-runtime/src ./src
 COPY apps/agent-runtime/alembic.ini ./
 COPY apps/agent-runtime/migrations ./migrations
 RUN pip install --no-cache-dir --no-deps .
-
-COPY infra/local-releases/experiences /releases/experiences
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 USER appuser

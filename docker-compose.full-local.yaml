@@ -73,20 +73,14 @@ services:
       # OpenAI-compatible vLLM / LiteLLM proxy: chat provider `vllm` and the vLLM embedding models.
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
-      # The agent comes from studio-api (signed pull); experiences/ still come from the local releases dir.
+      # The agent and experiences come from studio-api (signed pull), seeded by local-stack.sh up.
       RUNTIME_AGENT_RELEASE_SOURCE: product
-      # local until Studio is seeded (pnpm db:seed-experiences), then product.
-      RUNTIME_EXPERIENCE_RELEASE_SOURCE: local
       RUNTIME_PRODUCT_URL: http://studio-api:3001
       RUNTIME_PRODUCT_SIGNING_KEY: ${SDA_LOCAL_RUNTIME_PRODUCT_KEY:?Run scripts/local-stack.sh init}
       RUNTIME_PRODUCT_SIGNING_KID: runtime
-      # Local releases (experiences/) instead of Product.
-      RUNTIME_LOCAL_RELEASES_DIR: /releases
       # Outbound proxy for provider calls when the host has no direct route (empty = direct).
       PROXY_HOST: ${SDA_LOCAL_PROXY_HOST:-}
       PROXY_PORT: ${SDA_LOCAL_PROXY_PORT:-}
-    volumes:
-      - ./infra/local-releases:/releases:ro
     depends_on:
       db:
         condition: service_healthy
@@ -146,6 +140,20 @@ services:
     command: ["pnpm", "db:seed-agent", "/seed/agent.json"]
     volumes:
       - ./infra/local-releases/agent.json:/seed/agent.json:ro
+    environment:
+      DATABASE_URL: postgresql://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_local
+      SECRET_KEY: ${SDA_LOCAL_SECRET_KEY:?Run scripts/local-stack.sh init}
+
+  # One-shot (profile tools): experience, release and demo pointer per infra/local-releases/experiences/*.json.
+  studio-api-seed-experiences:
+    extends:
+      file: docker-compose.yaml
+      service: studio-api-migrate
+    image: sda-full-local-studio-api-migrate:local
+    profiles: ["tools"]
+    command: ["pnpm", "db:seed-experiences", "/seed/experiences"]
+    volumes:
+      - ./infra/local-releases/experiences:/seed/experiences:ro
     environment:
       DATABASE_URL: postgresql://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_local
       SECRET_KEY: ${SDA_LOCAL_SECRET_KEY:?Run scripts/local-stack.sh init}

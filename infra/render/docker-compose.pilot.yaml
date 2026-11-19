@@ -5,9 +5,9 @@
 #   docker build -f infra/render/agent-runtime.Dockerfile -t sda-pilot-runtime:local .
 #   PILOT_KEY_A=... PILOT_KEY_B=... PILOT_KEY_C=... PILOT_KEY_D=... \
 #     docker compose -f infra/render/docker-compose.pilot.yaml up -d
-# Experiences from Studio instead of the image: seed it, then restart the runtime with the flag:
-#   DATABASE_URL=postgresql://pilot_owner:pilot_owner@127.0.0.1:18100/sda_product SECRET_KEY=<api SECRET_KEY> #     pnpm --dir apps/studio-api db:seed-experiences
-#   PILOT_EXPERIENCE_SOURCE=product PILOT_KEY_A=... docker compose -f infra/render/docker-compose.pilot.yaml up -d runtime
+# The runtime reads the agent and experiences from Studio; seed experiences once the stack is up:
+#   DATABASE_URL=postgresql://pilot_owner:pilot_owner@127.0.0.1:18100/sda_product \
+#     SECRET_KEY=rehearsal-only-secret-key-rehearsal-only-secret-key pnpm --dir apps/studio-api db:seed-experiences
 # Every database URL here uses the owner role (pilot_owner), so the rehearsal does NOT test the pilot_* role grants;
 # check those against Neon after scripts provision the least-privilege roles.
 # The web UI runs outside Docker the way Vercel builds it:
@@ -72,8 +72,6 @@ services:
       RUNTIME_STUDIO_KEYRING: '{"studio":"${PILOT_KEY_B:?}"}'
       RUNTIME_CURSOR_SIGNING_KEY: ${PILOT_KEY_D:?}
       RUNTIME_AGENT_RELEASE_SOURCE: product
-      # local until Studio is seeded (pnpm db:seed-experiences), then product.
-      RUNTIME_EXPERIENCE_RELEASE_SOURCE: ${PILOT_EXPERIENCE_SOURCE:-local}
       RUNTIME_PRODUCT_URL: http://api:10000
       RUNTIME_PRODUCT_SIGNING_KEY: ${PILOT_KEY_C:?}
       RUNTIME_PRODUCT_SIGNING_KID: runtime

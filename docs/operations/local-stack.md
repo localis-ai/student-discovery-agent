@@ -114,6 +114,7 @@ Giới hạn hiện tại: UI chỉ dùng JSON (chưa stream SSE); sửa đáp �
 
 - Agent (lời chào, prompt, model...) được quản lý trong Studio qua `/api/v1/admin/agent/...` (draft, validate, publish, restore, audit). Runtime đọc release đang active từ studio-api (`RUNTIME_AGENT_RELEASE_SOURCE=product`, `RUNTIME_PRODUCT_URL=http://studio-api:3001`); hội thoại mới dùng release mới nhất, hội thoại cũ giữ release đã ghim.
 - `bash scripts/local-stack.sh up` chạy `studio-api-seed-agent` (profile `tools`): nạp draft/v1/pointer từ `infra/local-releases/agent.json` chỉ khi chưa có release agent nào.
+- Experience cũng lấy từ studio-api: `up` chạy tiếp `studio-api-seed-experiences`, tạo experience, release và pointer `demo` cho mỗi file `infra/local-releases/experiences/<id>.json` (chạy lại không tạo trùng, không đổi pointer đã có). Đổi release qua `/api/v1/admin/experience-releases/{id}:activate` và `/api/v1/admin/experiences/{id}:rollback`.
 - Khoá `SDA_LOCAL_RUNTIME_PRODUCT_KEY` (tự sinh bởi `init`, base64 32 byte) ký yêu cầu runtime -> studio-api; phải khác mọi khoá runtime khác. Phía studio-api là `PRODUCT_DELIVERY_VERIFY_KEY`.
 - `/api/v1/internal/` bị gateway (nginx) trả 404; chỉ runtime gọi được qua mạng compose.
 - Khi migration 0002 (hoặc baseline) thay đổi, tạo lại DB sản phẩm (không đụng `sda_runtime`):
@@ -178,7 +179,7 @@ Postman có thể giữ cookie sau login hoặc lấy `data.access_token` và đ
 | Bulk | POST `/admin/users/bulk/create`; PUT `/admin/users/bulk/update`; POST `/admin/users/bulk/delete` |
 | Avatar/download | POST `/users/avatar/upload` (`multipart/form-data`, field `file`); GET `/users/{id}/avatar`; GET `/download?object_name=...`; alias `/download` không có prefix |
 | Versions | GET/POST `/versions` |
-| Experiences | GET/POST `/admin/experiences`; GET/PATCH `/admin/experiences/{id}`; GET/PUT `/admin/experiences/{id}/draft`; GET/POST `/admin/experiences/{id}/releases`; GET `/admin/experience-releases/{release_id}` |
+| Experiences | GET/POST `/admin/experiences`; GET/PATCH `/admin/experiences/{id}`; GET/PUT `/admin/experiences/{id}/draft`; GET/POST `/admin/experiences/{id}/releases`; GET `/admin/experience-releases/{release_id}`; GET `/admin/experiences/{id}/active-release`; POST `/admin/experience-releases/{release_id}:activate`; POST `/admin/experiences/{id}:rollback` |
 
 Metadata dùng `metadata_revision` / `expected_metadata_revision`; draft dùng `draft_revision` / `expected_draft_revision`. Hai counter độc lập; no-op giữ revision. Thao tác mới dùng idempotency key mới, retry giữ nguyên key/payload. List dùng `data.items` và `meta.pagination`; bulk dùng `meta.summary`. Session dùng `principal` và `is_admin`. Xem [API review migration](api-review-fixes.md) và [error registry](../../contracts/error-codes.json).
 
