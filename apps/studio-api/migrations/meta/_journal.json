@@ -36,6 +36,13 @@
       "when": 1792121145685,
       "tag": "0005_experience_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792121145686,
+      "tag": "0006_experience_active_pointer",
+      "breakpoints": true
     }
   ]
 }

@@ -60,6 +60,23 @@ export const experienceReleases = productSchema.table(
 );
 
 /**
+ * `product.experience_active` - The active release per (experience, environment), guarded by `revision`.
+ * A missing row means no release is active yet; rows are moved, never deleted (rollback is not revocation).
+ */
+export const experienceActive = productSchema.table(
+  'experience_active',
+  {
+    experience_id: text('experience_id').notNull().references(() => experiences.id),
+    environment: text('environment').$type<'demo' | 'prod'>().notNull(),
+    release_id: text('release_id').notNull().references(() => experienceReleases.id),
+    revision: bigint('revision', { mode: 'number' }).notNull(),
+    updated_by: text('updated_by').notNull(),
+    updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.experience_id, table.environment] })],
+);
+
+/**
  * `product.idempotency_records` - Scoped idempotency records ensuring safe request replays.
  */
 export const idempotencyRecords = productSchema.table(

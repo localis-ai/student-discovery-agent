@@ -5,6 +5,7 @@ export {
   experiences,
   experienceDrafts,
   experienceReleases,
+  experienceActive,
   experienceReports,
   idempotencyRecords,
 } from '@/modules/experiences/experiences.table';
