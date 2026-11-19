@@ -1,7 +1,7 @@
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import * as repo from '@/modules/agent/agent.repository';
 import { getAgentValidator, type AgentValidation } from '@/modules/agent/runtime-validation';
 import {

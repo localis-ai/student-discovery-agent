@@ -1,6 +1,6 @@
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { ProductError } from '@/http/errors';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import {
   findActiveRelease,
   findPointer,

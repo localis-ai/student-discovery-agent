@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import type { ProductDatabase } from '@/infrastructure/db/client';
+import type { ProductDatabase, ProductExecutor } from '@/infrastructure/db/client';
+import { findIdempotencyRecord, saveIdempotencyRecord, withIdempotencyLock } from '@/infrastructure/db/idempotency';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import {
   findDraftByExperienceId,
   findExperienceById,
   findExperienceWithDraft,
-  findIdempotencyRecord,
   findReleaseById,
   insertExperienceRelease,
   insertExperienceReport,
@@ -15,10 +15,7 @@ import {
   listExperienceReleases as repoListReleases,
   listExperiences as repoListExperiences,
   patchExperienceMetadata,
-  saveIdempotencyRecord,
   updateDraftContent,
-  withIdempotencyLock,
-  type ProductExecutor,
 } from '@/modules/experiences/experiences.repository';
 import { getPublishReportVerifier, type PublishReportVerifier } from '@/modules/experiences/experiences.reports';
 import {

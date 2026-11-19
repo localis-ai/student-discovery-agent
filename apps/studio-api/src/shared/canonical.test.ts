@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, computeContentHash } from './canonical';
-import hashFixtures from '../../../../../contracts/fixtures/experience-content-hash.json';
+import hashFixtures from '../../../../contracts/fixtures/experience-content-hash.json';
 
 describe('canonicalJson & computeContentHash', () => {
   it.each(hashFixtures)('matches shared JCS fixture $name', (fixture) => {

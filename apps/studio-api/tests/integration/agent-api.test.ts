@@ -9,7 +9,7 @@ import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { seedAgent } from '@/modules/agent/agent.service';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { ProductError } from '@/http/errors';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 

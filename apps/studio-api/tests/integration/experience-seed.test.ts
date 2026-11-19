@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { findActiveRelease } from '@/modules/experiences/activation.repository';
 import { findExperienceById } from '@/modules/experiences/experiences.repository';
 import { seedExperience } from '@/modules/experiences/seed';

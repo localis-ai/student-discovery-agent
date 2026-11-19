@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { ProductDatabase } from '@/infrastructure/db/client';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { findPointer, insertExperienceAudit, lockPointerKey, upsertPointer } from '@/modules/experiences/activation.repository';
 import {
   findExperienceById,
@@ -9,7 +9,7 @@ import {
   insertExperienceRelease,
   insertExperienceWithDraft,
 } from '@/modules/experiences/experiences.repository';
-import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
+import { resourceIdSchema } from '@/http/field-schemas';
 
 /**
  * Only the release metadata. The publish gate's structural schema accepts schema 1.0 alone, while the packaged

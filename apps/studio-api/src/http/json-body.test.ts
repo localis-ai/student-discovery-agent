@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_MAX_EXPERIENCE_BODY_BYTES,
+  DEFAULT_MAX_BODY_BYTES,
   assertNoDuplicateKeys,
-  parseExperienceJson,
-  readExperienceJsonBody,
-} from '@/modules/experiences/body';
+  parseStrictJson,
+  readStrictJsonBody,
+} from '@/http/json-body';
 
 function req(body: string | undefined, contentType?: string, contentLength?: string) {
   const headers: Record<string, string> = {};
@@ -83,23 +83,23 @@ describe('assertNoDuplicateKeys', () => {
   });
 });
 
-describe('parseExperienceJson', () => {
+describe('parseStrictJson', () => {
   it('parses valid JSON data', () => {
-    expect(parseExperienceJson('{"name": "test", "items": [1, 2]}')).toEqual({
+    expect(parseStrictJson('{"name": "test", "items": [1, 2]}')).toEqual({
       name: 'test',
       items: [1, 2],
     });
   });
 
   it('rejects malformed JSON syntax with 400 VAL_INVALID_REQUEST', () => {
-    expect(() => parseExperienceJson('{')).toThrowError(
+    expect(() => parseStrictJson('{')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
         message: 'Malformed JSON body',
       }),
     );
-    expect(() => parseExperienceJson('{"a": 1,}')).toThrowError(
+    expect(() => parseStrictJson('{"a": 1,}')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
@@ -109,21 +109,21 @@ describe('parseExperienceJson', () => {
   });
 
   it('rejects non-finite numbers (Infinity / -Infinity / 1e1000) with 400 VAL_INVALID_REQUEST', () => {
-    expect(() => parseExperienceJson('{"val": 1e1000}')).toThrowError(
+    expect(() => parseStrictJson('{"val": 1e1000}')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
         message: 'Non-finite numbers are not allowed',
       }),
     );
-    expect(() => parseExperienceJson('{"val": -1e1000}')).toThrowError(
+    expect(() => parseStrictJson('{"val": -1e1000}')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
         message: 'Non-finite numbers are not allowed',
       }),
     );
-    expect(() => parseExperienceJson('[1, 1e1000]')).toThrowError(
+    expect(() => parseStrictJson('[1, 1e1000]')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
@@ -133,7 +133,7 @@ describe('parseExperienceJson', () => {
   });
 
   it('rejects duplicate keys via assertNoDuplicateKeys with 400 VAL_INVALID_REQUEST', () => {
-    expect(() => parseExperienceJson('{"foo": "a", "foo": "b"}')).toThrowError(
+    expect(() => parseStrictJson('{"foo": "a", "foo": "b"}')).toThrowError(
       expect.objectContaining({
         status: 400,
         code: 'VAL_INVALID_REQUEST',
@@ -142,7 +142,7 @@ describe('parseExperienceJson', () => {
   });
 });
 
-describe('readExperienceJsonBody', () => {
+describe('readStrictJsonBody', () => {
   it.each([undefined, '1'])(
     'cancels an oversized stream before consuming the remaining chunks (Content-Length: %s)',
     async (contentLength) => {
@@ -161,7 +161,7 @@ describe('readExperienceJsonBody', () => {
       const init: RequestInit & { duplex: string } = { method: 'PUT', headers, body: stream, duplex: 'half' };
       const request = new Request('http://localhost/draft', init);
 
-      await expect(readExperienceJsonBody(request, { maxBytes: 10 })).rejects.toMatchObject({
+      await expect(readStrictJsonBody(request, { maxBytes: 10 })).rejects.toMatchObject({
         status: 413, code: 'VAL_PAYLOAD_TOO_LARGE',
       });
       expect(chunksRead).toBe(2);
@@ -171,7 +171,7 @@ describe('readExperienceJsonBody', () => {
   );
 
   it.each([false, true])('rejects oversized whitespace before empty-body handling (optional: %s)', async (optional) => {
-    await expect(readExperienceJsonBody(req(' '.repeat(11), 'application/json'), {
+    await expect(readStrictJsonBody(req(' '.repeat(11), 'application/json'), {
       maxBytes: 10, optional,
     })).rejects.toMatchObject({ status: 413, code: 'VAL_PAYLOAD_TOO_LARGE' });
   });
@@ -192,8 +192,8 @@ describe('readExperienceJsonBody', () => {
       };
       return new Request('http://localhost/draft', init);
     }
-    await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length })).resolves.toEqual(payload);
-    await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length - 1 })).rejects.toMatchObject({
+    await expect(readStrictJsonBody(request(), { maxBytes: bytes.length })).resolves.toEqual(payload);
+    await expect(readStrictJsonBody(request(), { maxBytes: bytes.length - 1 })).rejects.toMatchObject({
       status: 413, code: 'VAL_PAYLOAD_TOO_LARGE',
     });
   });
@@ -204,7 +204,7 @@ describe('readExperienceJsonBody', () => {
     'Application/JSON;charset=UTF-8',
     'application/merge-patch+json',
   ])('accepts valid content-type %s', async (ct) => {
-    await expect(readExperienceJsonBody(req('{"valid": true}', ct))).resolves.toEqual({
+    await expect(readStrictJsonBody(req('{"valid": true}', ct))).resolves.toEqual({
       valid: true,
     });
   });
@@ -216,27 +216,27 @@ describe('readExperienceJsonBody', () => {
     'multipart/form-data; boundary=x',
     'text/json',
   ])('rejects unsupported content-type %s with 415 VAL_UNSUPPORTED_MEDIA_TYPE', async (ct) => {
-    await expect(readExperienceJsonBody(req('{"a": 1}', ct))).rejects.toMatchObject({
+    await expect(readStrictJsonBody(req('{"a": 1}', ct))).rejects.toMatchObject({
       status: 415,
       code: 'VAL_UNSUPPORTED_MEDIA_TYPE',
     });
   });
 
   it('handles optional body correctly', async () => {
-    await expect(readExperienceJsonBody(req(undefined), { optional: true })).resolves.toBeUndefined();
-    await expect(readExperienceJsonBody(req('   '), { optional: true })).resolves.toBeUndefined();
+    await expect(readStrictJsonBody(req(undefined), { optional: true })).resolves.toBeUndefined();
+    await expect(readStrictJsonBody(req('   '), { optional: true })).resolves.toBeUndefined();
     await expect(
-      readExperienceJsonBody(req('{"a": 1}', 'text/plain'), { optional: true }),
+      readStrictJsonBody(req('{"a": 1}', 'text/plain'), { optional: true }),
     ).rejects.toMatchObject({ status: 415 });
   });
 
   it('rejects empty body when required with 400 VAL_INVALID_REQUEST', async () => {
-    await expect(readExperienceJsonBody(req('', 'application/json'))).rejects.toMatchObject({
+    await expect(readStrictJsonBody(req('', 'application/json'))).rejects.toMatchObject({
       status: 400,
       code: 'VAL_INVALID_REQUEST',
       message: 'Request body is required',
     });
-    await expect(readExperienceJsonBody(req('   ', 'application/json'))).rejects.toMatchObject({
+    await expect(readStrictJsonBody(req('   ', 'application/json'))).rejects.toMatchObject({
       status: 400,
       code: 'VAL_INVALID_REQUEST',
       message: 'Request body is required',
@@ -246,7 +246,7 @@ describe('readExperienceJsonBody', () => {
   it('rejects payloads exceeding custom maxBytes with 413 VAL_PAYLOAD_TOO_LARGE', async () => {
     const payload = JSON.stringify({ data: 'hello' }); // ~17 bytes
     await expect(
-      readExperienceJsonBody(req(payload, 'application/json'), { maxBytes: 10 }),
+      readStrictJsonBody(req(payload, 'application/json'), { maxBytes: 10 }),
     ).rejects.toMatchObject({
       status: 413,
       code: 'VAL_PAYLOAD_TOO_LARGE',
@@ -256,8 +256,8 @@ describe('readExperienceJsonBody', () => {
   it('rejects based on Content-Length header exceeding maxBytes before reading body', async () => {
     const payload = JSON.stringify({ a: 1 });
     await expect(
-      readExperienceJsonBody(req(payload, 'application/json', '2000000'), {
-        maxBytes: DEFAULT_MAX_EXPERIENCE_BODY_BYTES,
+      readStrictJsonBody(req(payload, 'application/json', '2000000'), {
+        maxBytes: DEFAULT_MAX_BODY_BYTES,
       }),
     ).rejects.toMatchObject({
       status: 413,
@@ -268,14 +268,14 @@ describe('readExperienceJsonBody', () => {
   it('accepts payloads within 1MB limit', async () => {
     const data = { content: 'x'.repeat(1000) };
     await expect(
-      readExperienceJsonBody(req(JSON.stringify(data), 'application/json')),
+      readStrictJsonBody(req(JSON.stringify(data), 'application/json')),
     ).resolves.toEqual(data);
   });
 });
 
 describe('review fixes: input that must be rejected with 400', () => {
   async function expectInvalid(request: Request) {
-    await expect(readExperienceJsonBody(request)).rejects.toMatchObject({
+    await expect(readStrictJsonBody(request)).rejects.toMatchObject({
       status: 400,
       code: 'VAL_INVALID_REQUEST',
     });
@@ -307,7 +307,7 @@ describe('review fixes: input that must be rejected with 400', () => {
 
   it('still accepts valid surrogate pairs and safe integers', async () => {
     await expect(
-      readExperienceJsonBody(req('{"a":"\\ud83d\\ude00","n":9007199254740991}', 'application/json')),
+      readStrictJsonBody(req('{"a":"\\ud83d\\ude00","n":9007199254740991}', 'application/json')),
     ).resolves.toEqual({ a: '😀', n: 9007199254740991 });
   });
 });

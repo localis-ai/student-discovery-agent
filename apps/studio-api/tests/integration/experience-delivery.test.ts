@@ -9,7 +9,7 @@ import { call, json } from '../helpers/users-api';
 import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase } from '@/infrastructure/db/client';
 import { issueAccessToken } from '@/modules/auth/tokens';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
 
 const DELIVERY_KEY = Buffer.alloc(32, 4);

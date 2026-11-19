@@ -3,7 +3,7 @@ import { getProductDatabase } from '@/infrastructure/db/client';
 import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
-import { readExperienceJsonBody } from '@/modules/experiences/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import { ProductError } from '@/http/errors';
 import { paginationSchema, publishSchema, releaseIdSchema, restoreSchema, saveDraftSchema } from '@/modules/agent/agent.schemas';
 import { DEBUG_BODY, debugRunIdSchema, debugRunRequestSchema, readDebugRun, runDebugRun, streamDebugRun } from '@/modules/agent/debug-runs';
@@ -23,7 +23,7 @@ export const handleReadDraft = withHandler(async (req, ctx) => {
 
 export const handleSaveDraft = withHandler(async (req, ctx) => {
   const admin = await requireAdmin(req);
-  const body = saveDraftSchema.parse(await readExperienceJsonBody(req, BODY));
+  const body = saveDraftSchema.parse(await readStrictJsonBody(req, BODY));
   return success(await saveDraftContent(getProductDatabase(), body, admin.sub), ctx);
 });
 
@@ -34,7 +34,7 @@ export const handleValidateDraft = withHandler(async (req, ctx) => {
 
 export const handleCreateDebugRun = withHandler(async (req, ctx) => {
   const admin = await requireAdmin(req);
-  const body = debugRunRequestSchema.parse(await readExperienceJsonBody(req, DEBUG_BODY));
+  const body = debugRunRequestSchema.parse(await readStrictJsonBody(req, DEBUG_BODY));
   const db = getProductDatabase();
   if ((req.headers.get('accept') ?? '').includes('text/event-stream')) return streamDebugRun(db, body, admin.sub, ctx);
   return success(await runDebugRun(db, body, admin.sub, ctx), ctx);
@@ -57,7 +57,7 @@ const pageMeta = (limit: number, next_cursor: string | null) => ({ meta: { pagin
 
 export const handlePublish = withHandler(async (req, ctx) => {
   const admin = await requireAdmin(req);
-  const body = publishSchema.parse(await readExperienceJsonBody(req));
+  const body = publishSchema.parse(await readStrictJsonBody(req));
   const res = await publish(getProductDatabase(), body, admin.sub, ctx);
   return success(res.data, ctx, res.status);
 });
@@ -67,7 +67,7 @@ export const handleReleaseAction = withHandler<{ release: string }>(async (req, 
   const admin = await requireAdmin(req);
   const match = /^(agr_[0-9a-f]{24}):restore$/.exec(route.params.release);
   if (!match) throw new ProductError(404, 'RES_NOT_FOUND', 'Not found');
-  const body = restoreSchema.parse(await readExperienceJsonBody(req));
+  const body = restoreSchema.parse(await readStrictJsonBody(req));
   const res = await restore(getProductDatabase(), match[1]!, body, admin.sub, ctx);
   return success(res.data, ctx, res.status);
 });

@@ -8,7 +8,7 @@ import { success } from '@/http/response';
 import { activeDescriptor } from '@/modules/agent/agent.service';
 import { verifyDeliveryRequest } from '@/modules/agent/delivery-auth';
 import { activeExperienceDescriptor } from '@/modules/experiences/activation';
-import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
+import { resourceIdSchema } from '@/http/field-schemas';
 
 /** The runtime's only read into Product: the active agent, or the active release of one experience. */
 const environment = z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/);

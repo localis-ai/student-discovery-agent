@@ -4,6 +4,9 @@ import { getProductEnv } from '@/config/env';
 import * as schema from '@/infrastructure/db/schema';
 
 export type ProductDatabase = NodePgDatabase<typeof schema>;
+type ProductTransaction = Parameters<Parameters<ProductDatabase['transaction']>[0]>[0];
+/** The pool-backed database or an open transaction; repository calls join whichever they receive. */
+export type ProductExecutor = ProductDatabase | ProductTransaction;
 
 export interface ProductDatabaseHandle {
   db: ProductDatabase;

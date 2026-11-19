@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { auditEvents, experienceActive, experienceReleases } from '@/infrastructure/db/schema';
-import type { ExperienceReleaseRow, ProductExecutor } from '@/modules/experiences/experiences.repository';
+import type { ProductExecutor } from '@/infrastructure/db/client';
+import type { ExperienceReleaseRow } from '@/modules/experiences/experiences.repository';
 
 export type DeliveryEnvironment = 'demo' | 'prod';
 export type ExperienceActiveRow = typeof experienceActive.$inferSelect;

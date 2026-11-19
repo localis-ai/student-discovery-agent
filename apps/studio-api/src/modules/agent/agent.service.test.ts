@@ -3,7 +3,7 @@ import type { ProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/agent/agent.repository';
 import { activeDescriptor, publish, readDraft, restore, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
-import { computeContentHash } from '@/modules/experiences/canonical';
+import { computeContentHash } from '@/shared/canonical';
 
 vi.mock('@/modules/agent/agent.repository');
 const db = { transaction: (work: (tx: unknown) => unknown) => work(db) } as unknown as ProductDatabase;

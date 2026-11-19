@@ -7,7 +7,7 @@ export {
   experienceReleases,
   experienceActive,
   experienceReports,
-  idempotencyRecords,
 } from '@/modules/experiences/experiences.table';
+export { idempotencyRecords } from '@/infrastructure/db/idempotency.table';
 export { authSessions, authRefreshTokens, authRegistrationLimits } from '@/modules/auth/auth.table';
 export { agentDraft, agentReleases, agentActive, agentDebugRuns, auditEvents } from '@/modules/agent/agent.table';
