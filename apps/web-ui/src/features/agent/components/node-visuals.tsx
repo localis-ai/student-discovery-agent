@@ -29,7 +29,8 @@ interface NodeVisual {
 const ENTRY = { tile: 'bg-primary text-primary-foreground', dot: '!bg-primary', swatch: 'bg-primary' };
 const FLOW = { tile: 'bg-cyan-600 text-white', dot: '!bg-cyan-600', swatch: 'bg-cyan-600' };
 const AI = { tile: 'bg-indigo-600 text-white', dot: '!bg-indigo-600', swatch: 'bg-indigo-600' };
-const KNOWLEDGE = { tile: 'bg-emerald-600 text-white', dot: '!bg-emerald-600', swatch: 'bg-emerald-600' };
+// Violet, not green: green is Studio's own colour (the start node), so knowledge must not read as the entry.
+const KNOWLEDGE = { tile: 'bg-violet-600 text-white', dot: '!bg-violet-600', swatch: 'bg-violet-600' };
 const OUTPUT = { tile: 'bg-orange-500 text-white', dot: '!bg-orange-500', swatch: 'bg-orange-500' };
 
 const VISUALS: Record<string, NodeVisual> = {

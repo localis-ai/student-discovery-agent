@@ -10,8 +10,9 @@ import type { AgentActive } from '../types';
 
 export type DraftState = 'unsaved' | 'differs' | 'same';
 const LABEL: Record<DraftState, string> = { unsaved: 'Chưa lưu', differs: 'Đã lưu – khác bản đang dùng', same: 'Trùng bản đang dùng' };
-// Unsaved edits need attention; a saved draft ahead of the live copy is waiting to be published; equal is settled.
-const DOT: Record<DraftState, string> = { unsaved: 'bg-status-warning', differs: 'bg-primary', same: 'bg-status-success' };
+// Unsaved edits need attention (amber); a saved draft ahead of the live copy waits to be published (grey); equal is
+// settled (green). Not the primary colour: Studio's green would read as "settled".
+const DOT: Record<DraftState, string> = { unsaved: 'bg-status-warning', differs: 'bg-status-neutral', same: 'bg-status-success' };
 
 function DraftStateLabel({ state }: { state: DraftState }) {
   return (
