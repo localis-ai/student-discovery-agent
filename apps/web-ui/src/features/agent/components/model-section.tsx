@@ -19,7 +19,7 @@ export function ModelSection({ config, onChange, issues }: SectionProps) {
       <NumberField path={['model', 'timeout_ms']} label="Timeout mỗi lần gọi (ms)" value={timeout} onChange={onChange} issues={issues} />
       <NumberField path={['model', 'max_retries']} label="Số lần thử lại" value={retries} onChange={onChange} issues={issues} />
       {tooSlow && (
-        <p role="status" className="rounded-md bg-warning-subtle px-3 py-2 text-13 text-warning-foreground">
+        <p role="status" className="rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning-foreground">
           Timeout × số lần thử có thể vượt giới hạn thời gian một lượt ({String(turn)} ms) ở nhóm Giới hạn.
         </p>
       )}

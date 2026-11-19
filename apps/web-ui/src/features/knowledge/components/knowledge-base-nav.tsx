@@ -42,7 +42,7 @@ function KnowledgeBaseGroup({ kb }: { kb: string }) {
             <li key={slug}>
               <Link href={kbHref(kb, slug)} aria-current={selected ? 'page' : undefined}
                 className={cn(
-                  'flex h-8 items-center gap-2 rounded-md px-2 text-13 transition-colors', FOCUS,
+                  'flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors', FOCUS,
                   selected ? 'bg-primary-subtle font-medium text-primary' : 'text-sidebar-foreground hover:bg-primary-subtle',
                 )}>
                 <Icon className={cn('h-4 w-4', selected ? 'text-primary' : 'text-muted-foreground')} aria-hidden />{label}
@@ -53,7 +53,7 @@ function KnowledgeBaseGroup({ kb }: { kb: string }) {
         {errors > 0 && (
           <li>
             <Link href={`${kbHref(kb, 'documents')}?state=error`}
-              className={cn('flex h-8 items-center gap-2 rounded-md px-2 text-13 text-destructive hover:bg-destructive-subtle', FOCUS)}>
+              className={cn('flex h-8 items-center gap-2 rounded-md px-2 text-sm text-destructive hover:bg-destructive-subtle', FOCUS)}>
               <CircleAlert className="h-4 w-4" aria-hidden />{errors} lỗi index
             </Link>
           </li>

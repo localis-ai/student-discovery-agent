@@ -67,7 +67,7 @@ export function JsonObjectEditor({
           }
         }}
       />
-      {error && <p role="alert" className="text-13 text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

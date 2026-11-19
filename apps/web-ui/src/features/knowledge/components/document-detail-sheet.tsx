@@ -55,7 +55,7 @@ function formatValue(value: unknown): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3 py-1.5 text-13">
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3 py-1.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </div>
@@ -67,7 +67,7 @@ function ChunkBlock({ chunk }: { chunk: RetrievedChunk }) {
   return (
     <section aria-labelledby="doc-chunk-heading" className="rounded-lg border bg-primary-subtle/60 p-3">
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        <h3 id="doc-chunk-heading" className="text-13 font-semibold">Đoạn được truy xuất</h3>
+        <h3 id="doc-chunk-heading" className="text-sm font-semibold">Đoạn được truy xuất</h3>
         <span className="ml-auto font-mono text-xs text-muted-foreground">
           {place}{chunk.score !== undefined && `${place ? ' · ' : ''}${chunk.score.toFixed(3)}`}
         </span>
@@ -174,7 +174,7 @@ function DocumentDetailBody({ kb, detail, fields, fieldsFailed, focus }: {
         <section ref={errorRef} tabIndex={-1} aria-labelledby="doc-error-heading"
           className="space-y-2 rounded-lg border border-destructive/30 bg-destructive-subtle p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <div className="flex items-center justify-between gap-2">
-            <h3 id="doc-error-heading" className="flex items-center gap-1.5 text-13 font-semibold text-destructive">
+            <h3 id="doc-error-heading" className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
               <CircleAlert className="h-4 w-4" aria-hidden />Lỗi gần nhất
             </h3>
             {latest.error && <CopyButton value={latest.error} iconOnly variant="ghost" label="Copy lỗi" className="h-7 w-7" />}
@@ -187,10 +187,10 @@ function DocumentDetailBody({ kb, detail, fields, fieldsFailed, focus }: {
       )}
 
       <section aria-labelledby="doc-meta-heading">
-        <h3 id="doc-meta-heading" className="mb-1 text-13 font-semibold">Metadata</h3>
-        {fieldsFailed ? <p className="text-13 text-destructive">Không tải được danh sách trường metadata.</p>
+        <h3 id="doc-meta-heading" className="mb-1 text-sm font-semibold">Metadata</h3>
+        {fieldsFailed ? <p className="text-sm text-destructive">Không tải được danh sách trường metadata.</p>
           : fields === undefined ? <Skeleton className="h-4 w-1/2" /> : sortedFields.length === 0
-          ? <p className="text-13 text-muted-foreground">Knowledge base chưa có trường metadata.</p>
+          ? <p className="text-sm text-muted-foreground">Knowledge base chưa có trường metadata.</p>
           : (
             <dl className="divide-y">
               {sortedFields.map(field => <Row key={field.id} label={fieldLabel(field)}>{formatValue(latest.metadata[field.name])}</Row>)}
@@ -200,7 +200,7 @@ function DocumentDetailBody({ kb, detail, fields, fieldsFailed, focus }: {
 
       <section className="flex items-start justify-between gap-3 rounded-lg border p-3">
         <div>
-          <Label htmlFor="doc-retrieval-switch" className="text-13 font-medium">Cho phép truy xuất</Label>
+          <Label htmlFor="doc-retrieval-switch" className="text-sm font-medium">Cho phép truy xuất</Label>
           <p className="text-xs text-muted-foreground">Tắt không xoá dữ liệu, bật lại dùng được ngay.</p>
         </div>
         <Switch id="doc-retrieval-switch" checked={enabled} disabled={archive.isPending || restore.isPending}
@@ -227,7 +227,7 @@ export function DocumentDetailSheet({ kb, docId, open, onOpenChange, focus, chun
       >
         <SheetHeader className="border-b px-6 py-4">
           <SheetTitle className="break-words">{title ?? 'Chi tiết tài liệu'}</SheetTitle>
-          <SheetDescription className="text-13">Chỉ xem. Mở trình soạn để sửa nội dung hoặc metadata.</SheetDescription>
+          <SheetDescription className="text-sm">Chỉ xem. Mở trình soạn để sửa nội dung hoặc metadata.</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
           {chunk && <ChunkBlock chunk={chunk} />}

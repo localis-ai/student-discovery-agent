@@ -54,7 +54,7 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
     <div className="space-y-6">
       <QueryState query={releases}>{page => (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-13">
+          <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr><th className="p-2">Phiên bản</th><th className="p-2">Ghi chú</th><th className="p-2">Người phát hành</th><th className="p-2">Thời điểm</th><th className="p-2" /></tr>
             </thead>

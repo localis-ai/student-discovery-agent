@@ -84,7 +84,7 @@ export function CreateKnowledgeBaseDialog({ open, onOpenChange }: CreateKnowledg
           </div>
           <div>
             <button type="button" aria-expanded={showMore} onClick={() => setShowMore(value => !value)}
-              className="inline-flex items-center gap-1 rounded-sm text-13 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <ChevronRight className={cn('h-4 w-4 transition-transform', showMore && 'rotate-90')} aria-hidden />Tuỳ chọn khác
             </button>
             {showMore && (

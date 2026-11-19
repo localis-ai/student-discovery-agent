@@ -29,7 +29,7 @@ export interface IndexStatusProps {
 export function IndexStatus({ status, className, as: Tag = 'span' }: IndexStatusProps) {
   const { icon: Icon, className: tone, iconClassName } = LOOK[status];
   return (
-    <Tag className={cn('inline-flex items-center gap-1.5 whitespace-nowrap text-13', tone, className)}>
+    <Tag className={cn('inline-flex items-center gap-1.5 whitespace-nowrap text-sm', tone, className)}>
       <Icon className={cn('h-4 w-4 shrink-0', iconClassName)} aria-hidden />
       {INDEX_STATUS_LABELS[status]}
     </Tag>

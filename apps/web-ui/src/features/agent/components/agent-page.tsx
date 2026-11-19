@@ -36,7 +36,7 @@ export function AgentPage() {
         // Once loaded, a failed background refetch must not unmount the editor and drop unsaved edits.
         <>
           {draft.error && (
-            <p role="status" className="rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-2 text-13">
+            <p role="status" className="rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-2 text-sm">
               Không tải lại được bản nháp: {errorMessage(draft.error)}. Nội dung đang sửa vẫn được giữ.
             </p>
           )}
@@ -237,7 +237,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       <ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />
 
       {conflict && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-13">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-sm">
           <span>
             Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}), bởi {conflict.updated_by} lúc {new Date(conflict.updated_at).toLocaleString('vi-VN')}.
           </span>

@@ -24,7 +24,7 @@ interface EditorProps {
 function MetadataValueEditor({ field, value, onChange, onDone, invalid, describedBy }: EditorProps) {
   const common = {
     id: metadataInputId(field.name), 'aria-label': fieldLabel(field), 'aria-invalid': invalid || undefined,
-    'aria-describedby': describedBy, autoFocus: true, onBlur: onDone, className: 'h-8 text-13',
+    'aria-describedby': describedBy, autoFocus: true, onBlur: onDone, className: 'h-8 text-sm',
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); onDone(); }
     },
@@ -32,7 +32,7 @@ function MetadataValueEditor({ field, value, onChange, onDone, invalid, describe
   if (field.type === 'string_list') {
     return (
       <TagInput
-        id={common.id} label={common['aria-label']} autoFocus invalid={invalid} describedBy={describedBy} className="text-13"
+        id={common.id} label={common['aria-label']} autoFocus invalid={invalid} describedBy={describedBy} className="text-sm"
         value={splitList(value)} onChange={tags => onChange(joinList(tags))} onDone={onDone}
       />
     );
@@ -62,7 +62,7 @@ function MetadataRow({ field, control, editing, onEdit, onDone }: {
   const errorId = fieldState.error ? `${metadataInputId(field.name)}-error` : undefined;
   return (
     <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-2">
-      <dt className="truncate pt-1.5 text-13 text-muted-foreground" title={field.name}>{fieldLabel(field)}</dt>
+      <dt className="truncate pt-1.5 text-sm text-muted-foreground" title={field.name}>{fieldLabel(field)}</dt>
       <dd className="min-w-0">
         {editing
           ? (
@@ -76,7 +76,7 @@ function MetadataRow({ field, control, editing, onEdit, onDone }: {
               type="button" onClick={onEdit} title="Bấm để sửa"
               aria-label={`${fieldLabel(field)}: ${display || 'chưa có'}`} aria-describedby={errorId}
               className={cn(
-                'block w-full truncate rounded-md px-1.5 py-1 text-left text-13 transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'block w-full truncate rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 !display && 'text-muted-foreground',
                 fieldState.error && 'text-destructive',
               )}
@@ -98,7 +98,7 @@ export function MetadataInputs({ fields, control, editing, onEditingChange }: {
   editing: string | null;
   onEditingChange: (name: string | null) => void;
 }) {
-  if (fields.length === 0) return <p className="text-13 text-muted-foreground">Knowledge base chưa có trường metadata.</p>;
+  if (fields.length === 0) return <p className="text-sm text-muted-foreground">Knowledge base chưa có trường metadata.</p>;
   return (
     <dl className="space-y-1">
       {fields.map(field => (

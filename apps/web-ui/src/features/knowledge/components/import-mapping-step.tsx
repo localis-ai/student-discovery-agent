@@ -41,16 +41,16 @@ export function ImportMappingStep({ header, sample, fields, mapping, onChange }:
     const value = sampleOf(mapping[key]);
     return (
       <div key={key} className="grid grid-cols-1 items-center gap-2 py-2 sm:grid-cols-[minmax(0,12rem)_auto_minmax(0,16rem)_minmax(0,1fr)] sm:gap-3">
-        <Label htmlFor={id} className="text-13 font-normal">{label}</Label>
+        <Label htmlFor={id} className="text-sm font-normal">{label}</Label>
         <ArrowLeft className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden />
         <Select value={mapping[key] ?? NONE} onValueChange={next => onChange(key, next === NONE ? undefined : next)}>
-          <SelectTrigger id={id} className="h-8 text-13"><SelectValue /></SelectTrigger>
+          <SelectTrigger id={id} className="h-8 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>(không ghép)</SelectItem>
             {columns.map(column => <SelectItem key={column} value={column}>{column}</SelectItem>)}
           </SelectContent>
         </Select>
-        <span className="truncate text-13 text-muted-foreground" title={value || undefined}>
+        <span className="truncate text-sm text-muted-foreground" title={value || undefined}>
           {value && <><span className="sr-only">Ví dụ: </span>{value}</>}
         </span>
       </div>
@@ -70,7 +70,7 @@ export function ImportMappingStep({ header, sample, fields, mapping, onChange }:
           )))}
         </div>
       </div>
-      <p className="rounded-xl bg-sidebar px-4 py-3 text-13 text-muted-foreground">
+      <p className="rounded-xl bg-sidebar px-4 py-3 text-sm text-muted-foreground">
         Tài liệu đã có: cột không ghép giữ giá trị cũ; ô rỗng trong cột được ghép sẽ xoá giá trị.
       </p>
     </div>

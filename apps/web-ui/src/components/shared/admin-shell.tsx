@@ -53,7 +53,7 @@ function SidebarBody({ pathname, account, knowledgeNav, onNavigate }: {
                 onClick={onNavigate}
                 aria-current={current ? 'page' : undefined}
                 className={cn(
-                  'relative flex h-9 items-center gap-2.5 rounded-md px-3 text-13 transition-colors', FOCUS,
+                  'relative flex h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors', FOCUS,
                   // The bar marks the section you are in, whether or not a nested item is the current page.
                   inSection && 'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary',
                   current && 'bg-primary-subtle font-medium text-primary',

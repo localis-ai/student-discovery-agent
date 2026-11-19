@@ -17,7 +17,7 @@ export function AgentStatusBar({ active, draftState, busy, canPublish, onSave, o
     <div className={compact
       ? 'flex flex-wrap items-center gap-3'
       : 'sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-3 backdrop-blur'}>
-      <p className="text-13 text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {active ? <>Đang dùng <strong className="text-foreground">v{active.version}</strong> · {relativeTime(active.updated_at)}</> : 'Chưa có bản phát hành'}
         <span className="mx-2">·</span>
         <span data-testid="draft-state">{LABEL[draftState]}</span>

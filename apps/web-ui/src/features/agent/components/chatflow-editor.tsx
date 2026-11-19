@@ -32,7 +32,7 @@ export function ChatflowEditor({ tabs, actions, notices, onClose, closeDisabled,
           onClick={onClose}
           disabled={closeDisabled}
           title={closeDisabled ? 'Sửa lỗi JSON trước khi đóng' : undefined}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-13 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           <ArrowLeft className="size-4" /> Về trang Agent
         </button>

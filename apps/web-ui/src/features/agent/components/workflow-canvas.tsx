@@ -237,7 +237,7 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
       <div className="flex items-center gap-2.5 px-3 pt-3">
         <NodeIcon type={data.nodeType} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-13 font-semibold leading-tight">{data.label}</div>
+          <div className="truncate text-sm font-semibold leading-tight">{data.label}</div>
           {data.typeTitle ? <div className="truncate text-[11px] leading-tight text-muted-foreground">{data.typeTitle}</div> : null}
         </div>
         {data.invalid ? <CircleAlert aria-label="Node có lỗi" className="size-4 shrink-0 text-destructive" /> : null}

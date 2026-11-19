@@ -119,7 +119,7 @@ export function MetadataFieldRow({ kb, field, previous, next }: MetadataFieldRow
           )}
           <p className="truncate font-mono text-xs text-muted-foreground">{field.name}</p>
         </div>
-        <span className="w-20 shrink-0 text-13 text-muted-foreground">{FIELD_TYPES[field.type].label}</span>
+        <span className="w-20 shrink-0 text-sm text-muted-foreground">{FIELD_TYPES[field.type].label}</span>
         <Switch checked={field.filterable} onCheckedChange={value => void setFilterable(value)}
           aria-label={`Lọc được theo ${title}`} />
         <DropdownMenu>

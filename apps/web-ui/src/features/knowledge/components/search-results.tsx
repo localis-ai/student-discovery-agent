@@ -65,7 +65,7 @@ function ScoreBadge({ score, degraded }: { score: number; degraded: boolean }) {
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">{degraded ? SCORE_HINT_KEYWORD : SCORE_HINT}</TooltipContent>
       </Tooltip>
-      <span className="font-mono text-13 font-medium">{score.toFixed(3)}</span>
+      <span className="font-mono text-sm font-medium">{score.toFixed(3)}</span>
       <span aria-hidden className="h-1 w-10 overflow-hidden rounded-full bg-muted">
         <span className="block h-full rounded-full bg-primary" style={{ width: `${width}%` }} />
       </span>
@@ -92,7 +92,7 @@ function ResultCard({ rank, record, query, fields, degraded, view, expanded, onT
     <li className="rounded-lg border bg-card" aria-label={`#${rank} ${record.title}`}>
       <div className="space-y-1 px-3 pt-3">
         <div className="flex items-center gap-2">
-          <span className="w-7 shrink-0 font-mono text-13 font-semibold text-primary">#{rank}</span>
+          <span className="w-7 shrink-0 font-mono text-sm font-semibold text-primary">#{rank}</span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium" title={record.title}>{record.title}</span>
           <ScoreBadge score={record.score} degraded={degraded} />
         </div>
@@ -107,13 +107,13 @@ function ResultCard({ rank, record, query, fields, degraded, view, expanded, onT
       <div id={`chunk-${rank}`} className={cn('relative mx-3 mt-2 pl-9', clamped && 'max-h-24 overflow-hidden')}>
         {view === 'markdown'
           ? <MarkdownPreview source={record.content} highlight={query} compact />
-          : <p className="whitespace-pre-wrap break-words font-mono text-13 leading-6"><Highlighted text={record.content} query={query} /></p>}
+          : <p className="whitespace-pre-wrap break-words font-mono text-sm leading-6"><Highlighted text={record.content} query={query} /></p>}
         {clamped && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card" />}
       </div>
       <div className="flex items-center gap-1 px-3 pb-2 pt-1 pl-12">
         {long && (
           <button type="button" aria-expanded={expanded} aria-controls={`chunk-${rank}`} onClick={onToggle}
-            className="inline-flex items-center gap-1 rounded-sm py-1 text-13 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            className="inline-flex items-center gap-1 rounded-sm py-1 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', expanded && 'rotate-180')} aria-hidden />
             {expanded ? 'Thu gọn' : 'Xem thêm'}
           </button>
@@ -161,7 +161,7 @@ function ResultsToolbar({ view, onView, canExpand, allExpanded, onExpandAll }: {
       </div>
       {canExpand && (
         <button type="button" onClick={() => onExpandAll(!allExpanded)}
-          className="inline-flex items-center gap-1 rounded-sm text-13 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {allExpanded ? <ChevronsDownUp className="h-4 w-4" aria-hidden /> : <ChevronsUpDown className="h-4 w-4" aria-hidden />}
           {allExpanded ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}
         </button>
@@ -216,7 +216,7 @@ export function SearchResults({ kb, result, query, fields, settings, elapsedMs }
     <div className="space-y-3">
       <SearchSummary count={result.records.length} elapsedMs={elapsedMs} degraded={result.degraded} settings={settings} fields={fields} />
       {result.degraded && (
-        <p className="flex items-center gap-2 text-13 text-warning-foreground">
+        <p className="flex items-center gap-2 text-sm text-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />Đang chỉ tìm theo từ khoá (embedding câu hỏi lỗi).
         </p>
       )}

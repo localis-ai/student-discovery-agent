@@ -15,7 +15,7 @@ export function Field({ path, label, hint, issues, children }: FieldProps) {
   const mine = issues.filter(issue => fieldId(issue.path) === id);
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-13">{label}</Label>
+      <Label htmlFor={id} className="text-sm">{label}</Label>
       {children}
       {hint && !mine.length && <p id={`${id}-hint`} className="text-xs text-muted-foreground">{hint}</p>}
       {mine.map((issue, i) => <p key={`${issue.code}:${issue.path}:${i}`} role="alert" className="text-xs text-destructive">{issue.message}</p>)}

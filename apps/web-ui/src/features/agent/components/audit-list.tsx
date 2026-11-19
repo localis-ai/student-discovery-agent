@@ -30,7 +30,7 @@ export function AuditList() {
   return (
     <QueryState query={audit}>{page => (
       <div className="space-y-2">
-        <ul className="divide-y rounded-lg border text-13">
+        <ul className="divide-y rounded-lg border text-sm">
           {page.items.length === 0 && <li className="p-3 text-muted-foreground">Chưa có thao tác nào.</li>}
           {page.items.map(event => (
             <li key={event.id} className="flex flex-wrap justify-between gap-2 p-3">

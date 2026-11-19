@@ -68,7 +68,7 @@ export function SearchSettingsPopover({ kb, settings, fields, onChange }: Search
         <section aria-labelledby="search-filter-heading" className="space-y-3 border-t pt-4">
           <p id="search-filter-heading" className="font-semibold">Lọc metadata</p>
           {filterable.length === 0 ? (
-            <p className="text-13 text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Chưa có field nào cho phép lọc. Bật &ldquo;Lọc&rdquo; cho field trong{' '}
               <Link href={kbHref(kb, 'documents')} className="text-primary underline-offset-2 hover:underline">Metadata ở trang Tài liệu</Link>.
             </p>
@@ -90,7 +90,7 @@ function OptionalSlider({ id, label, value, fallback, ends, onChange }: {
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor={`${id}-switch`}>{label}</Label>
         <div className="flex items-center gap-2">
-          {on && <span className="font-mono text-13">{value.toFixed(2)}</span>}
+          {on && <span className="font-mono text-sm">{value.toFixed(2)}</span>}
           <Switch id={`${id}-switch`} checked={on} onCheckedChange={checked => onChange(checked ? fallback : null)} />
         </div>
       </div>
@@ -133,19 +133,19 @@ function ConditionEditor({ settings, fields, onChange }: {
                 const next = fields.find(item => item.name === name);
                 if (next) update(row.id, { name, operator: OPERATORS[next.type][0]!, value: '' });
               }}>
-              <SelectTrigger aria-label={`Field điều kiện ${n}`} className="h-8 px-2 text-13"><SelectValue placeholder="Field" /></SelectTrigger>
+              <SelectTrigger aria-label={`Field điều kiện ${n}`} className="h-8 px-2 text-sm"><SelectValue placeholder="Field" /></SelectTrigger>
               <SelectContent>
                 {fields.map(item => <SelectItem key={item.id} value={item.name}>{item.label || item.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={row.operator} onValueChange={operator => update(row.id, { operator })}>
-              <SelectTrigger aria-label={`Phép so sánh điều kiện ${n}`} className="h-8 px-2 text-13"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={`Phép so sánh điều kiện ${n}`} className="h-8 px-2 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {operators.map(operator => <SelectItem key={operator} value={operator}>{operator}</SelectItem>)}
               </SelectContent>
             </Select>
             {isValueless(row.operator) ? <span aria-hidden /> : (
-              <Input aria-label={`Giá trị điều kiện ${n}`} className="h-8 px-2 text-13" value={row.value}
+              <Input aria-label={`Giá trị điều kiện ${n}`} className="h-8 px-2 text-sm" value={row.value}
                 type={field?.type === 'number' ? 'number' : field?.type === 'time' ? 'datetime-local' : 'text'}
                 onChange={event => update(row.id, { value: event.target.value })} />
             )}
