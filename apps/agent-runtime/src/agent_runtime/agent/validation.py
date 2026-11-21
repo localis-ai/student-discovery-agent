@@ -124,6 +124,8 @@ class _RefPorts:
         self._fields: dict[str, frozenset[str] | None] = {}
 
     def experience_exists(self, experience_id: str, algorithm_profile: str | None) -> bool:
+        if self._experiences is None:
+            return True
         try:
             self._experiences.resolve_active_experience(self._environment, experience_id, algorithm_profile)
         except RuntimeSessionError as error:

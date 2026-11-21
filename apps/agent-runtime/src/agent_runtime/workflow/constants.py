@@ -13,6 +13,7 @@ JOURNEY_STAGE_VALUES: tuple[str, ...] = ("pick_majors", "need", "fee", "job", "f
 STAGE_VALUES: tuple[str, ...] = BASE_STAGE_VALUES + JOURNEY_STAGE_VALUES
 
 _STAGE_VARIABLE: dict[str, Any] = {"name": "stage", "type": "enum", "values": list(STAGE_VALUES), "default": "welcome"}
+STAGE_VARIABLE: dict[str, Any] = _STAGE_VARIABLE
 
 
 def stage_variable() -> dict[str, Any]:

@@ -31,7 +31,7 @@ from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
-from agent_runtime.workflow.ports import NullProfilePort, Ports
+from agent_runtime.workflow.ports import InMemoryProfilePort, Ports
 from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.trace import NodeRunTrace, Redaction
 
@@ -134,10 +134,12 @@ def _iso(moment: datetime) -> str:
 
 class DebugRunService:
     def __init__(self, models: Callable[[str], Any], knowledge=None, *, clock: Callable[[], float] = time.monotonic,
-                 now: Callable[[], datetime] = lambda: datetime.now(UTC), strict_knowledge: bool = False):
+                 now: Callable[[], datetime] = lambda: datetime.now(UTC), strict_knowledge: bool = False,
+                 profile: Any = None):
         self.models, self.knowledge, self._clock, self._now = models, knowledge, clock, now
         # strict: an unreachable knowledge store is a 503, not a silently emptier run (persona gate must not blame the stubs).
         self._strict_knowledge = strict_knowledge
+        self.profile = profile
 
     def run(self, content: dict, request: dict, emit: Emit | None = None, should_stop: StopCheck | None = None) -> dict:
         return self.prepare(content, request)(emit, should_stop)
@@ -197,7 +199,7 @@ class DebugRunService:
                       tools=open_turn(TurnWorld(state_view, self.knowledge, fields)),
                       knowledge=self.knowledge, knowledge_fields=fields,
                       show_params=KnowledgeShowParams.model_validate(show.params) if show else None,
-                      profile=NullProfilePort(),
+                      profile=self.profile or InMemoryProfilePort(request.state.profile),
                       agent_context=AgentContext(today=date.today(), phase=phase, display_name=display_name,
                                                  current_question=question),
                       user_text=user_text)

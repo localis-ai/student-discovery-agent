@@ -37,6 +37,15 @@ class NullProfilePort:
         return 0
 
 
+VALID_ENTRY_LEVELS = frozenset({
+    "thpt_grade_10", "thpt_grade_11", "thpt_grade_12", "thpt_graduated",
+    "trung_cap", "cao_dang", "van_bang_2",
+})
+VALID_BUDGET_TIERS = frozenset({"under_15m", "15_25m", "25_40m", "over_40m", "undecided"})
+VALID_STUDY_MODES = frozenset({"distance_online", "on_campus_fulltime", "part_time", "no_preference"})
+VALID_STUDY_DESTINATIONS = frozenset({"home_province", "other_city", "abroad", "undecided"})
+
+
 def rank_career_groups(major_ids: Sequence[str], limit: int = 3) -> tuple[str, ...]:
     """Clean, dedupe keeping first occurrence, and keep the top ``limit`` (DEC-26: order is the ranking)."""
     cleaned = [m.strip() for m in major_ids if isinstance(m, str) and m.strip()]
@@ -58,7 +67,26 @@ class InMemoryProfilePort:
         return {"profile_revision": self._revision, **self._profile}
 
     def accept(self, fields: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {}
+        """Validate and accept at most 2 model-extracted profile fields (DEC-13, FR-PRF-04)."""
+        accepted: dict[str, Any] = {}
+        for key, value in fields.items():
+            if key == "entry_level" and value in VALID_ENTRY_LEVELS:
+                accepted[key] = value
+            elif key == "home_province" and isinstance(value, str) and value.strip() and len(value) <= 100:
+                accepted[key] = value.strip()
+            elif key == "home_area" and isinstance(value, str) and value.strip() and len(value) <= 80:
+                accepted[key] = value.strip()
+            elif key == "budget_tier" and value in VALID_BUDGET_TIERS:
+                accepted[key] = value
+            elif key == "study_mode" and value in VALID_STUDY_MODES:
+                accepted[key] = value
+            elif key == "study_destination" and value in VALID_STUDY_DESTINATIONS:
+                accepted[key] = value
+            elif key in {"interested_career_groups", "interested_occupations"} and isinstance(value, (list, tuple)):
+                accepted[key] = list(value)[:10]
+            if len(accepted) >= 2:
+                break
+        return accepted
 
     def record_career_groups(self, major_ids: Sequence[str]) -> int:
         """Rank top 3 career groups, deduplicating preserving order (DEC-26).
