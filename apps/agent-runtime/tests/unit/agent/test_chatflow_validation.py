@@ -37,11 +37,11 @@ def test_one_call_returns_every_kind_of_graph_error():
     workflow["nodes"].append({"id": "call", "type": "tool", "config": {"tool": "assessment.start"}})  # not enabled
     result, found = report(content_of(workflow))
     assert not result.valid
-    for pair in (("workflow.nodes[3].type", "workflow_node_type_unsupported"),
-                 ("workflow.nodes[4].id", "duplicate_items"),
-                 ("workflow.nodes[1].config.assignments[0].variable", "workflow_assign_invalid"),
+    for pair in (("workflow.flows[0].nodes[3].type", "workflow_node_type_unsupported"),
+                 ("workflow.flows[0].nodes[4].id", "duplicate_items"),
+                 ("workflow.flows[0].nodes[1].config.assignments[0].variable", "workflow_assign_invalid"),
                  ("workflow.budget.max_llm_calls", "workflow_budget_exceeds_ceiling"),
-                 ("workflow.nodes[7].config.tool", "workflow_tool_not_enabled")):
+                 ("workflow.flows[0].nodes[7].config.tool", "workflow_tool_not_enabled")):
         assert pair in found, pair
     codes = {code for _, code in found}
     assert {"workflow_cycle", "workflow_unreachable_node", "workflow_dead_end", "workflow_unwired_label"} <= codes
@@ -56,7 +56,7 @@ def test_a_schema_error_in_the_workflow_is_not_reported_twice():
     workflow = copy.deepcopy(FLOW)
     workflow["nodes"][3]["type"] = "http"
     result, _ = report(content_of(workflow))
-    assert [i.path for i in result.issues].count("workflow.nodes[3].type") == 1
+    assert [i.path for i in result.issues].count("workflow.flows[0].nodes[3].type") == 1
 
 
 def test_fewer_than_two_mandatory_cases_is_one_issue():
@@ -105,7 +105,7 @@ def test_a_failing_optional_case_is_reported_but_does_not_block():
 def test_personas_can_be_skipped_and_are_skipped_when_the_graph_is_broken():
     assert run([case("a"), case("b")], personas=False).persona_report is None
     broken = content_of(FLOW)
-    broken["workflow"]["edges"] = broken["workflow"]["edges"][:2]
+    broken["workflow"]["flows"][0]["edges"] = broken["workflow"]["flows"][0]["edges"][:2]
     checker = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo", personas=runner())
     result = checker.validate(broken)
     assert not result.valid and result.persona_report is None

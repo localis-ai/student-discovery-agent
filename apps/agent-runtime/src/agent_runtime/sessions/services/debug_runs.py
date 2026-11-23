@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from pydantic import Field, ValidationError, model_validator
@@ -32,6 +32,7 @@ from agent_runtime.workflow.constants import EXPLAIN_OUTCOME, INTERACTION_OUTCOM
 from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
+from agent_runtime.workflow.flows import ROUTER_ID, RunGraph, compile_chatflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports
 from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.trace import NodeRunTrace, Redaction
@@ -58,6 +59,8 @@ class DebugState(ContractModel):
     result: JsonObject | None = None
     conv: JsonObject = Field(default_factory=dict)
     activity: JsonObject | None = None
+    # sys.turn_index the run sees: 0 is a conversation's first turn; a later turn skips first-turn triggers.
+    turn_index: Annotated[int, Field(strict=True, ge=0, le=1000)] = 0
 
 
 class DebugRequest(ContractModel):
@@ -65,6 +68,7 @@ class DebugRequest(ContractModel):
     interaction: DebugInteraction | None = None
     state: DebugState = DebugState()
     llm_stubs: dict[str, Any] = Field(default_factory=dict)
+    stop_after: Literal["route"] | None = None  # route only: the Nghiệp vụ tab's routing test
 
     @model_validator(mode="after")
     def one_input(self) -> "DebugRequest":
@@ -171,7 +175,7 @@ class DebugRunService:
                  should_stop: StopCheck | None) -> dict:
         created = self._now()
         sink = emit or (lambda name, data: None)
-        workflow = agent.workflow
+        workflow = compile_chatflow(agent.workflow)
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000
         base = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
         stubs = request.llm_stubs
@@ -184,7 +188,7 @@ class DebugRunService:
             user_text = interaction_summary(interaction.action, display_name=display_name,
                                             option_id=interaction.option_id)
         scope = Scope(sys={"query": request.message or "", "interaction": interaction.action if interaction else None,
-                           "interaction_outcome": outcome, "turn_index": 0, "client_blocks": _BLOCK_TYPES,
+                           "interaction_outcome": outcome, "turn_index": request.state.turn_index, "client_blocks": _BLOCK_TYPES,
                            "activity_status": activity.state.status if activity else None},
                       conv=request.state.conv, profile=request.state.profile, result=request.state.result,
                       variables=workflow.variables)
@@ -224,26 +228,35 @@ class DebugRunService:
                 else:  # model nodes stream live, inside their started/finished pair
                     sink("delta", {"event": "delta", "text": event.text})
 
+        if request.stop_after == "route" and workflow.entry != ROUTER_ID:  # one flow: nothing to route, no model call
+            only = agent.workflow.flows[0].id
+            empty = WorkflowRun("completed", (), (), (), scope.conv_values())
+            return self._result(empty, workflow, created, stubs, route={"flow": only, "method": "single"})
         run = run_workflow(workflow, scope, ports, budget=budget, on_event=on_event, should_stop=should_stop,
-                           reply_required=interaction is None)
+                           reply_required=interaction is None,
+                           halt_after=ROUTER_ID if request.stop_after == "route" else None)
         return self._result(run, workflow, created, stubs)
 
-    def _result(self, run: WorkflowRun, workflow, created: datetime, stubs: dict[str, Any]) -> dict:
+    def _result(self, run: WorkflowRun, workflow: RunGraph, created: datetime, stubs: dict[str, Any],
+                route: dict[str, Any] | None = None) -> dict:
         # The Admin's own run, never persisted by the runtime: node inputs and values are shown in full.
         full = Redaction("full", {variable.name: variable for variable in workflow.variables})
         node_runs = []
         for record in run.records:
-            item = NodeRunTrace(node_id=record.node_id, type=record.type, order=record.order, handle=record.handle,
+            item = NodeRunTrace(node_id=record.node_id, type=record.type, flow_id=workflow.flow_of.get(record.node_id),
+                                order=record.order, handle=record.handle,
                                 duration_ms=record.duration_ms, reason=full.reason(record),
                                 input=full.input(record.input), output=full.io(record.type, record.output),
                                 llm_calls=record.llm_calls, tokens={"input": record.tokens[0], "output": record.tokens[1]},
                                 refs=record.refs, error=record.error).model_dump(mode="json")
             node_runs.append({key: value for key, value in item.items()
-                              if value is not None or key in {"handle", "error"}})
+                              if value is not None or key in {"handle", "error", "flow_id"}})
+        if route is None and run.records and run.records[0].node_id == ROUTER_ID and run.records[0].error is None:
+            route = dict(run.records[0].reason)
         return {"run_id": "dbg_" + uuid4().hex[:24],
                 "status": "completed" if run.status == "completed" else "fallback",
                 "fallback_reason": run.fallback if run.fallback in {"workflow_budget", "workflow_node_error"} else None,
-                "path": list(run.path), "node_runs": node_runs,
+                "path": list(run.path), "node_runs": node_runs, "route": route,
                 "blocks": [block.model_dump(mode="json") for block in run.blocks],
                 "effects": [_effect(effect) for effect in run.effects], "llm_calls": run.llm_calls,
                 "live_llm_calls": sum(record.llm_calls for record in run.records if record.node_id not in stubs),

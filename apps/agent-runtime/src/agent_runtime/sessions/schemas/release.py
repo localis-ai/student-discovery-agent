@@ -8,7 +8,7 @@ from agent_runtime.agent.model import ModelSettings, worst_case_ms
 from agent_runtime.agent.placeholders import PLACEHOLDER, PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
-from .workflow import PersonaCase, Workflow
+from .workflow import Chatflow, PersonaCase
 
 
 def _known_variables(text: str) -> str:
@@ -143,7 +143,7 @@ class AgentSnapshotV1(ContractModel):
     links: AgentLinks = AgentLinks()
     templates: AgentTemplates = AgentTemplates()
     mode: Literal["agent", "chatflow"] = "agent"
-    workflow: Workflow | None = None
+    workflow: Chatflow | None = None
     persona_cases: Annotated[tuple[PersonaCase, ...], Field(max_length=30)] = ()
 
     def tool(self, name: str) -> AgentToolBinding | None:

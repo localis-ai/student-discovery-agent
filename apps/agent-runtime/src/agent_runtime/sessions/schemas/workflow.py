@@ -1,6 +1,6 @@
 """Chatflow schema carried by agent.snapshot.v1 (mode=chatflow). Shape only: graph semantics are the T14 validator."""
 import math
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
@@ -9,10 +9,16 @@ from pydantic_core import PydanticCustomError
 from .common import ContractModel, JsonObject, NonEmptyText
 
 NODE_TYPES = frozenset({"start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval",
-                        "tool", "profile_propose", "assign", "answer"})
+                        "tool", "profile_propose", "assign", "answer", "goto_flow"})
+# Registered node types the runtime builds itself and an author can never use (not in the catalog).
+INTERNAL_NODE_TYPES = frozenset({"router"})
 
-# Scope routes these path heads to a namespace, so a node with such an id could never have its output read.
-RESERVED_NODE_IDS = frozenset({"sys", "conv", "profile", "result"})
+# Scope routes the first four path heads to a namespace, so a node with such an id could never have its output read;
+# "router" is the runtime's own routing node of a multi-flow chatflow.
+RESERVED_NODE_IDS = frozenset({"sys", "conv", "profile", "result", "router"})
+# The router classifies with these as handles of its own, so no flow may take them as an id.
+RESERVED_FLOW_IDS = frozenset({"other", "error"})
+MAX_VARIABLES, MAX_FLOWS = 60, 10
 
 _JSON_SAFE_INT = 9007199254740991  # same bound as JsonSafeInt in common.py
 
@@ -162,27 +168,107 @@ class WorkflowBudget(ContractModel):
     turn_timeout_ms: Annotated[int, Field(strict=True, ge=1)] = 25000
 
 
+def _check_reserved(nodes: tuple[WorkflowNode, ...], prefix: str = "") -> None:
+    for index, node in enumerate(nodes):
+        if node.id in RESERVED_NODE_IDS:
+            raise PydanticCustomError("workflow_node_id_reserved", "node id is a reserved namespace",
+                                      {"field": f"{prefix}nodes.{index}.id"})
+
+
+def _check_unique(owner: Any, collections: tuple[tuple[str, str], ...]) -> None:
+    for collection, key in collections:
+        seen: set[str] = set()
+        for index, item in enumerate(getattr(owner, collection)):
+            value = getattr(item, key)
+            if value in seen:  # first duplicate only; reporting every one is the T14 validator's job
+                raise PydanticCustomError("duplicate_items", "ids must be unique",
+                                          {"field": f"{collection}.{index}.{key}"})
+            seen.add(value)
+
+
 class Workflow(ContractModel):
+    """One graph: a flow as the executor and the node tests see it (entry, nodes, edges, variables, budget)."""
     entry: Ident
-    variables: Annotated[tuple[ConvVariable, ...], Field(max_length=30)] = ()
+    variables: Annotated[tuple[ConvVariable, ...], Field(max_length=MAX_VARIABLES)] = ()
     nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=50)]
     edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=100)] = ()
     budget: WorkflowBudget = WorkflowBudget()
 
     @model_validator(mode="after")
     def unique_ids(self) -> "Workflow":
-        for index, node in enumerate(self.nodes):
-            if node.id in RESERVED_NODE_IDS:
-                raise PydanticCustomError("workflow_node_id_reserved", "node id is a reserved namespace",
-                                          {"field": f"nodes.{index}.id"})
-        for collection, key in (("variables", "name"), ("nodes", "id"), ("edges", "id")):
-            seen: set[str] = set()
-            for index, item in enumerate(getattr(self, collection)):
-                value = getattr(item, key)
-                if value in seen:  # first duplicate only; reporting every one is the T14 validator's job
-                    raise PydanticCustomError("duplicate_items", "ids must be unique",
-                                              {"field": f"{collection}.{index}.{key}"})
-                seen.add(value)
+        _check_reserved(self.nodes)
+        _check_unique(self, (("variables", "name"), ("nodes", "id"), ("edges", "id")))
+        return self
+
+
+def _flow_invalid(message: str, field: str) -> PydanticCustomError:
+    return PydanticCustomError("workflow_flow_invalid", message, {"field": field})
+
+
+Example = Annotated[str, StringConstraints(min_length=1, max_length=200, pattern=r"\S")]
+
+
+class Flow(ContractModel):
+    """One business flow (nghiệp vụ): a graph plus what the router reads to pick it."""
+    id: Ident
+    title: Title
+    description: Description = ""  # the router sends it to the model: configuration, not an authoring note
+    examples: Annotated[tuple[Example, ...], Field(max_length=5)] = ()
+    trigger: JsonObject | None = None  # DEC-23 condition, checked by the graph validator; a match wins the turn
+    routable: bool = True  # False: only reached through a trigger or goto_flow
+    entry: Ident
+    nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=50)]
+    edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=100)] = ()
+
+    @model_validator(mode="after")
+    def consistent(self) -> "Flow":
+        if self.id in RESERVED_FLOW_IDS:
+            raise _flow_invalid("flow id cannot be other or error", "id")
+        if self.routable and not self.description.strip():
+            raise _flow_invalid("a routable flow needs a description", "description")
+        _check_reserved(self.nodes)
+        _check_unique(self, (("nodes", "id"), ("edges", "id")))
+        return self
+
+
+class ChatflowRouter(ContractModel):
+    default_flow: Ident
+    model: NonEmptyText | None = None  # None: the agent's model
+    instructions: Annotated[str, StringConstraints(max_length=2000)] = ""
+    history_messages: Annotated[int, Field(strict=True, ge=0, le=6)] = 0
+
+
+class Chatflow(ContractModel):
+    """agent.snapshot.v1 ``workflow``: shared variables and budget, the router, and one to ten flows."""
+    variables: Annotated[tuple[ConvVariable, ...], Field(max_length=MAX_VARIABLES)] = ()
+    budget: WorkflowBudget = WorkflowBudget()
+    router: ChatflowRouter
+    # No min_length: pydantic would also report one bad flow as too_short; emptiness is checked below.
+    flows: Annotated[tuple[Flow, ...], Field(max_length=MAX_FLOWS)]
+
+    def flow(self, flow_id: str) -> Flow | None:
+        return next((flow for flow in self.flows if flow.id == flow_id), None)
+
+    def nodes(self) -> Iterator[tuple[Flow, WorkflowNode]]:
+        for flow in self.flows:
+            for node in flow.nodes:
+                yield flow, node
+
+    @model_validator(mode="after")
+    def consistent(self) -> "Chatflow":
+        if not self.flows:
+            raise _flow_invalid("a chatflow needs at least one flow", "flows")
+        _check_unique(self, (("variables", "name"), ("flows", "id")))
+        seen: set[str] = set()
+        for k, flow in enumerate(self.flows):  # agent-wide: stubs, persona paths and traces name a node by id alone
+            for i, node in enumerate(flow.nodes):
+                if node.id in seen:
+                    raise PydanticCustomError("workflow_node_id_duplicate", "node ids are unique across flows",
+                                              {"field": f"flows.{k}.nodes.{i}.id"})
+                seen.add(node.id)
+        default = self.flow(self.router.default_flow)
+        if default is None or not default.routable:
+            raise _flow_invalid("default_flow must name a routable flow", "router.default_flow")
         return self
 
 

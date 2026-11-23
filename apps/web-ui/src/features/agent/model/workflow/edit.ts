@@ -6,7 +6,7 @@ import { wouldCreateCycle } from './graph';
 export const MAX_WORKFLOW_NODES = 50;
 export const MAX_WORKFLOW_EDGES = 100;
 export const CHATFLOW_IDENTIFIER_RE = /^[a-z][a-z0-9_]{0,39}$/;
-export const RESERVED_NODE_IDS: ReadonlySet<string> = new Set(['sys', 'conv', 'profile', 'result']);
+export const RESERVED_NODE_IDS: ReadonlySet<string> = new Set(['sys', 'conv', 'profile', 'result', 'router']);
 
 export type WorkflowEditErrorCode =
   | 'MAX_NODES'
@@ -46,7 +46,7 @@ function sanitizePrefix(raw: string | undefined, fallback: string): string {
   return normalized;
 }
 
-function nextUniqueId(
+export function nextUniqueId(
   existing: ReadonlySet<string>,
   prefix: string,
   reserved?: ReadonlySet<string>,
@@ -64,10 +64,11 @@ function nextUniqueId(
 
 /** Generates a unique valid identifier for a new node, avoiding existing and reserved IDs. */
 export function generateNodeId(
-  workflow: Pick<ChatflowWorkflow, 'nodes'>,
+  workflow: Pick<ChatflowWorkflow, 'nodes' | 'takenNodeIds'>,
   prefix = 'node',
 ): string {
-  const existing = new Set(workflow.nodes.map((node) => node.id));
+  // Node ids are unique across the agent: the other flows' ids are taken too.
+  const existing = new Set([...workflow.nodes.map((node) => node.id), ...(workflow.takenNodeIds ?? [])]);
   const base = sanitizePrefix(prefix, 'node');
   return nextUniqueId(existing, base, RESERVED_NODE_IDS);
 }

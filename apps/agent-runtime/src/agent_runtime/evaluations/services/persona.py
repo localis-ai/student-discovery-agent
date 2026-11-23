@@ -13,10 +13,12 @@ from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.workflow import PersonaCase, PersonaExpect
 from agent_runtime.sessions.services.debug_runs import DebugRunService
+from agent_runtime.workflow.flows import ROUTER_ID
 
 logger = logging.getLogger(__name__)
 
-MODEL_NODE_TYPES = frozenset({"intent_classifier", "llm", "profile_propose", "agent"})
+
+MODEL_NODE_TYPES = frozenset({"intent_classifier", "llm", "profile_propose", "agent", "router"})
 
 
 class Mismatch(ContractModel):
@@ -87,11 +89,14 @@ class PersonaRunner:
     def _case(self, content: dict, defaults: Mapping[str, Any], index: int, case: PersonaCase) -> CaseReport:
         state, conv = case.initial_state, {**defaults, **case.initial_state.conv}
         mismatches: list[Mismatch] = []
+        user_turns = 0  # sys.turn_index counts the student's earlier messages, as in a real conversation
         for step, turn in enumerate(case.turns):
             at = f"persona_cases[{index}].turns[{step}]"
             request: dict[str, Any] = {"llm_stubs": turn.llm_stubs, "state": {
-                "profile": state.profile, "result": state.result, "conv": conv, "activity": state.activity}}
+                "profile": state.profile, "result": state.result, "conv": conv, "activity": state.activity,
+                "turn_index": user_turns}}
             if turn.input.text is not None:
+                user_turns += 1
                 request["message"] = turn.input.text
             else:
                 request["interaction"] = turn.input.interaction.model_dump(exclude_none=True)
@@ -108,7 +113,9 @@ class PersonaRunner:
                 mismatches.append(Mismatch(path=at, message=f"Lượt không chạy được ({type(error).__name__}); xem log runtime."))
                 break
             for run in result["node_runs"]:  # a wired ``error`` edge would otherwise hide a model node with no stub
-                if run["type"] in MODEL_NODE_TYPES and run["node_id"] not in turn.llm_stubs:
+                # The router calls the model only to classify; picking by trigger or default needs no stub.
+                needs_stub = run["type"] in MODEL_NODE_TYPES and (run["type"] != "router" or run["llm_calls"] > 0)
+                if needs_stub and run["node_id"] not in turn.llm_stubs:
                     mismatches.append(Mismatch(path=f"{at}.llm_stubs",
                                                message=f"Node model '{run['node_id']}' đã chạy nhưng chưa có stub."))
             for effect in result["effects"]:  # the run only proposes: conv.* is the one thing a turn hands on
@@ -123,7 +130,9 @@ def stale_cases(snapshot: AgentSnapshotV1) -> list[tuple[str, str]]:
     """``(path, message)`` for expectations that name a node or variable the graph no longer has (DEC-29)."""
     if snapshot.workflow is None:
         return []
-    kinds = {node.id: node.type for node in snapshot.workflow.nodes}
+    kinds = {node.id: node.type for _, node in snapshot.workflow.nodes()}
+    if len(snapshot.workflow.flows) > 1:  # the runtime's routing node runs first and may be stubbed
+        kinds[ROUTER_ID] = "router"
     declared = {variable.name for variable in snapshot.workflow.variables}
     out: list[tuple[str, str]] = []
     for index, case in enumerate(snapshot.persona_cases):

@@ -1,14 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
+import { ROUTE_METHODS, findFlow, flowOfNode, flowView } from '../model/workflow/flows';
+import type { Chatflow, NodeTypeCatalog } from '../types';
 import { useDebugRun } from '../hooks/use-debug-run';
 import { DebugRunForm } from './debug-run-form';
 import { DebugTrace } from './debug-trace';
 import { WorkflowCanvas } from './workflow-canvas';
 
-export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
-  workflow?: ChatflowWorkflow;
+export function DebugRunTab({ chat, flowId, catalog, beforeRun, visible = true }: {
+  chat?: Chatflow;
+  /** The flow open in the editor; the canvas follows the run into the flow it was routed to. */
+  flowId?: string;
   catalog?: NodeTypeCatalog;
   beforeRun?: () => Promise<boolean>;
   /** The editor keeps this tab mounted while hidden so a run survives a tab switch. */
@@ -20,6 +23,13 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
     .filter(event => event.event === 'workflow.node_started')
     .map(event => event.node_id), [debug.result, debug.events]);
   const activeNodeId = useMemo(() => (debug.running ? activeNode(debug.events) : null), [debug.running, debug.events]);
+  // Show the flow the turn is in now: the one holding the last node that ran (the router belongs to none).
+  const shownFlowId = useMemo(() => {
+    const last = [...livePath].reverse().find(nodeId => chat && flowOfNode(chat, nodeId));
+    return (chat && last ? flowOfNode(chat, last) : undefined) ?? flowId;
+  }, [chat, livePath, flowId]);
+  const workflow = chat && shownFlowId ? flowView(chat, shownFlowId) : undefined;
+  const routed = debug.result?.route ?? routeFromEvents(debug.events);
 
   return (
     <section aria-label="Chạy thử Chatflow" className="space-y-3">
@@ -41,6 +51,12 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
       )}
       {debug.delta && <pre className="max-h-28 overflow-auto rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">{debug.delta}</pre>}
 
+      {routed && chat && (
+        <p role="status" className="rounded-md border bg-muted/40 p-2 text-xs">
+          Đã định tuyến tới <strong>{findFlow(chat, routed.flow)?.title ?? routed.flow}</strong>
+          {routed.method ? ` · ${ROUTE_METHODS[routed.method] ?? routed.method}` : ''}
+        </p>
+      )}
       {/* A canvas laid out while hidden has no size; remount it when the tab is shown again. */}
       {visible && workflow && catalog && (livePath.length > 0 || debug.running) && (
         <div className="h-[360px] rounded-lg border p-1" aria-label="Đường đi đang chạy">
@@ -59,6 +75,12 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
       {!workflow && !debug.error && <p className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground">Workflow chưa có để chạy thử.</p>}
     </section>
   );
+}
+
+/** The flow the router picked, from its node_finished event (its handle is the flow id), while the run streams. */
+function routeFromEvents(events: ReturnType<typeof useDebugRun>['events']): { flow: string; method?: string } | null {
+  const finished = events.find(event => event.event === 'workflow.node_finished' && event.node_id === 'router');
+  return finished && 'handle' in finished && finished.handle ? { flow: finished.handle } : null;
 }
 
 /** The most recently started node that has not finished; a node revisited in a loop counts once per visit. */

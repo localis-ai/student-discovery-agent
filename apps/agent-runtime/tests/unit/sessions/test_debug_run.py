@@ -106,3 +106,45 @@ def test_live_llm_calls_counts_only_the_nodes_that_were_not_stubbed():
     assert stubbed["llm_calls"] == 1 and stubbed["live_llm_calls"] == 0
     live = service(FakeModel(ModelReply(text="other"))).run(CONTENT, {"message": "x"})
     assert live["llm_calls"] == 1 and live["live_llm_calls"] == 1
+
+
+# -- several flows ------------------------------------------------------------------------------------------------
+
+def two_flows():
+    from tests.helpers.chatflow import chatflow_content as content_of
+
+    def flow(fid, prefix):
+        return {"id": fid, "title": fid, "description": f"hỏi {fid}", "entry": f"{prefix}_s",
+                "nodes": [{"id": f"{prefix}_s", "type": "start"},
+                          {"id": f"{prefix}_a", "type": "answer", "config": {"text": fid}}],
+                "edges": [{"id": "e1", "source": f"{prefix}_s", "source_handle": "next", "target": f"{prefix}_a"}]}
+    return content_of({"router": {"default_flow": "hoc_phi"}, "flows": [flow("hoc_phi", "hp"), flow("viec_lam", "vl")]})
+
+
+def test_a_route_only_run_stops_after_the_router():
+    model = FakeModel()
+    result = service(model).run(two_flows(), {"message": "việc làm", "llm_stubs": {"router": "viec_lam"},
+                                              "stop_after": "route"})
+    assert result["path"] == ["router"] and result["blocks"] == [] and model.calls == []
+    assert result["route"] == {"method": "classifier", "flow": "viec_lam", "label": "viec_lam"}
+
+
+def test_a_full_run_names_each_nodes_flow():
+    result = service().run(two_flows(), {"message": "việc làm", "llm_stubs": {"router": "viec_lam"}})
+    assert result["path"] == ["router", "vl_s", "vl_a"] and result["route"]["flow"] == "viec_lam"
+    assert [run.get("flow_id") for run in result["node_runs"]] == [None, "viec_lam", "viec_lam"]
+
+
+def test_a_route_only_run_of_one_flow_runs_nothing():
+    result = service().run(CONTENT, {"message": "xin chào", "stop_after": "route"})
+    assert result["path"] == [] and result["route"] == {"flow": "main", "method": "single"}
+
+
+def test_the_simulated_turn_index_decides_a_first_turn_trigger():
+    content = two_flows()
+    content["workflow"]["flows"][0]["trigger"] = {"==": [{"var": "sys.turn_index"}, 0]}
+    first = service().run(content, {"message": "học phí", "stop_after": "route"})
+    later = service().run(content, {"message": "học phí", "stop_after": "route", "state": {"turn_index": 3},
+                                    "llm_stubs": {"router": "viec_lam"}})
+    assert first["route"] == {"method": "trigger", "flow": "hoc_phi"}
+    assert later["route"] == {"method": "classifier", "flow": "viec_lam", "label": "viec_lam"}

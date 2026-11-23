@@ -10,6 +10,7 @@ from agent_runtime.workflow.constants import stage_variable
 from agent_runtime.workflow.effects import AssignConv
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import _live_nodes, run_workflow
+from agent_runtime.workflow.flows import compile_chatflow
 from agent_runtime.workflow.nodes.answer import AnswerConfig
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeError, NodeSpec
 from tests.unit.workflow.helpers import MIN, ids, ports_for, scope_for, workflow
@@ -34,7 +35,7 @@ def chain():
 
 
 def test_the_minimal_fixture_runs_end_to_end():
-    wf = AgentSnapshotV1.model_validate(MIN).workflow
+    wf = compile_chatflow(AgentSnapshotV1.model_validate(MIN).workflow)
     events = []
     result = run(wf, events=events)
     assert (result.status, result.path, result.fallback) == ("completed", ("start", "in_test", "reply"), None)

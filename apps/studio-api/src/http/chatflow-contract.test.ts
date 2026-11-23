@@ -7,7 +7,7 @@ import { parse } from 'yaml';
 const root = resolve(__dirname, '../../../../contracts');
 const fixture = (name: string) => JSON.parse(readFileSync(join(root, 'fixtures', name), 'utf8').replace(/^﻿/, ''));
 const NODE_TYPES = ['start', 'if_else', 'intent_classifier', 'llm', 'agent', 'knowledge_retrieval',
-  'tool', 'profile_propose', 'assign', 'answer'];
+  'tool', 'profile_propose', 'assign', 'answer', 'goto_flow'];
 
 function contractAjv() {
   const ajv = new Ajv({ strict: false, allErrors: true });
@@ -41,7 +41,7 @@ describe('chatflow snapshot contract parity', () => {
 
   it('accepts node descriptions and described, constrained variables', () => {
     const content = structuredClone(minimal);
-    content.workflow.nodes[0].description = 'Điểm vào';
+    content.workflow.flows[0].nodes[0].description = 'Điểm vào';
     content.workflow.variables = [
       { name: 'score', description: 'Điểm tạm', type: 'number', default: 0, constraints: { minimum: 0, maximum: 10, integer: true } },
       { name: 'tags', type: 'string_list', default: [], constraints: { max_items: 3, item_max_length: 20 } },
@@ -55,8 +55,36 @@ describe('chatflow snapshot contract parity', () => {
     expect(validate(content)).toBe(false);
   });
 
-  const withNodes = (nodes: unknown[]) => ({ ...minimal, workflow: { ...minimal.workflow, nodes } });
-  const node = (patch: Record<string, unknown>) => ({ ...minimal.workflow.nodes[1], ...patch });
+  const flow = minimal.workflow.flows[0];
+  const withNodes = (nodes: unknown[]) => ({ ...minimal, workflow: { ...minimal.workflow, flows: [{ ...flow, nodes }] } });
+  const node = (patch: Record<string, unknown>) => ({ ...flow.nodes[1], ...patch });
+
+  it('accepts two flows with a router and rejects eleven flows or 61 variables', () => {
+    const content = structuredClone(minimal);
+    const second = structuredClone(content.workflow.flows[0]);
+    second.id = 'hoc_phi';
+    second.title = 'Học phí';
+    second.description = 'Học sinh hỏi học phí';
+    second.examples = ['học phí bao nhiêu'];
+    second.trigger = { '==': [{ var: 'sys.interaction_outcome' }, 'assessment_completed'] };
+    second.nodes = second.nodes.map((item: { id: string }) => ({ ...item, id: `hp_${item.id}` }));
+    second.entry = `hp_${second.entry}`;
+    second.edges = second.edges.map((item: Record<string, string>) => ({ ...item, source: `hp_${item.source}`, target: `hp_${item.target}` }));
+    content.workflow.flows.push(second);
+    content.workflow.router = { default_flow: 'main', history_messages: 2, instructions: 'Ưu tiên học phí' };
+    expect(validate(content), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...content, workflow: { ...content.workflow, flows: Array.from({ length: 11 }, () => second) } })).toBe(false);
+    const variables = Array.from({ length: 61 }, (_, i) => ({ name: `v${i}`, type: 'string', default: '' }));
+    expect(validate({ ...content, workflow: { ...content.workflow, variables } })).toBe(false);
+  });
+
+  it('accepts a goto_flow node and rejects a flow without a router', () => {
+    const content = structuredClone(minimal);
+    content.workflow.flows[0].nodes.push({ id: 'go', type: 'goto_flow', config: { flow: 'main' } });
+    expect(validate(content), JSON.stringify(validate.errors)).toBe(true);
+    delete content.workflow.router;
+    expect(validate(content)).toBe(false);
+  });
   it.each([
     ['unknown mode', { ...minimal, mode: 'graph' }],
     ['code node', withNodes([node({ type: 'code' })])],
@@ -76,7 +104,7 @@ describe('workflow node-type catalog contract', () => {
   const validate = validator('schemas/chatflow-authoring.yaml', 'WorkflowNodeTypeCatalog');
   const minimal = fixture('agent-snapshot-chatflow-min.json');
 
-  it('matches the schema and covers exactly the ten node types', () => {
+  it('matches the schema and covers exactly the authorable node types', () => {
     expect(validate(catalog), JSON.stringify(validate.errors)).toBe(true);
     expect(catalog.node_types.map((t: { type: string }) => t.type).sort()).toEqual([...NODE_TYPES].sort());
   });
@@ -94,7 +122,7 @@ describe('workflow node-type catalog contract', () => {
   });
 
   it('accepts the config of every node in the minimal chatflow fixture', () => {
-    for (const node of minimal.workflow.nodes) {
+    for (const node of minimal.workflow.flows[0].nodes) {
       const entry = catalog.node_types.find((t: { type: string }) => t.type === node.type);
       const check = new Ajv({ strict: false }).compile(entry.config_schema);
       expect(check(node.config ?? {}), `${node.id}: ${JSON.stringify(check.errors)}`).toBe(true);
@@ -122,6 +150,18 @@ describe('workflow debug run contract', () => {
   it('accepts the example request and result', () => {
     expect(request(example.request), JSON.stringify(request.errors)).toBe(true);
     expect(result(example.result), JSON.stringify(result.errors)).toBe(true);
+  });
+
+  it('accepts a route-only request and a routed result with a router node run', () => {
+    expect(request({ ...example.request, stop_after: 'route' }), JSON.stringify(request.errors)).toBe(true);
+    expect(request({ ...example.request, stop_after: 'all' })).toBe(false);
+    const routed = structuredClone(example.result);
+    routed.path = ['router'];
+    routed.node_runs = [{ ...routed.node_runs[0], node_id: 'router', type: 'router', flow_id: null, handle: 'main' }];
+    routed.route = { flow: 'main', method: 'classifier', label: 'main' };
+    expect(result(routed), JSON.stringify(result.errors)).toBe(true);
+    expect(result({ ...routed, route: { flow: 'main', method: 'guess' } })).toBe(false);
+    expect(streamEvent({ event: 'workflow.node_started', node_id: 'router', type: 'router', order: 1 })).toBe(true);
   });
 
   it('requires exactly one of message and interaction', () => {

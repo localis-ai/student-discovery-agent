@@ -33,8 +33,8 @@ def workflow(nodes, edges, variables=(), **budget):
                                               for i, (s, h, t) in enumerate(edges)], "budget": budget})
 
 
-def scope_for(wf, *, query="xin chào", conv=None, profile=None, result=None, outcome="none"):
-    return Scope(sys={"query": query, "interaction": None, "interaction_outcome": outcome, "turn_index": 0,
+def scope_for(wf, *, query="xin chào", conv=None, profile=None, result=None, outcome="none", interaction=None):
+    return Scope(sys={"query": query, "interaction": interaction, "interaction_outcome": outcome, "turn_index": 0,
                       "client_blocks": [], "activity_status": None},
                  conv=conv or {}, profile=profile or {}, result=result, variables=wf.variables)
 

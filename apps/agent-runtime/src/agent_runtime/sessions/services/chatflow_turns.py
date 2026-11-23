@@ -19,6 +19,7 @@ from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.constants import EXPLAIN_OUTCOME, INTERACTION_OUTCOMES
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
+from agent_runtime.workflow.flows import RunGraph, compile_chatflow
 from agent_runtime.workflow.implicit import implicit_workflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort, rank_career_groups
 from agent_runtime.workflow.scope import Scope
@@ -59,14 +60,14 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
              result: dict | None, user_text: str, model, toolbox, knowledge_port,
              profile: ProfilePort | None, emit, should_stop, deadline, clock,
              knowledge_fields: dict | None, reply_required: bool = True,
-             profile_overlay: dict[str, Any] | None = None) -> tuple[WorkflowRun, Budget, Workflow]:
+             profile_overlay: dict[str, Any] | None = None) -> tuple[WorkflowRun, Budget, Workflow | RunGraph]:
     """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks.
 
     Returns the run, the Budget it used (its counters feed the trace) and the workflow that ran.
     """
     agent = snapshot.agent
     implicit = agent.mode == "agent"
-    workflow = implicit_workflow(agent) if implicit else agent.workflow
+    workflow = implicit_workflow(agent) if implicit else compile_chatflow(agent.workflow)
     profile = profile or NullProfilePort()
     activity = snapshot.activity
     sys_values: dict[str, Any] = {
@@ -92,7 +93,7 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
 def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, model, toolbox, knowledge_port,
                      knowledge_fields: dict | None = None, profile: ProfilePort | None = None,
                      emit=None, should_stop=None, deadline=None,
-                     clock) -> tuple[WorkflowRun, Budget, Workflow]:
+                     clock) -> tuple[WorkflowRun, Budget, Workflow | RunGraph]:
     explain = request.explain is not None
     return _execute(snapshot, query="" if explain else request.content.text,
                     interaction="explain_result" if explain else None,
@@ -105,7 +106,7 @@ def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, mo
 
 def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, model, toolbox, knowledge_port,
                          profile: ProfilePort | None = None, emit=None, should_stop=None, deadline=None,
-                         clock, knowledge_fields: dict | None = None) -> tuple[WorkflowRun, Budget, Workflow]:
+                         clock, knowledge_fields: dict | None = None) -> tuple[WorkflowRun, Budget, Workflow | RunGraph]:
     """The graph sees the state after the fixed handler ran; the handler's own blocks are never its business."""
     post = post_handler(chat, draft)
     result = _result_of(chat)

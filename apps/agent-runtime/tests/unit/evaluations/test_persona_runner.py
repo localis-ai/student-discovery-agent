@@ -92,7 +92,7 @@ def test_stale_cases_point_at_nodes_and_variables_that_no_longer_exist():
 def test_a_model_node_without_a_stub_fails_even_when_its_error_edge_is_wired():
     content = chatflow_content(copy.deepcopy(FLOW))
     content["tools"] = []
-    content["workflow"]["edges"].append({"id": "e6", "source": "ask", "source_handle": "error", "target": "reply"})
+    content["workflow"]["flows"][0]["edges"].append({"id": "e6", "source": "ask", "source_handle": "error", "target": "reply"})
     content["persona_cases"] = [case(turns=[{"input": {"text": "x"}}])]  # no stub, and nothing else is expected
     report = runner().run(AgentSnapshotV1.model_validate(content), content)
     assert not report.cases[0].passed
@@ -114,3 +114,46 @@ def test_an_unreachable_knowledge_store_is_a_503_for_the_persona_gate_but_degrad
     with pytest.raises(RuntimeSessionError) as raised:
         DebugRunService(models, _DownKnowledge(), strict_knowledge=True)._fields(["kb"])
     assert raised.value.status == 503 and "secret" not in str(raised.value.details)
+
+
+def test_a_router_that_picks_by_trigger_needs_no_stub_but_a_classifying_one_does():
+    from tests.helpers.chatflow import single_flow
+
+    main = single_flow(copy.deepcopy(FLOW))
+    welcome = {"id": "chao", "title": "Chào", "routable": False, "entry": "chao_s",
+               "trigger": {"==": [{"var": "conv.stage"}, "welcome"]},
+               "nodes": [{"id": "chao_s", "type": "start"}, {"id": "chao_a", "type": "answer", "config": {"text": "Chào!"}}],
+               "edges": [{"id": "e1", "source": "chao_s", "source_handle": "next", "target": "chao_a"}]}
+    other = {**copy.deepcopy(welcome), "id": "khac", "title": "Khác", "routable": True, "description": "câu khác",
+             "trigger": None, "entry": "khac_s",
+             "nodes": [{"id": "khac_s", "type": "start"}, {"id": "khac_a", "type": "answer", "config": {"text": "?"}}],
+             "edges": [{"id": "e1", "source": "khac_s", "source_handle": "next", "target": "khac_a"}]}
+    content = chatflow_content({**main, "flows": [welcome, *main["flows"], other]})
+    content["tools"] = []
+    content["persona_cases"] = [
+        case("by_trigger", turns=[{"input": {"text": "xin chào"}, "expect": {"path": ["router", "chao_s", "chao_a"]}}],
+             initial_state={"conv": {"stage": "welcome"}}),
+        case("by_model", turns=[{"input": {"text": "?"}, "llm_stubs": {"ask": "other"}}],
+             initial_state={"conv": {"stage": "explore"}}),
+    ]
+    report = runner().run(AgentSnapshotV1.model_validate(content), content)
+    assert report.cases[0].passed, report.cases[0].mismatches
+    assert not report.cases[1].passed
+    assert any("router" in m.message for m in report.cases[1].mismatches)
+
+
+def test_a_later_turn_of_a_case_is_not_the_conversation_first_turn():
+    from tests.helpers.chatflow import single_flow
+
+    main = single_flow(copy.deepcopy(FLOW))
+    welcome = {"id": "chao", "title": "Chào", "routable": False, "entry": "chao_s",
+               "trigger": {"==": [{"var": "sys.turn_index"}, 0]},
+               "nodes": [{"id": "chao_s", "type": "start"}, {"id": "chao_a", "type": "answer", "config": {"text": "Chào!"}}],
+               "edges": [{"id": "e1", "source": "chao_s", "source_handle": "next", "target": "chao_a"}]}
+    content = chatflow_content({**main, "flows": [welcome, *main["flows"]]})
+    content["tools"] = []
+    content["persona_cases"] = [case("two_turns", turns=[
+        {"input": {"text": "xin chào"}, "expect": {"path": ["router", "chao_s", "chao_a"]}},
+        {"input": {"text": "học phí"}, "llm_stubs": {"ask": "hoi_hoc_phi"}, "expect": {"path": ["router", *PATH]}}])]
+    report = runner().run(AgentSnapshotV1.model_validate(content), content)
+    assert report.cases[0].passed, report.cases[0].mismatches

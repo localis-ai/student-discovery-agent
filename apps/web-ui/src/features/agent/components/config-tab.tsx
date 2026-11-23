@@ -1,16 +1,19 @@
 'use client';
 
-import { Maximize2, Variable } from 'lucide-react';
+import { Maximize2, Network, Variable } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { errorMessage, useKnowledgeBases } from '@/features/knowledge';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { useAgentNodeTypes } from '../hooks/use-agent';
-import { isRenderableWorkflow } from '../model/workflow/shape';
+import { findFlow, flowOfNode, flowView, isRenderableChatflow, withFlowView } from '../model/workflow/flows';
+import { issuesForFlow, type WorkflowIssueTarget } from '../model/workflow/issue-path';
 import type { SummaryContext } from '../model/workflow/summary';
 import { TOOL_CATALOG } from '../model/tools';
 import type { AgentConfig, ChatflowWorkflow } from '../types';
+import { FlowsContext, type FlowsEditorContext } from './flows-context';
+import { FlowsTab } from './flows-tab';
 import { ChatflowEditor } from './chatflow-editor';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 import { JsonSection } from './json-section';
@@ -26,9 +29,10 @@ import { WorkflowCanvas } from './workflow-canvas';
 import { DebugRunTab } from './debug-run-tab';
 import { VariablesProvider } from './variables-provider';
 
-type ChatflowTab = 'canvas' | 'json' | 'debug';
+type ChatflowTab = 'flows' | 'canvas' | 'json' | 'debug';
 
 const CHATFLOW_TABS: ReadonlyArray<{ id: ChatflowTab; label: string }> = [
+  { id: 'flows', label: 'Nghiệp vụ' },
   { id: 'canvas', label: 'Sơ đồ' },
   { id: 'json', label: 'JSON' },
   { id: 'debug', label: 'Chạy thử' },
@@ -50,23 +54,52 @@ export function ConfigTab({
   /** Agent/Chatflow switch, shown above the section list: it is changed rarely and asks for confirmation. */
   modeSwitch?: ReactNode;
 }) {
-  const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
+  // A chatflow of several flows opens on its map of flows; a single flow straight on its graph.
+  const [chatflowTab, setChatflowTab] = useState<ChatflowTab>(() => (
+    isRenderableChatflow(config.workflow) && config.workflow.flows.length > 1 ? 'flows' : 'canvas'));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [activeFlowId, setActiveFlowId] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const jumpToNode = useCallback((id: string) => { setChatflowTab('canvas'); setSelectedNodeId(id); }, []);
+  const chat = isRenderableChatflow(config.workflow) ? config.workflow : undefined;
+  // The flow open in the canvas: the one picked, else the first (a removed or renamed pick falls back too).
+  const flowId = chat ? (chat.flows.some(flow => flow.id === activeFlowId) ? activeFlowId! : chat.flows[0]!.id) : undefined;
+  const jumpToNode = useCallback((id: string) => {
+    const owner = chat ? flowOfNode(chat, id) : undefined;
+    if (owner) setActiveFlowId(owner);
+    setChatflowTab('canvas');
+    setSelectedNodeId(id);
+  }, [chat]);
   const nodeTypes = useAgentNodeTypes(mode === 'chatflow');
   const catalog = nodeTypes.data;
   const knowledgeBases = useKnowledgeBases();
   const summaryContext = useMemo<SummaryContext>(() => ({
     knowledgeBaseName: id => knowledgeBases.data?.find(kb => kb.id === id)?.name,
     toolLabel: name => TOOL_CATALOG.find(tool => tool.name === name)?.label,
-  }), [knowledgeBases.data]);
+    flowTitle: id => (chat ? findFlow(chat, id)?.title : undefined),
+  }), [knowledgeBases.data, chat]);
+  const flowsContext = useMemo<FlowsEditorContext | null>(() => (chat && flowId
+    ? { flows: chat.flows.map(flow => ({ id: flow.id, title: flow.title })), currentFlowId: flowId } : null), [chat, flowId]);
   const handleJsonValidity = (error: string | null) => { setJsonError(error); onJsonValidity(error); };
   const visibleSections = sectionsForMode(mode ?? 'agent');
   const issues = validation?.issues ?? [];
-  const workflow = isRenderableWorkflow(config.workflow) ? config.workflow : undefined;
-  const workflowMalformed = config.workflow != null && !workflow;
-  const workflowIssues = validation?.stale ? [] : issues;
+  const workflow = chat && flowId ? flowView(chat, flowId) : undefined;
+  const workflowMalformed = config.workflow != null && !chat;
+  // The canvas reads paths of one graph: keep this flow's issues, rewritten to workflow.nodes[i]….
+  const workflowIssues = validation?.stale || !chat || !flowId ? [] : issuesForFlow(issues, chat, flowId);
+  const setFlowGraph = (next: ChatflowWorkflow) => { if (chat && flowId) onChange(['workflow'], withFlowView(chat, flowId, next)); };
+  const openWorkflowIssue = (target: WorkflowIssueTarget) => {
+    if (jsonError) return;
+    if ((target.kind === 'node' || target.kind === 'edge') && target.flowId) {
+      setActiveFlowId(target.flowId);
+      setChatflowTab('canvas');
+      setSelectedNodeId(target.kind === 'node' ? target.nodeId : null);
+    } else if (target.kind === 'flow') {
+      setActiveFlowId(target.flowId);
+      setChatflowTab('flows');
+    } else {
+      setChatflowTab('json');
+    }
+  };
   useEffect(() => {
     if (!workflow?.nodes.some(node => node.id === selectedNodeId)) setSelectedNodeId(null);
   }, [selectedNodeId, workflow]);
@@ -78,12 +111,13 @@ export function ConfigTab({
         <IssuesPanel
           state={validation}
           onOpenSection={onSection}
-          workflow={mode === 'chatflow' ? validation.workflow ?? config.workflow as ChatflowWorkflow | undefined : undefined}
-          onOpenWorkflowIssue={() => { if (!jsonError) { setChatflowTab('json'); onChatflowOpen(true); } }}
+          workflow={mode === 'chatflow' ? validation.workflow ?? config.workflow : undefined}
+          onOpenWorkflowIssue={target => { if (!jsonError) { openWorkflowIssue(target); onChatflowOpen(true); } }}
         />
       )}
       {mode === 'chatflow' && chatflowOpen && (
         <VariablesProvider config={config} catalog={catalog} readOnly={!catalog} onConfigChange={onReplace} onJumpToNode={jumpToNode}>
+        <FlowsContext.Provider value={flowsContext}>
         <ChatflowEditor
           onClose={() => onChatflowOpen(false)}
           closeDisabled={Boolean(jsonError)}
@@ -99,6 +133,18 @@ export function ConfigTab({
                 </button>
               ))}
             </div>
+            {chat && flowId && (chatflowTab === 'canvas' || chatflowTab === 'debug') ? (
+              <label className="flex items-center gap-1.5 text-sm">
+                <span className="text-muted-foreground">Nghiệp vụ</span>
+                <select aria-label="Nghiệp vụ đang sửa" value={flowId} disabled={Boolean(jsonError)}
+                  onChange={event => { setActiveFlowId(event.target.value); setSelectedNodeId(null); }}
+                  className="h-8 max-w-[14rem] rounded-md border border-input bg-background px-2 text-sm">
+                  {chat.flows.map(flow => (
+                    <option key={flow.id} value={flow.id}>{flow.title}{flow.id === chat.router.default_flow ? ' ★' : ''}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <button type="button" title="Biến được khai báo ở node Bắt đầu"
               onClick={() => { if (workflow) jumpToNode(workflow.entry); }} disabled={!workflow || Boolean(jsonError)}
               className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
@@ -122,8 +168,8 @@ export function ConfigTab({
                   <IssuesPanel
                     state={validation}
                     onOpenSection={id => { if (!jsonError) { onChatflowOpen(false); onSection(id); } }}
-                    workflow={validation.workflow ?? config.workflow as ChatflowWorkflow | undefined}
-                    onOpenWorkflowIssue={() => { if (!jsonError) setChatflowTab('json'); }}
+                    workflow={validation.workflow ?? config.workflow}
+                    onOpenWorkflowIssue={openWorkflowIssue}
                   />
                 ) : null}
               </>
@@ -132,9 +178,20 @@ export function ConfigTab({
         >
           {/* Hidden, not unmounted: leaving the tab would abort the run and drop its trace. */}
           <div hidden={chatflowTab !== 'debug'} className="mx-auto h-full max-w-4xl overflow-y-auto">
-            <DebugRunTab workflow={workflow} catalog={catalog} beforeRun={onBeforeDebugRun} visible={chatflowTab === 'debug'} />
+            <DebugRunTab chat={chat} flowId={flowId} catalog={catalog} beforeRun={onBeforeDebugRun} visible={chatflowTab === 'debug'} />
           </div>
-          {chatflowTab === 'debug' ? null : chatflowTab === 'json' ? (
+          {chatflowTab === 'debug' ? null : chatflowTab === 'flows' ? (
+            chat ? (
+              <FlowsTab chat={chat} catalog={catalog} issues={validation?.stale ? [] : issues} readOnly={!catalog}
+                beforeRun={onBeforeDebugRun}
+                onChange={next => onChange(['workflow'], next)}
+                onOpenFlow={id => { setActiveFlowId(id); setSelectedNodeId(null); setChatflowTab('canvas'); }} />
+            ) : (
+              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+                Chatflow chưa đúng cấu trúc (cần router và mảng flows, mỗi flow có id, entry và nodes) — sửa ở tab JSON.
+              </p>
+            )
+          ) : chatflowTab === 'json' ? (
             <div className="mx-auto h-full max-w-4xl overflow-y-auto">
               <WorkflowJsonTab
                 workflow={config.workflow as Record<string, unknown> | undefined}
@@ -152,7 +209,7 @@ export function ConfigTab({
               summaryContext={summaryContext}
               selectedNodeId={selectedNodeId}
               onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
-              onChange={next => onChange(['workflow'], next)}
+              onChange={setFlowGraph}
               overlay={selectedNodeId ? (
                 <aside
                   aria-label="Cấu hình node"
@@ -166,7 +223,7 @@ export function ConfigTab({
                     nodeId={selectedNodeId}
                     catalog={catalog}
                     readOnly={!catalog}
-                    onChange={next => onChange(['workflow'], next)}
+                    onChange={setFlowGraph}
                     onClose={() => { if (!jsonError) setSelectedNodeId(null); }}
                   />
                 </aside>
@@ -174,7 +231,7 @@ export function ConfigTab({
             />
           ) : workflowMalformed ? (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-              Workflow chưa đúng cấu trúc (cần mảng nodes, mỗi node có id và type) — sửa ở tab JSON.
+              Chatflow chưa đúng cấu trúc (cần router và mảng flows, mỗi flow có id, entry và nodes) — sửa ở tab JSON.
             </p>
           ) : (
             <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
@@ -182,6 +239,7 @@ export function ConfigTab({
             </p>
           )}
         </ChatflowEditor>
+        </FlowsContext.Provider>
         </VariablesProvider>
       )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
@@ -202,10 +260,30 @@ export function ConfigTab({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">Sơ đồ chatflow được sửa trong trình chỉnh sửa gần toàn màn hình.</p>
-                <Button size="sm" onClick={() => onChatflowOpen(true)}>
-                  <Maximize2 className="size-4" /> Mở trình chỉnh sửa
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {chat ? (
+                    <Button size="sm" variant="outline" onClick={() => { setChatflowTab('flows'); onChatflowOpen(true); }}>
+                      <Network className="size-4" /> Nghiệp vụ ({chat.flows.length})
+                    </Button>
+                  ) : null}
+                  <Button size="sm" onClick={() => { setChatflowTab('canvas'); onChatflowOpen(true); }}>
+                    <Maximize2 className="size-4" /> Mở trình chỉnh sửa
+                  </Button>
+                </div>
               </div>
+              {chat && flowId && chat.flows.length > 1 ? (
+                <div role="tablist" aria-label="Xem sơ đồ nghiệp vụ" className="flex flex-wrap gap-1.5">
+                  {chat.flows.map(flow => (
+                    <button key={flow.id} type="button" role="tab" aria-selected={flow.id === flowId}
+                      onClick={() => setActiveFlowId(flow.id)}
+                      className={flow.id === flowId
+                        ? 'rounded-full border border-primary bg-primary-subtle px-3 py-1 text-xs font-medium text-primary'
+                        : 'rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'}>
+                      {flow.title}{flow.id === chat.router.default_flow ? ' ★' : ''}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {workflow ? (
                 <WorkflowCanvas className="h-[420px] w-full" workflow={workflow} catalog={catalog} issues={workflowIssues} readOnly showPalette={false} summaryContext={summaryContext} />
               ) : (

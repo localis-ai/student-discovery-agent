@@ -3,7 +3,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -21,11 +21,14 @@ from agent_runtime.workflow.ports import Ports
 from agent_runtime.workflow.registry import get as get_spec
 from agent_runtime.workflow.scope import Scope
 
+if TYPE_CHECKING:
+    from agent_runtime.workflow.flows import RunGraph
+
 logger = logging.getLogger(__name__)
 
 # Nodes that only read the scope and make no external call: a late but finished agent reply must still be
 # answered, so these run after the deadline; the model call itself is refused by ``start_llm_call``.
-_NO_EXTERNAL_CALL = frozenset({"start", "if_else", "assign", "answer"})
+_NO_EXTERNAL_CALL = frozenset({"start", "if_else", "assign", "answer", "goto_flow"})
 
 
 @dataclass(frozen=True)
@@ -103,12 +106,14 @@ def _live_nodes(workflow: Workflow) -> set[str]:
     return live
 
 
-def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budget,
+def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *, budget: Budget,
                  new_id: Callable[[], str] = lambda: uuid4().hex, on_event: Callable[[Any], None] | None = None,
                  should_stop: Callable[[], bool] | None = None, implicit: bool = False,
-                 reply_required: bool = True) -> WorkflowRun:
+                 reply_required: bool = True, halt_after: str | None = None) -> WorkflowRun:
     """``reply_required``: an explicit graph whose answer yields no block (and no handoff) falls back rather than
-    commit an empty reply; a handled interaction passes False, since the fixed handler's block is its reply."""
+    commit an empty reply; a handled interaction passes False, since the fixed handler's block is its reply.
+
+    ``halt_after``: stop, completed and without a reply, once that node has finished (a route-only debug run)."""
     emit = on_event or (lambda event: None)
     stop = should_stop or (lambda: False)
     nodes = {node.id: node for node in workflow.nodes}
@@ -179,7 +184,9 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
             records.append(NodeRecord(node.id, node.type, order, result.handle, duration, dict(result.reason),
                                       result.input, output, calls, (tokens_in, tokens_out), result.refs, None))
             emit(NodeFinished(node.id, result.handle, duration, calls, tokens_in, tokens_out))
-            if result.handle is None:
+            if node.id == halt_after:
+                final, current = (), None
+            elif result.handle is None:
                 final, current = result.blocks, None
             else:
                 current = edges.get((node.id, result.handle))

@@ -166,3 +166,19 @@ describe('NodeField', () => {
     expect(onValue).toHaveBeenLastCalledWith('Hỏi: {{sys.query}}');
   });
 });
+
+describe('goto_flow target', () => {
+  it('lists the other flows by title and stores the chosen id', async () => {
+    const { FlowsContext } = await import('./flows-context');
+    const onValue = vi.fn();
+    render(
+      <FlowsContext.Provider value={{ currentFlowId: 'main', flows: [{ id: 'main', title: 'Chính' }, { id: 'fee', title: 'Học phí' }] }}>
+        <Stateful name="flow" property={{ type: 'string' }} onValue={onValue} />
+      </FlowsContext.Provider>,
+    );
+    const select = screen.getByLabelText('Nghiệp vụ đích');
+    expect(screen.queryByRole('option', { name: /Chính/ })).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'fee' } });
+    expect(onValue).toHaveBeenLastCalledWith('fee');
+  });
+});
