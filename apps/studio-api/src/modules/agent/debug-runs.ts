@@ -24,6 +24,7 @@ export const debugRunRequestSchema = z.object({
   }).strict().optional(),
   state: z.object({
     profile: object.optional(), result: object.nullable().optional(), conv: object.optional(), activity: object.nullable().optional(),
+    turn_index: z.number().int().min(0).max(1000).optional(),
   }).strict().optional(),
   llm_stubs: object.optional(),
   stop_after: z.literal('route').optional(),

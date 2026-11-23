@@ -152,7 +152,10 @@ describe('FlowsTab', () => {
     fireEvent.change(screen.getByLabelText('Câu thử định tuyến'), { target: { value: 'học phí bao nhiêu' } });
     fireEvent.click(screen.getByRole('button', { name: 'Thử' }));
     expect(await screen.findByRole('status')).toHaveTextContent('→ Học phí · phân loại theo mô tả');
-    expect(vi.mocked(streamDebugRun).mock.lastCall![0]).toEqual({ message: 'học phí bao nhiêu', stop_after: 'route' });
+    expect(vi.mocked(streamDebugRun).mock.lastCall![0]).toEqual({ message: 'học phí bao nhiêu', stop_after: 'route', state: { turn_index: 1 } });
+    fireEvent.click(screen.getByLabelText(/Mô phỏng lượt đầu tiên/));
+    fireEvent.click(screen.getByRole('button', { name: 'Thử' }));
+    await waitFor(() => expect(vi.mocked(streamDebugRun).mock.lastCall![0]).toEqual({ message: 'học phí bao nhiêu', stop_after: 'route', state: { turn_index: 0 } }));
     await waitFor(() => expect(screen.getByTestId('flow-card-fee').className).toContain('border-primary'));
     expect(screen.getByTestId('flow-map-fee').className).toContain('border-primary');
   });

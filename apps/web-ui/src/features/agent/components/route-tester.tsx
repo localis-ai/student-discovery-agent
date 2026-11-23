@@ -15,12 +15,14 @@ export function RouteTester({ chat, beforeRun, onRouted }: {
   onRouted?: (flowId: string | null) => void;
 }) {
   const [message, setMessage] = useState('');
+  // Mid-conversation by default: a first-turn trigger (e.g. a welcome flow) would otherwise win every test.
+  const [firstTurn, setFirstTurn] = useState(false);
   const debug = useDebugRun(beforeRun);
   const route = debug.result?.route ?? null;
   const run = async () => {
     if (!message.trim()) return;
     onRouted?.(null);
-    await debug.run({ message: message.trim(), stop_after: 'route' });
+    await debug.run({ message: message.trim(), stop_after: 'route', state: { turn_index: firstTurn ? 0 : 1 } });
   };
   const shown = route ? findFlow(chat, route.flow) : undefined;
   const routedFlow = route?.flow ?? null;
@@ -39,6 +41,10 @@ export function RouteTester({ chat, beforeRun, onRouted }: {
           {debug.running ? 'Đang chạy…' : 'Thử'}
         </Button>
       </form>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={firstTurn} onChange={event => setFirstTurn(event.target.checked)} />
+        Mô phỏng lượt đầu tiên của hội thoại (để thử điều kiện kích hoạt như lời chào)
+      </label>
       {debug.error ? <p role="alert" className="text-xs text-destructive">{debug.error}</p> : null}
       {route ? (
         <p role="status" className="rounded-md bg-muted/60 p-2 text-sm">

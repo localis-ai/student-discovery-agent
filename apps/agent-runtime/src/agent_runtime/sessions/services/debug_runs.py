@@ -60,6 +60,8 @@ class DebugState(ContractModel):
     result: JsonObject | None = None
     conv: JsonObject = Field(default_factory=dict)
     activity: JsonObject | None = None
+    # sys.turn_index the run sees: 0 is a conversation's first turn; a later turn skips first-turn triggers.
+    turn_index: Annotated[int, Field(strict=True, ge=0, le=1000)] = 0
 
 
 class DebugRequest(ContractModel):
@@ -187,7 +189,7 @@ class DebugRunService:
             user_text = interaction_summary(interaction.action, display_name=display_name,
                                             option_id=interaction.option_id)
         scope = Scope(sys={"query": request.message or "", "interaction": interaction.action if interaction else None,
-                           "interaction_outcome": outcome, "turn_index": 0, "client_blocks": _BLOCK_TYPES,
+                           "interaction_outcome": outcome, "turn_index": request.state.turn_index, "client_blocks": _BLOCK_TYPES,
                            "activity_status": activity.state.status if activity else None},
                       conv=request.state.conv, profile=request.state.profile, result=request.state.result,
                       variables=workflow.variables)

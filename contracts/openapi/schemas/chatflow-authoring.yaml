@@ -85,6 +85,7 @@ components:
         result: {type: object, nullable: true, additionalProperties: true, description: "Result giả lập hoặc null."}
         conv: {type: object, additionalProperties: true, description: "Giá trị conv.*; biến vắng dùng default."}
         activity: {type: object, nullable: true, additionalProperties: true}
+        turn_index: {type: integer, minimum: 0, maximum: 1000, description: "sys.turn_index giả lập; bỏ trống là 0 (lượt đầu tiên của hội thoại)."}
       description: "Trạng thái giả lập; debug run không đọc hay ghi conversation, hồ sơ, activity, proposal hay hàng đợi thật."
     WorkflowDebugRunRequest:
       type: object

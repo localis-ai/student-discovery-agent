@@ -138,3 +138,13 @@ def test_a_full_run_names_each_nodes_flow():
 def test_a_route_only_run_of_one_flow_runs_nothing():
     result = service().run(CONTENT, {"message": "xin chào", "stop_after": "route"})
     assert result["path"] == [] and result["route"] == {"flow": "main", "method": "single"}
+
+
+def test_the_simulated_turn_index_decides_a_first_turn_trigger():
+    content = two_flows()
+    content["workflow"]["flows"][0]["trigger"] = {"==": [{"var": "sys.turn_index"}, 0]}
+    first = service().run(content, {"message": "học phí", "stop_after": "route"})
+    later = service().run(content, {"message": "học phí", "stop_after": "route", "state": {"turn_index": 3},
+                                    "llm_stubs": {"router": "viec_lam"}})
+    assert first["route"] == {"method": "trigger", "flow": "hoc_phi"}
+    assert later["route"] == {"method": "classifier", "flow": "viec_lam", "label": "viec_lam"}
