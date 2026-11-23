@@ -1,6 +1,6 @@
 'use client';
 
-import { Maximize2, Variable } from 'lucide-react';
+import { Maximize2, Network, Variable } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { errorMessage, useKnowledgeBases } from '@/features/knowledge';
@@ -260,10 +260,30 @@ export function ConfigTab({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">Sơ đồ chatflow được sửa trong trình chỉnh sửa gần toàn màn hình.</p>
-                <Button size="sm" onClick={() => onChatflowOpen(true)}>
-                  <Maximize2 className="size-4" /> Mở trình chỉnh sửa
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {chat ? (
+                    <Button size="sm" variant="outline" onClick={() => { setChatflowTab('flows'); onChatflowOpen(true); }}>
+                      <Network className="size-4" /> Nghiệp vụ ({chat.flows.length})
+                    </Button>
+                  ) : null}
+                  <Button size="sm" onClick={() => { setChatflowTab('canvas'); onChatflowOpen(true); }}>
+                    <Maximize2 className="size-4" /> Mở trình chỉnh sửa
+                  </Button>
+                </div>
               </div>
+              {chat && flowId && chat.flows.length > 1 ? (
+                <div role="tablist" aria-label="Xem sơ đồ nghiệp vụ" className="flex flex-wrap gap-1.5">
+                  {chat.flows.map(flow => (
+                    <button key={flow.id} type="button" role="tab" aria-selected={flow.id === flowId}
+                      onClick={() => setActiveFlowId(flow.id)}
+                      className={flow.id === flowId
+                        ? 'rounded-full border border-primary bg-primary-subtle px-3 py-1 text-xs font-medium text-primary'
+                        : 'rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'}>
+                      {flow.title}{flow.id === chat.router.default_flow ? ' ★' : ''}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {workflow ? (
                 <WorkflowCanvas className="h-[420px] w-full" workflow={workflow} catalog={catalog} issues={workflowIssues} readOnly showPalette={false} summaryContext={summaryContext} />
               ) : (

@@ -345,6 +345,26 @@ describe('ConfigTab with several flows', () => {
     expect(next.flows[0]).toEqual((TWO.workflow as { flows: unknown[] }).flows[0]);
   });
 
+  it('previews each flow on the Agent page and opens the editor on the Nghiệp vụ tab', async () => {
+    function Closed() {
+      const [open, setOpen] = useState(false);
+      const [client] = useState(() => new QueryClient());
+      return (
+        <QueryClientProvider client={client}>
+          <ConfigTab config={TWO} onChange={() => {}} onReplace={() => {}} section="chatflow" onSection={() => {}}
+            onJsonValidity={() => {}} validation={null} onBindKb={() => {}} mode="chatflow" chatflowOpen={open} onChatflowOpen={setOpen} />
+        </QueryClientProvider>
+      );
+    }
+    render(<Closed />);
+    expect(await screen.findByTestId('workflow-node-a')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Học phí' }));
+    expect(await screen.findByTestId('workflow-node-fee_a')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Nghiệp vụ (2)' }));
+    expect(screen.getByRole('tab', { name: 'Nghiệp vụ' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('flow-card-fee')).toBeInTheDocument();
+  });
+
   it('opens on the Nghiệp vụ tab and goes to a flow graph from its card', async () => {
     render(<Harness initial={TWO} initialSection="chatflow" mode="chatflow" />);
     expect(screen.getByRole('tab', { name: 'Nghiệp vụ' })).toHaveAttribute('aria-selected', 'true');
