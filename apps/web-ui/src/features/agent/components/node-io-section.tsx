@@ -8,11 +8,10 @@ import { useVariablesPanel } from './variables-context';
 
 function SourceChip({ input }: { input: InputSource }) {
   return (
-    <span className="inline-flex min-w-0 max-w-[60%] shrink items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-[11px]">
+    // The path beside it already names the field: the chip only says where the value comes from.
+    <span className="inline-flex min-w-0 max-w-[45%] shrink items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-[11px]">
       {input.nodeType ? <NodeIcon type={input.nodeType} size="sm" className="size-4 rounded" /> : <Variable aria-hidden className="size-3 text-muted-foreground" />}
       <span className="truncate text-muted-foreground">{input.source}</span>
-      <span aria-hidden className="text-muted-foreground/60">/</span>
-      <code className="truncate text-primary">{input.field}</code>
     </span>
   );
 }
@@ -43,7 +42,7 @@ export function NodeIoSection({ node, workflow, catalog, showOutputs = true }: {
             {inputs.map((input) => {
               const row = (
                 <>
-                  <code className="min-w-0 flex-1 truncate text-xs">{input.path}</code>
+                  <code className="min-w-0 flex-1 truncate text-xs" title={input.path}>{input.path}</code>
                   <SourceChip input={input} />
                   {input.type ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{input.type}</span> : null}
                   {input.kind === 'unknown' ? <span className="shrink-0 text-[11px] text-destructive">không rõ nguồn</span> : null}
