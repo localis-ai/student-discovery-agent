@@ -13,7 +13,7 @@ function Stateful({ name, property, initial, onValue }: {
       property={property}
       value={value}
       disabled={false}
-      variables={[{ title: 'Hệ thống', paths: ['sys.query', 'sys.turn_index'] }]}
+      variables={[{ title: 'Hệ thống', items: [{ path: 'sys.query', type: 'string' }, { path: 'sys.turn_index', type: 'number' }] }]}
       onChange={(next) => { setValue(next); onValue(next); }}
       onValidity={() => {}}
     />

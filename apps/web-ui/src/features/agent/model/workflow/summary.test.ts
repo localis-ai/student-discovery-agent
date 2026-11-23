@@ -63,7 +63,9 @@ describe('readableVariables', () => {
         { id: 'e2', source: 'up', source_handle: 'success', target: 'me' },
       ],
     };
-    expect(readableVariables(workflow, catalog, 'me')).toEqual([
+    const groups = readableVariables(workflow, catalog, 'me');
+    expect(groups[0]!.items[0]).toMatchObject({ path: 'sys.query', type: 'string' });
+    expect(groups.map((group) => ({ title: group.title, paths: group.items.map((item) => item.path) }))).toEqual([
       { title: 'Hệ thống', paths: ['sys.query'] },
       { title: 'Biến hội thoại', paths: ['conv.step'] },
       { title: 'Output', paths: ['up.text'] },

@@ -202,7 +202,7 @@ function VariableInsert({ label, variables, disabled, onInsert }: {
         <option value="">Chọn biến</option>
         {variables.map((group) => (
           <optgroup key={group.title} label={group.title}>
-            {group.paths.map((path) => <option key={path} value={path}>{path}</option>)}
+            {group.items.map((item) => <option key={item.path} value={item.path}>{item.path}</option>)}
           </optgroup>
         ))}
       </select>
@@ -575,7 +575,7 @@ function ConditionField(props: FieldProps) {
         </div>
       ) : null}
       <datalist id={listId}>
-        {variables.flatMap((group) => group.paths).map((path) => <option key={path} value={path} />)}
+        {variables.flatMap((group) => group.items).map((item) => <option key={item.path} value={item.path} />)}
       </datalist>
       {draft.rows.map((row, index) => {
         const badVariable = row.variable !== '' && !VARIABLE_PATH.test(row.variable);
