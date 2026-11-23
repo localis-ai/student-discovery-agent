@@ -22,7 +22,7 @@ import {
   type OnNodesChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { Check, CircleAlert, LayoutGrid, Maximize, Trash2, TriangleAlert, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, CircleAlert, LayoutGrid, Maximize, Trash2, TriangleAlert, Variable, ZoomIn, ZoomOut } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/features/knowledge';
 import { cn } from '@/lib/utils/cn';
@@ -42,6 +42,7 @@ import { validTargets } from '../model/workflow/graph';
 import { handleLabel, isErrorHandle, nodeHandles, type NodeHandle } from '../model/workflow/handles';
 import { parseWorkflowIssuePath, type WorkflowIssueTarget } from '../model/workflow/issue-path';
 import { arrangeWorkflow, computeWorkflowLayout, type WorkflowLayoutOptions } from '../model/workflow/layout';
+import { describeInput, nodeInputs, type InputSource } from '../model/workflow/node-io';
 import { nodeSummary, summaryHeightLines, type CardSummary, type SummaryContext } from '../model/workflow/summary';
 import type {
   AgentIssue,
@@ -90,6 +91,11 @@ interface WorkflowNodeData extends Record<string, unknown> {
   typeDescription?: string;
   /** The node's own authoring note. */
   note?: string;
+  /** Start card: the conversation variables of the flow. */
+  variables: Array<{ name: string; type: string }>;
+  /** Later cards: where the first values the node reads come from. */
+  inputs: InputSource[];
+  moreInputs: number;
   summary: CardSummary;
   handles: NodeHandle[];
   invalid: boolean;
@@ -211,10 +217,33 @@ const CARD_NOTE = 22;
 const CARD_SUMMARY_LINE = 18;
 const CARD_ROW = 24;
 const LONG_TITLE = 28;
+const CARD_LIST_ROW = 22;
+const MAX_CARD_VARIABLES = 6;
+const MAX_CARD_INPUTS = 3;
+// Their summary already names every variable they touch.
+const NO_INPUT_CHIPS: ReadonlySet<string> = new Set(['start', 'if_else', 'assign']);
 
-function estimatedCardHeight(card: { summaryRows: number; handles: number; note: boolean; longTitle: boolean }): number {
+function estimatedCardHeight(card: { summaryRows: number; handles: number; note: boolean; longTitle: boolean; listRows: number }): number {
   return CARD_HEADER + (card.longTitle ? CARD_TITLE_EXTRA : 0) + (card.note ? CARD_NOTE : 0)
-    + (card.summaryRows ? card.summaryRows * CARD_SUMMARY_LINE + 16 : 0) + card.handles * CARD_ROW + 12;
+    + (card.summaryRows ? card.summaryRows * CARD_SUMMARY_LINE + 16 : 0)
+    + (card.listRows ? card.listRows * CARD_LIST_ROW + 8 : 0) + card.handles * CARD_ROW + 12;
+}
+
+function cardInputs(node: ChatflowNode, workflow: ChatflowWorkflow, catalog: NodeTypeCatalog | undefined) {
+  if (NO_INPUT_CHIPS.has(node.type)) return { inputs: [], moreInputs: 0 };
+  const paths = nodeInputs(node);
+  return {
+    inputs: paths.slice(0, MAX_CARD_INPUTS).map((path) => describeInput(path, workflow, catalog)),
+    moreInputs: Math.max(0, paths.length - MAX_CARD_INPUTS),
+  };
+}
+
+function cardListRows(node: ChatflowNode, workflow: ChatflowWorkflow, io: { inputs: InputSource[]; moreInputs: number }): number {
+  if (node.type === 'start') {
+    const count = workflow.variables?.length ?? 0;
+    return Math.min(count, MAX_CARD_VARIABLES) + (count > MAX_CARD_VARIABLES ? 1 : 0);
+  }
+  return io.inputs.length + (io.moreInputs ? 1 : 0);
 }
 
 function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
@@ -276,6 +305,33 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
         ) : null}
       </div>
       {data.note ? <NodeDescription text={data.note} /> : null}
+      {data.variables.length ? (
+        <ul aria-label="Biến hội thoại" className="mx-3 mt-2 space-y-0.5">
+          {data.variables.slice(0, MAX_CARD_VARIABLES).map((variable) => (
+            <li key={variable.name} data-testid="card-variable" className="flex h-5 items-center gap-1.5 rounded border bg-background px-1.5 text-[11px]">
+              <Variable aria-hidden className="size-3 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate font-mono">{variable.name}</span>
+              <span className="shrink-0 font-mono text-muted-foreground">{variable.type}</span>
+            </li>
+          ))}
+          {data.variables.length > MAX_CARD_VARIABLES ? (
+            <li className="h-5 px-1.5 text-[11px] text-muted-foreground">+{data.variables.length - MAX_CARD_VARIABLES} biến</li>
+          ) : null}
+        </ul>
+      ) : null}
+      {data.inputs.length ? (
+        <ul aria-label="Biến đầu vào" className="mx-3 mt-2 space-y-0.5">
+          {data.inputs.map((input) => (
+            <li key={input.path} data-testid="card-input" title={input.path} className="flex h-5 items-center gap-1 rounded border bg-background px-1.5 text-[11px]">
+              {input.nodeType ? <NodeIcon type={input.nodeType} size="sm" className="size-3.5 rounded-sm" /> : <Variable aria-hidden className="size-3 shrink-0 text-muted-foreground" />}
+              <span className="min-w-0 max-w-[45%] truncate text-muted-foreground">{input.source}</span>
+              <span aria-hidden className="text-muted-foreground/60">/</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-primary">{input.field}</span>
+            </li>
+          ))}
+          {data.moreInputs ? <li className="h-5 px-1.5 text-[11px] text-muted-foreground">+{data.moreInputs} biến đầu vào</li> : null}
+        </ul>
+      ) : null}
       {data.summary.lines.length ? (
         <div className="mx-3 mt-2 space-y-0.5 rounded-md bg-muted/70 px-2 py-1.5" title={data.summary.lines.map((line) => line.text).join('\n')}>
           {data.summary.lines.map((line, index) => (
@@ -418,10 +474,15 @@ export function WorkflowCanvas({
       new Map(
         workflow.nodes.map((node) => {
           const type = catalogType(catalog, node);
-          return [node.id, { type, handles: nodeHandles(node, type?.handles), summary: nodeSummary(node, summaryContext) }];
+          const io = cardInputs(node, workflow, catalog);
+          return [node.id, {
+            type, handles: nodeHandles(node, type?.handles), summary: nodeSummary(node, summaryContext), ...io,
+            listRows: cardListRows(node, workflow, io),
+            variables: node.type === 'start' ? (workflow.variables ?? []).map((variable) => ({ name: variable.name, type: variable.type })) : [],
+          }];
         }),
       ),
-    [catalog, workflow.nodes, summaryContext],
+    [catalog, workflow, summaryContext],
   );
   const layoutOptions = useMemo<WorkflowLayoutOptions>(() => {
     let nodeHeight = 120;
@@ -433,6 +494,7 @@ export function WorkflowCanvas({
         handles: card.handles.length,
         note: Boolean(node.description?.trim()),
         longTitle: (node.title ?? '').length > LONG_TITLE,
+        listRows: card.listRows,
       }));
     }
     return {
@@ -473,6 +535,9 @@ export function WorkflowCanvas({
             typeDescription: type?.description,
             note: node.description?.trim() || undefined,
             summary: card?.summary ?? EMPTY_SUMMARY,
+            variables: card?.variables ?? [],
+            inputs: card?.inputs ?? [],
+            moreInputs: card?.moreInputs ?? 0,
             handles: card?.handles ?? [],
             invalid: invalidNodes.has(node.id),
             highlighted: highlightedNodes.has(node.id),

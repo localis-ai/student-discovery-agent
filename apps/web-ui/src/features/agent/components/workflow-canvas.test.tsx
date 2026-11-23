@@ -109,6 +109,30 @@ describe('WorkflowCanvas', () => {
     expect(within(screen.getByTestId('workflow-node-empty')).queryByTestId('node-description')).not.toBeInTheDocument();
   });
 
+  it('lists the conversation variables on the start card and input sources on later cards', () => {
+    const vars: ChatflowWorkflow = {
+      entry: 'start',
+      variables: Array.from({ length: 8 }, (_, index) => ({ name: `v${index + 1}`, type: 'string' as const, default: '' })),
+      nodes: [
+        { id: 'start', type: 'start', title: 'Bắt đầu lượt chat' },
+        { id: 'classify', type: 'intent_classifier', title: 'Hiểu ý', config: { labels: [{ id: 'a' }] } },
+        { id: 'answer', type: 'answer', config: { text: '{{classify.label}} {{conv.v1}} {{sys.query}} {{conv.v2}}' } },
+      ],
+      edges: [],
+    };
+    render(<WorkflowCanvas workflow={vars} catalog={catalog} />);
+    const start = screen.getByTestId('workflow-node-start');
+    expect(within(start).getAllByTestId('card-variable')).toHaveLength(6);
+    expect(start).toHaveTextContent('+2 biến');
+    const answer = screen.getByTestId('workflow-node-answer');
+    const chips = within(answer).getAllByTestId('card-input');
+    expect(chips).toHaveLength(3);
+    expect(chips[0]).toHaveTextContent('Hiểu ý');
+    expect(chips[1]).toHaveTextContent('Bắt đầu lượt chat');
+    expect(answer).toHaveTextContent('+1 biến đầu vào');
+    expect(within(screen.getByTestId('workflow-node-classify')).queryByTestId('card-input')).not.toBeInTheDocument();
+  });
+
   it('names a knowledge base from the summary context', () => {
     const kb: ChatflowWorkflow = { entry: 'start', nodes: [{ id: 'start', type: 'start' },
       { id: 'kb', type: 'knowledge_retrieval', config: { knowledge_base_id: 'kb1' } }], edges: [] };
