@@ -89,11 +89,14 @@ class PersonaRunner:
     def _case(self, content: dict, defaults: Mapping[str, Any], index: int, case: PersonaCase) -> CaseReport:
         state, conv = case.initial_state, {**defaults, **case.initial_state.conv}
         mismatches: list[Mismatch] = []
+        user_turns = 0  # sys.turn_index counts the student's earlier messages, as in a real conversation
         for step, turn in enumerate(case.turns):
             at = f"persona_cases[{index}].turns[{step}]"
             request: dict[str, Any] = {"llm_stubs": turn.llm_stubs, "state": {
-                "profile": state.profile, "result": state.result, "conv": conv, "activity": state.activity}}
+                "profile": state.profile, "result": state.result, "conv": conv, "activity": state.activity,
+                "turn_index": user_turns}}
             if turn.input.text is not None:
+                user_turns += 1
                 request["message"] = turn.input.text
             else:
                 request["interaction"] = turn.input.interaction.model_dump(exclude_none=True)

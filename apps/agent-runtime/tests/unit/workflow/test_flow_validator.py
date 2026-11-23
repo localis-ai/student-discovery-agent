@@ -78,3 +78,17 @@ def test_the_router_id_is_reserved():
     taken["nodes"][1]["id"] = "router"
     taken["edges"][0]["target"] = "router"
     assert ("workflow.flows[0].nodes[1].id", "workflow_node_id_reserved") in codes(chat(taken))
+
+
+def test_a_non_string_flow_id_is_a_finding_not_a_crash():
+    broken = flow("a", "a")
+    broken["edges"] = []
+    found = codes(chat(broken, {**flow("b", "b"), "id": ["b"]}))  # the bad id itself is the schema layer's finding
+    assert ("workflow.flows[0].nodes[1]", "workflow_unreachable_node") in found
+
+
+def test_a_goto_chain_longer_than_the_turn_allows_is_rejected():
+    within = [goto(flow(f, f), t) for f, t in zip("abc", "bcd", strict=True)] + [flow("d", "d")]
+    assert not any(code == "workflow_goto_invalid" for _, code in codes(chat(*within)))
+    too_long = [goto(flow(f, f), t) for f, t in zip("abcd", "bcde", strict=True)] + [flow("e", "e")]
+    assert ("workflow.flows[0].nodes[1].config.flow", "workflow_goto_invalid") in codes(chat(*too_long))

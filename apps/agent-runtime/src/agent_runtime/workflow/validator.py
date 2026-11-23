@@ -17,6 +17,7 @@ from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import HARD_CEILING
 from agent_runtime.workflow.catalog import HANDLE_SPECS, NAMESPACES
 from agent_runtime.workflow.expressions import COMPARISONS, ExpressionError, Lit, Op, Var, parse, variables
+from agent_runtime.workflow.nodes.goto_flow import MAX_FLOW_SWITCHES
 from agent_runtime.workflow.templates import placeholders
 
 logger = logging.getLogger(__name__)
@@ -573,7 +574,7 @@ class _Chatflow:
     def _flows(self, flows: list[Any]) -> None:
         for k, flow in enumerate(flows):
             flow = _dict(flow)
-            if flow.get("id") in RESERVED_FLOW_IDS:
+            if isinstance(flow.get("id"), str) and flow["id"] in RESERVED_FLOW_IDS:
                 self.add(f"workflow.flows[{k}].id", "workflow_flow_invalid",
                          "Id nghiệp vụ không được là other hoặc error.")
             description = flow.get("description")
@@ -633,11 +634,14 @@ class _Chatflow:
                 elif isinstance(flow.get("id"), str):
                     links[flow["id"]].append((target, at))
         state: dict[str, int] = {}
+        cyclic = False
 
         def visit(flow_id: str) -> None:
+            nonlocal cyclic
             state[flow_id] = 1
             for target, at in links.get(flow_id, ()):
                 if state.get(target) == 1:
+                    cyclic = True
                     self.add(at, "workflow_goto_cycle", "Các nghiệp vụ chuyển vòng qua nhau bằng goto_flow.")
                 elif target not in state:
                     visit(target)
@@ -646,6 +650,23 @@ class _Chatflow:
         for flow_id in list(links):
             if flow_id not in state:
                 visit(flow_id)
+        if not cyclic:
+            self._goto_depth(links)
+
+    def _goto_depth(self, links: dict[str, list[tuple[str, str]]]) -> None:
+        """A turn may switch flows at most MAX_FLOW_SWITCHES times: a longer acyclic chain always fails at run time."""
+        depth: dict[str, int] = {}
+
+        def jumps(flow_id: str) -> int:  # the goto links form a DAG here: cycles were reported before
+            if flow_id not in depth:
+                depth[flow_id] = max((1 + jumps(target) for target, _ in links.get(flow_id, ())), default=0)
+            return depth[flow_id]
+
+        for targets in links.values():
+            for target, at in targets:
+                if 1 + jumps(target) > MAX_FLOW_SWITCHES:
+                    self.add(f"{at}.config.flow", "workflow_goto_invalid",
+                             f"Chuỗi chuyển nghiệp vụ từ đây dài hơn {MAX_FLOW_SWITCHES} lần chuyển trong một lượt.")
 
     def _budget(self, budget: dict[str, Any]) -> None:
         for key, ceiling in (("max_nodes", HARD_CEILING.max_nodes), ("max_llm_calls", HARD_CEILING.max_llm_calls),

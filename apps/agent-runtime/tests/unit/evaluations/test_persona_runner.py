@@ -140,3 +140,20 @@ def test_a_router_that_picks_by_trigger_needs_no_stub_but_a_classifying_one_does
     assert report.cases[0].passed, report.cases[0].mismatches
     assert not report.cases[1].passed
     assert any("router" in m.message for m in report.cases[1].mismatches)
+
+
+def test_a_later_turn_of_a_case_is_not_the_conversation_first_turn():
+    from tests.helpers.chatflow import single_flow
+
+    main = single_flow(copy.deepcopy(FLOW))
+    welcome = {"id": "chao", "title": "Chào", "routable": False, "entry": "chao_s",
+               "trigger": {"==": [{"var": "sys.turn_index"}, 0]},
+               "nodes": [{"id": "chao_s", "type": "start"}, {"id": "chao_a", "type": "answer", "config": {"text": "Chào!"}}],
+               "edges": [{"id": "e1", "source": "chao_s", "source_handle": "next", "target": "chao_a"}]}
+    content = chatflow_content({**main, "flows": [welcome, *main["flows"]]})
+    content["tools"] = []
+    content["persona_cases"] = [case("two_turns", turns=[
+        {"input": {"text": "xin chào"}, "expect": {"path": ["router", "chao_s", "chao_a"]}},
+        {"input": {"text": "học phí"}, "llm_stubs": {"ask": "hoi_hoc_phi"}, "expect": {"path": ["router", *PATH]}}])]
+    report = runner().run(AgentSnapshotV1.model_validate(content), content)
+    assert report.cases[0].passed, report.cases[0].mismatches
