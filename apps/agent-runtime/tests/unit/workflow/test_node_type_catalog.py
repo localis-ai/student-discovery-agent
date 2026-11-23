@@ -62,3 +62,35 @@ def test_new_fields_are_published_in_the_catalog():
     assert "operation" in by_type["assign"]["assignments"]["items"]["properties"]
     outputs = {item["type"]: item["output_schema"]["properties"] for item in node_type_catalog()["node_types"]}
     assert "error_type" in outputs["llm"] and "error_type" in outputs["tool"]
+
+
+def _static(namespace, name):
+    from agent_runtime.workflow.catalog import node_type_catalog as build
+    spaces = {item["name"]: item for item in build()["namespaces"]}
+    return next(v for v in spaces[namespace]["variables"] if v["name"] == name)
+
+
+def test_every_static_variable_has_a_description():
+    for space in node_type_catalog()["namespaces"]:
+        for variable in space.get("variables", []):
+            assert variable.get("description"), f"{space['name']}.{variable['name']}"
+
+
+def test_fixed_value_sets_come_from_the_code_that_produces_them():
+    from typing import get_args
+
+    from agent_runtime.sessions.schemas.activity import ActivityStatus, StoredInteraction
+    from agent_runtime.workflow.constants import OUTCOME_VALUES
+
+    assert _static("sys", "interaction")["values"] == list(get_args(StoredInteraction.model_fields["action"].annotation))
+    assert _static("sys", "activity_status")["values"] == list(get_args(ActivityStatus))
+    assert _static("sys", "interaction_outcome")["values"] == list(OUTCOME_VALUES)
+    assert "values" not in _static("sys", "query")
+
+
+def test_three_node_types_are_renamed():
+    titles = {item["type"]: item["title"] for item in node_type_catalog()["node_types"]}
+    assert titles["llm"] == "Gọi LLM"
+    assert titles["knowledge_retrieval"] == "Tra cứu Knowledge base"
+    assert titles["profile_propose"] == "Đề xuất cập nhật hồ sơ"
+    assert titles["if_else"] == "Rẽ nhánh" and titles["assign"] == "Gán biến"

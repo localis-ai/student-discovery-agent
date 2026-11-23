@@ -17,14 +17,14 @@ from agent_runtime.sessions.services.message_turns import (
 from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
+from agent_runtime.workflow.constants import INTERACTION_OUTCOMES
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
 from agent_runtime.workflow.implicit import implicit_workflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort, rank_career_groups
 from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.validator import knowledge_base_ids
 
-_OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited", "select_majors": "selection_made"}
+_OUTCOMES = INTERACTION_OUTCOMES  # kept under the old name for callers and tests
 
 
 def interaction_outcome(request, draft) -> str:

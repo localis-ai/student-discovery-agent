@@ -272,3 +272,9 @@ def test_only_a_message_turn_requires_the_graph_to_produce_a_reply(monkeypatch):
     run_interaction_turn(chat_snapshot(), request("set_name"), draft(next_state=after), model=None,
                          toolbox=None, knowledge_port=None, clock=lambda: 0.0)
     assert required == [True, False]  # a handled interaction already has the handler's block as its reply
+
+
+def test_outcome_values_cover_every_outcome_the_handler_returns():
+    from agent_runtime.sessions.services.chatflow_turns import _OUTCOMES
+    from agent_runtime.workflow.constants import OUTCOME_VALUES
+    assert set(_OUTCOMES.values()) | {"none", "assessment_completed"} == set(OUTCOME_VALUES)
