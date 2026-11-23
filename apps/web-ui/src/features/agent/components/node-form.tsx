@@ -10,6 +10,8 @@ import { handleLabel, isErrorHandle, nodeHandles } from '../model/workflow/handl
 import { readableVariables } from '../model/workflow/variables';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { ADVANCED_FIELDS, NodeField, type SchemaProperty } from './node-fields';
+import { JsonOutputFields } from './json-output-fields';
+import { NodeIoSection } from './node-io-section';
 import { StartVariables } from './start-variables';
 import { NodeIcon, nodeVisual } from './node-visuals';
 
@@ -210,7 +212,12 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
           {!definition ? (
             <p className="text-sm text-muted-foreground">Chưa có catalog cho loại node này, chỉ sửa được ở tab JSON.</p>
           ) : mainProperties.length ? (
-            <div className="space-y-4">{mainProperties.map(renderField)}</div>
+            <div className="space-y-4">
+              {mainProperties.map(renderField)}
+              {node.type === 'llm' && node.config?.output === 'json' ? (
+                <JsonOutputFields value={node.config?.json_schema} disabled={readOnly} onChange={(schema) => changeConfig('json_schema', schema)} />
+              ) : null}
+            </div>
           ) : advancedProperties.length ? (
             <p className="text-sm text-muted-foreground">Mọi thiết lập của node này nằm trong phần Nâng cao.</p>
           ) : (
@@ -218,6 +225,8 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
           )}
           </Section>
         )}
+
+        {node.type === 'start' ? null : <NodeIoSection node={node} workflow={workflow} catalog={catalog} />}
 
         {handles.length ? (
           <Section title="Bước tiếp theo">
