@@ -18,7 +18,9 @@ import {
   type ConditionRows,
 } from '../model/workflow/condition';
 import { findVariable, type VariableGroup } from '../model/workflow/variables';
+import { constraintError } from '../model/workflow/variable-rules';
 import { VariablePicker } from './variable-picker';
+import { useVariablesPanel } from './variables-context';
 import { TOOL_CATALOG } from '../model/tools';
 
 export type SchemaProperty = Record<string, unknown>;
@@ -33,6 +35,8 @@ export interface FieldProps {
   onChange: (value: unknown) => void;
   /** Reports text the field cannot store yet (invalid JSON), keyed by `name`; null once it parses. */
   onValidity: (name: string, error: string | null) => void;
+  /** The other fields of the list item this field belongs to (e.g. an assignment's variable for its value). */
+  siblings?: Record<string, unknown>;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -512,6 +516,7 @@ function ObjectListField(props: FieldProps) {
               property={asObject(raw) ?? {}}
               value={asObject(item)?.[field]}
               required={itemRequired.includes(field)}
+              siblings={asObject(item) ?? {}}
               onChange={(fieldValue) => setItem(index, field, fieldValue)}
             />
           ))}
@@ -747,10 +752,102 @@ function KnowledgeBaseField({ name, property, value, required, disabled, onChang
   );
 }
 
+/** An assignment target: only declared conv.* variables, with a shortcut to declare a new one. */
+function AssignVariableField({ name, property, value, required, disabled, variables, onChange }: FieldProps) {
+  const label = fieldLabel(name, property);
+  const id = fieldId(name);
+  const panel = useVariablesPanel();
+  const convOnly = variables
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.path.startsWith('conv.')) }))
+    .filter((group) => group.items.length);
+  const current = typeof value === 'string' ? value : '';
+  return (
+    <FieldShell id={id} label={label} required={required} hint={FIELD_HINTS.variable}>
+      <VariablePicker
+        id={id}
+        label={label}
+        value={current}
+        groups={convOnly}
+        disabled={disabled}
+        placeholder="conv.ten_bien"
+        onChange={(path) => onChange(path || undefined)}
+        footer={panel ? {
+          label: '+ Khai báo biến mới…',
+          onSelect: () => panel.openVariables({ create: true, onCreated: (created) => onChange(`conv.${created}`) }),
+        } : undefined}
+      />
+    </FieldShell>
+  );
+}
+
+/**
+ * An assignment value shaped by its variable: a list for enum/boolean, a number box with the declared range for
+ * numbers, and an error under the field when the value breaks the declaration. Templates, add/append and other
+ * types keep the free value box.
+ */
+function AssignValueField(props: FieldProps) {
+  const { name, property, value, required, disabled, variables, siblings, onChange } = props;
+  const path = typeof siblings?.variable === 'string' ? siblings.variable : '';
+  const operation = typeof siblings?.operation === 'string' ? siblings.operation : 'set';
+  const info = findVariable(variables, path);
+  const isTemplate = typeof value === 'string' && value.includes('{{');
+  if (!info?.type || operation !== 'set' || isTemplate || !['enum', 'boolean', 'number'].includes(info.type)) {
+    return <AnyValueField {...props} />;
+  }
+  const label = fieldLabel(name, property);
+  const id = fieldId(name);
+  const error = value === undefined ? null : constraintError({ type: info.type, values: info.values, constraints: info.constraints }, value);
+  const shell = (control: ReactNode) => (
+    <FieldShell id={id} label={label} required={required} hint={error ? undefined : FIELD_HINTS.value}>
+      {control}
+      {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
+    </FieldShell>
+  );
+  if (info.type === 'number') {
+    return shell(
+      <Input
+        id={id}
+        aria-label={label}
+        aria-invalid={Boolean(error)}
+        type="number"
+        className="font-mono"
+        value={typeof value === 'number' ? value : ''}
+        min={info.constraints?.minimum}
+        max={info.constraints?.maximum}
+        step={info.constraints?.integer ? 1 : 'any'}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+      />,
+    );
+  }
+  const options = info.type === 'enum' ? info.values ?? [] : ['true', 'false'];
+  const current = value === undefined ? '' : String(value);
+  return shell(
+    <select
+      id={id}
+      aria-label={label}
+      aria-invalid={Boolean(error)}
+      className={`${selectClass} font-mono`}
+      value={current}
+      disabled={disabled}
+      onChange={(event) => {
+        const text = event.target.value;
+        onChange(text === '' ? undefined : info.type === 'boolean' ? text === 'true' : text);
+      }}
+    >
+      <option value="">Chọn giá trị…</option>
+      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      {current && !options.includes(current) ? <option value={current}>{current} (không hợp lệ)</option> : null}
+    </select>,
+  );
+}
+
 /** One config field, with an editor chosen from its schema; unknown shapes fall back to JSON. */
 export function NodeField(props: FieldProps) {
   const property = resolve(props.property);
   const resolved = { ...props, property };
+  if (/^assignments\.\d+\.variable$/.test(props.name)) return <AssignVariableField {...resolved} />;
+  if (/^assignments\.\d+\.value$/.test(props.name)) return <AssignValueField {...resolved} />;
   switch (fieldKind(property)) {
     case 'condition': return <ConditionField {...resolved} />;
     case 'tool': return <ToolField {...resolved} />;

@@ -25,7 +25,55 @@ function Stateful({ name, property, initial, onValue, variables = DEFAULT_GROUPS
   );
 }
 
+const ASSIGNMENTS: SchemaProperty = {
+  type: 'array',
+  items: {
+    type: 'object',
+    required: ['variable'],
+    properties: {
+      variable: { type: 'string', pattern: '^conv\\.[a-z][a-z0-9_]*$' },
+      operation: { type: 'string', enum: ['set', 'append', 'clear', 'add'], default: 'set' },
+      value: {},
+    },
+  },
+};
+const CONV_GROUPS: VariableGroup[] = [
+  { title: 'Hệ thống', items: [{ path: 'sys.query', type: 'string' }] },
+  { title: 'Biến hội thoại', items: [
+    { path: 'conv.stage', type: 'enum', values: ['welcome', 'fee'] },
+    { path: 'conv.score', type: 'number', constraints: { minimum: 0, maximum: 10 } },
+  ] },
+];
+
 describe('NodeField', () => {
+  it('picks only conv variables for an assignment and offers enum values', () => {
+    const onValue = vi.fn();
+    render(<Stateful name="assignments" property={ASSIGNMENTS} initial={[{ variable: 'conv.stage', operation: 'set' }]}
+      onValue={onValue} variables={CONV_GROUPS} />);
+    fireEvent.focus(screen.getByLabelText('Biến'));
+    expect(screen.queryByRole('option', { name: /sys\.query/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /conv\.score/ })).toBeInTheDocument();
+    const value = screen.getByLabelText('Giá trị');
+    expect(value.tagName).toBe('SELECT');
+    fireEvent.change(value, { target: { value: 'fee' } });
+    expect(onValue).toHaveBeenLastCalledWith([{ variable: 'conv.stage', operation: 'set', value: 'fee' }]);
+  });
+
+  it('flags a number that breaks the declared range right under the field', () => {
+    const onValue = vi.fn();
+    render(<Stateful name="assignments" property={ASSIGNMENTS} initial={[{ variable: 'conv.score', operation: 'set', value: 1 }]}
+      onValue={onValue} variables={CONV_GROUPS} />);
+    fireEvent.change(screen.getByLabelText('Giá trị'), { target: { value: '42' } });
+    expect(onValue).toHaveBeenLastCalledWith([{ variable: 'conv.score', operation: 'set', value: 42 }]);
+    expect(screen.getByText('Tối đa 10.')).toBeInTheDocument();
+  });
+
+  it('keeps the free value box for templates and for add/append', () => {
+    render(<Stateful name="assignments" property={ASSIGNMENTS} initial={[{ variable: 'conv.score', operation: 'add', value: 1 }]}
+      onValue={() => {}} variables={CONV_GROUPS} />);
+    expect(screen.getByLabelText('Giá trị').getAttribute('type')).not.toBe('number');
+  });
+
   it('offers the values of a fixed-value variable and only the comparisons of its type', () => {
     const onValue = vi.fn();
     render(<Stateful name="condition" property={{ type: 'object', 'x-widget': 'condition_builder' }} onValue={onValue}
