@@ -25,6 +25,11 @@ components:
               name: {type: string}
               type: {type: string, enum: [string, number, boolean, enum, string_list]}
               nullable: {type: boolean}
+              description: {type: string}
+              values:
+                type: array
+                items: {type: string}
+                description: Tập giá trị cố định, lấy từ code sinh ra biến.
     WorkflowHandleSpec:
       type: object
       additionalProperties: false
