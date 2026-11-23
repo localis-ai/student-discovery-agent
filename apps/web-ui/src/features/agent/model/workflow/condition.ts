@@ -167,3 +167,19 @@ export function formatCondition(raw: unknown): string {
   if (items.length === 2) return `${formatOperand(items[0])} ${operator} ${formatOperand(items[1])}`;
   return JSON.stringify(raw);
 }
+
+/** A condition for the canvas card: one clause per line, `và`/`hoặc` in front of the later ones, at most `max` lines. */
+export function conditionLines(raw: unknown, max = 3): string[] {
+  if (!isRecord(raw)) return [];
+  const entry = single(raw);
+  if (!entry) return [formatCondition(raw)].filter(Boolean);
+  const [operator, args] = entry;
+  if ((operator !== 'and' && operator !== 'or') || !Array.isArray(args) || args.length < 2) return [formatCondition(raw)];
+  const joiner = operator === 'and' ? 'và' : 'hoặc';
+  const clauses = args.map((item) => {
+    const nested = isRecord(item) ? single(item)?.[0] : undefined;
+    return nested === 'and' || nested === 'or' ? `(${formatCondition(item)})` : formatCondition(item);
+  });
+  const lines = clauses.map((clause, index) => (index === 0 ? clause : `${joiner} ${clause}`));
+  return lines.length > max ? [...lines.slice(0, max - 1), `+${lines.length - (max - 1)} điều kiện`] : lines;
+}

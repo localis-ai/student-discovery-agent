@@ -87,6 +87,35 @@ describe('WorkflowCanvas', () => {
     expect(screen.queryByTestId('delete-node-classify')).not.toBeInTheDocument();
   });
 
+  it('shows the node note, the full code summary, KB names and missing-config warnings', () => {
+    const noted: ChatflowWorkflow = {
+      entry: 'start',
+      nodes: [
+        { id: 'start', type: 'start' },
+        {
+          id: 'check', type: 'if_else', title: 'Vừa hoàn tất Holland?', description: 'Bắt lượt sau khi nộp bài.',
+          config: { condition: { '==': [{ var: 'sys.interaction_outcome' }, 'assessment_completed'] } },
+        },
+        { id: 'empty', type: 'answer' },
+      ],
+      edges: [],
+    };
+    render(<WorkflowCanvas workflow={noted} catalog={catalog} />);
+    const card = screen.getByTestId('workflow-node-check');
+    expect(within(card).getByTestId('node-description')).toHaveTextContent('Bắt lượt sau khi nộp bài.');
+    expect(card).toHaveTextContent('sys.interaction_outcome == "assessment_completed"');
+    expect(card.style.width).toBe('260px');
+    expect(screen.getByTestId('workflow-node-empty')).toHaveTextContent('Chưa có nội dung');
+    expect(within(screen.getByTestId('workflow-node-empty')).queryByTestId('node-description')).not.toBeInTheDocument();
+  });
+
+  it('names a knowledge base from the summary context', () => {
+    const kb: ChatflowWorkflow = { entry: 'start', nodes: [{ id: 'start', type: 'start' },
+      { id: 'kb', type: 'knowledge_retrieval', config: { knowledge_base_id: 'kb1' } }], edges: [] };
+    render(<WorkflowCanvas workflow={kb} catalog={catalog} summaryContext={{ knowledgeBaseName: (id) => (id === 'kb1' ? 'Tuyển sinh' : undefined) }} />);
+    expect(screen.getByTestId('workflow-node-kb')).toHaveTextContent('Tuyển sinh');
+  });
+
   it('places each source handle inside the row of its own label', () => {
     render(<WorkflowCanvas workflow={workflow} catalog={catalog} />);
     for (const label of ['study', 'other']) {

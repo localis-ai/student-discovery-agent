@@ -22,7 +22,7 @@ import {
   type OnNodesChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { Check, CircleAlert, LayoutGrid, Maximize, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, CircleAlert, LayoutGrid, Maximize, Trash2, TriangleAlert, ZoomIn, ZoomOut } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/features/knowledge';
 import { cn } from '@/lib/utils/cn';
@@ -42,7 +42,7 @@ import { validTargets } from '../model/workflow/graph';
 import { handleLabel, isErrorHandle, nodeHandles, type NodeHandle } from '../model/workflow/handles';
 import { parseWorkflowIssuePath, type WorkflowIssueTarget } from '../model/workflow/issue-path';
 import { arrangeWorkflow, computeWorkflowLayout, type WorkflowLayoutOptions } from '../model/workflow/layout';
-import { nodeSummary } from '../model/workflow/summary';
+import { nodeSummary, summaryHeightLines, type CardSummary, type SummaryContext } from '../model/workflow/summary';
 import type {
   AgentIssue,
   ChatflowNode,
@@ -52,6 +52,7 @@ import type {
   WorkflowNodeType,
 } from '../types';
 import { NodePalette, WORKFLOW_PALETTE_MIME } from './node-palette';
+import { NodeDescription } from './node-description';
 import { NodeIcon, nodeVisual } from './node-visuals';
 
 export interface WorkflowCanvasProps {
@@ -70,6 +71,8 @@ export interface WorkflowCanvasProps {
   highlightedPath?: readonly string[];
   /** Node currently between workflow.node_started and workflow.node_finished. */
   activeNodeId?: string | null;
+  /** Names for ids the cards would otherwise show raw (knowledge bases, tools). */
+  summaryContext?: SummaryContext;
 }
 
 export interface WorkflowConnectionLike {
@@ -83,8 +86,11 @@ interface WorkflowNodeData extends Record<string, unknown> {
   nodeType: string;
   /** Catalog title, shown under a custom title so the kind of node stays readable. */
   typeTitle?: string;
-  description?: string;
-  summary: string[];
+  /** Catalog description of the node type, as the card's tooltip. */
+  typeDescription?: string;
+  /** The node's own authoring note. */
+  note?: string;
+  summary: CardSummary;
   handles: NodeHandle[];
   invalid: boolean;
   highlighted: boolean;
@@ -198,13 +204,17 @@ export function createNodeFromCatalog(
 }
 
 // Card geometry, also fed to the auto layout so arranged cards do not overlap.
-const CARD_WIDTH = 240;
+const CARD_WIDTH = 260;
 const CARD_HEADER = 52;
+const CARD_TITLE_EXTRA = 16; // a title that wraps to its second line
+const CARD_NOTE = 22;
 const CARD_SUMMARY_LINE = 18;
 const CARD_ROW = 24;
+const LONG_TITLE = 28;
 
-function estimatedCardHeight(summaryLines: number, handles: number): number {
-  return CARD_HEADER + (summaryLines ? summaryLines * CARD_SUMMARY_LINE + 16 : 0) + handles * CARD_ROW + 12;
+function estimatedCardHeight(card: { summaryRows: number; handles: number; note: boolean; longTitle: boolean }): number {
+  return CARD_HEADER + (card.longTitle ? CARD_TITLE_EXTRA : 0) + (card.note ? CARD_NOTE : 0)
+    + (card.summaryRows ? card.summaryRows * CARD_SUMMARY_LINE + 16 : 0) + card.handles * CARD_ROW + 12;
 }
 
 function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
@@ -223,7 +233,7 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
     <div
       data-testid={`workflow-node-${id}`}
       data-position={`${Math.round(data.position.x)},${Math.round(data.position.y)}`}
-      title={data.description}
+      title={data.typeDescription}
       style={{ width: CARD_WIDTH }}
       className={cn('group relative rounded-xl border bg-card pb-2 text-card-foreground shadow-sm transition-shadow hover:shadow-md', ring)}
     >
@@ -247,7 +257,7 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
       <div className="flex items-center gap-2.5 px-3 pt-3">
         <NodeIcon type={data.nodeType} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold leading-tight">{data.label}</div>
+          <div className="line-clamp-2 break-words text-sm font-semibold leading-tight">{data.label}</div>
           {data.typeTitle ? <div className="truncate text-[11px] leading-tight text-muted-foreground">{data.typeTitle}</div> : null}
         </div>
         {!data.readOnly && !data.isEntry && data.onRequestDelete ? (
@@ -265,10 +275,25 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
           </button>
         ) : null}
       </div>
-      {data.summary.length ? (
-        <div className="mx-3 mt-2 space-y-0.5 rounded-md bg-muted/70 px-2 py-1.5">
-          {data.summary.map((line, index) => (
-            <p key={index} className="truncate font-mono text-[11px] leading-[18px] text-muted-foreground">{line}</p>
+      {data.note ? <NodeDescription text={data.note} /> : null}
+      {data.summary.lines.length ? (
+        <div className="mx-3 mt-2 space-y-0.5 rounded-md bg-muted/70 px-2 py-1.5" title={data.summary.lines.map((line) => line.text).join('\n')}>
+          {data.summary.lines.map((line, index) => (
+            <p key={index} className={cn('line-clamp-2 break-words text-[11px] leading-[18px] text-muted-foreground', line.code && 'font-mono')}>
+              {line.text}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {data.summary.chips.length || data.summary.warning ? (
+        <div className="mx-3 mt-1.5 flex flex-wrap items-center gap-1">
+          {data.summary.warning ? (
+            <span className="inline-flex items-center gap-1 rounded bg-warning-subtle px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground">
+              <TriangleAlert className="size-3" aria-hidden /> {data.summary.warning}
+            </span>
+          ) : null}
+          {data.summary.chips.map((chip) => (
+            <span key={chip} className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground/70">{chip}</span>
           ))}
         </div>
       ) : null}
@@ -335,6 +360,8 @@ const nodeTypes = { workflow: WorkflowNode };
 /** Browser-only workflow canvas supporting read-only inspection and interactive graph editing. */
 // A shared default: a fresh `[]` per render would rebuild every node and edge memo below.
 const NO_PATH: readonly string[] = [];
+const NO_CONTEXT: SummaryContext = {};
+const EMPTY_SUMMARY: CardSummary = { lines: [], chips: [] };
 
 export function WorkflowCanvas({
   workflow,
@@ -349,6 +376,7 @@ export function WorkflowCanvas({
   overlay,
   highlightedPath = NO_PATH,
   activeNodeId = null,
+  summaryContext = NO_CONTEXT,
 }: WorkflowCanvasProps) {
   const isReadOnly = readOnly ?? !onChange;
   const flowInstanceRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null);
@@ -390,22 +418,29 @@ export function WorkflowCanvas({
       new Map(
         workflow.nodes.map((node) => {
           const type = catalogType(catalog, node);
-          return [node.id, { type, handles: nodeHandles(node, type?.handles), summary: nodeSummary(node) }];
+          return [node.id, { type, handles: nodeHandles(node, type?.handles), summary: nodeSummary(node, summaryContext) }];
         }),
       ),
-    [catalog, workflow.nodes],
+    [catalog, workflow.nodes, summaryContext],
   );
   const layoutOptions = useMemo<WorkflowLayoutOptions>(() => {
     let nodeHeight = 120;
-    for (const card of cards.values()) {
-      nodeHeight = Math.max(nodeHeight, estimatedCardHeight(card.summary.length, card.handles.length));
+    for (const node of workflow.nodes) {
+      const card = cards.get(node.id);
+      if (!card) continue;
+      nodeHeight = Math.max(nodeHeight, estimatedCardHeight({
+        summaryRows: summaryHeightLines(card.summary),
+        handles: card.handles.length,
+        note: Boolean(node.description?.trim()),
+        longTitle: (node.title ?? '').length > LONG_TITLE,
+      }));
     }
     return {
       nodeWidth: CARD_WIDTH,
       nodeHeight,
       handleOrderByNode: Object.fromEntries([...cards].map(([id, card]) => [id, card.handles.map((handle) => handle.id)])),
     };
-  }, [cards]);
+  }, [cards, workflow.nodes]);
   const positions = useMemo(() => computeWorkflowLayout(workflow, layoutOptions), [layoutOptions, workflow]);
 
   const requestDeleteNode = useCallback(
@@ -435,8 +470,9 @@ export function WorkflowCanvas({
             label: node.title || type?.title || node.type,
             nodeType: node.type,
             typeTitle: node.title && type?.title && node.title !== type.title ? type.title : undefined,
-            description: type?.description,
-            summary: card?.summary ?? [],
+            typeDescription: type?.description,
+            note: node.description?.trim() || undefined,
+            summary: card?.summary ?? EMPTY_SUMMARY,
             handles: card?.handles ?? [],
             invalid: invalidNodes.has(node.id),
             highlighted: highlightedNodes.has(node.id),

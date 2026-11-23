@@ -1,13 +1,15 @@
 'use client';
 
 import { Maximize2 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { errorMessage } from '@/features/knowledge';
+import { errorMessage, useKnowledgeBases } from '@/features/knowledge';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { useAgentNodeTypes } from '../hooks/use-agent';
 import { isRenderableWorkflow } from '../model/workflow/shape';
+import type { SummaryContext } from '../model/workflow/summary';
+import { TOOL_CATALOG } from '../model/tools';
 import type { AgentConfig, ChatflowWorkflow } from '../types';
 import { ChatflowEditor } from './chatflow-editor';
 import { IssuesPanel, type ValidationState } from './issues-panel';
@@ -52,6 +54,11 @@ export function ConfigTab({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const nodeTypes = useAgentNodeTypes(mode === 'chatflow');
   const catalog = nodeTypes.data;
+  const knowledgeBases = useKnowledgeBases();
+  const summaryContext = useMemo<SummaryContext>(() => ({
+    knowledgeBaseName: id => knowledgeBases.data?.find(kb => kb.id === id)?.name,
+    toolLabel: name => TOOL_CATALOG.find(tool => tool.name === name)?.label,
+  }), [knowledgeBases.data]);
   const handleJsonValidity = (error: string | null) => { setJsonError(error); onJsonValidity(error); };
   const visibleSections = sectionsForMode(mode ?? 'agent');
   const issues = validation?.issues ?? [];
@@ -132,6 +139,7 @@ export function ConfigTab({
               catalog={catalog}
               readOnly={!catalog}
               issues={workflowIssues}
+              summaryContext={summaryContext}
               selectedNodeId={selectedNodeId}
               onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
               onChange={next => onChange(['workflow'], next)}
@@ -188,7 +196,7 @@ export function ConfigTab({
                 </Button>
               </div>
               {workflow ? (
-                <WorkflowCanvas className="h-[420px] w-full" workflow={workflow} catalog={catalog} issues={workflowIssues} readOnly showPalette={false} />
+                <WorkflowCanvas className="h-[420px] w-full" workflow={workflow} catalog={catalog} issues={workflowIssues} readOnly showPalette={false} summaryContext={summaryContext} />
               ) : (
                 <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
                   {workflowMalformed ? 'Workflow chưa đúng cấu trúc, mở trình chỉnh sửa để sửa ở tab JSON.' : 'Bản nháp Chatflow chưa có workflow.'}
