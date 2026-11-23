@@ -32,6 +32,14 @@ describe('JSON output fields', () => {
     expect(schemaToFields({ type: 'array' }).editable).toBe(false);
   });
 
+  it('leaves schemas the table cannot write back unchanged to the JSON editor', () => {
+    expect(schemaToFields({ type: 'object', properties: { n: { type: 'integer' } } }).editable).toBe(false);
+    expect(schemaToFields({ type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false }).editable)
+      .toBe(false);
+    expect(schemaToFields({ type: 'object', properties: { a: { type: 'string' } }, required: ['a', 'ghost'] }).editable)
+      .toBe(false);
+  });
+
   it('writes the subset the runtime checks, and round-trips', () => {
     const fields = [
       { name: 'stage', type: 'string' as const, required: true, description: 'Giai đoạn' },

@@ -30,7 +30,6 @@ function fieldType(schema: unknown): JsonFieldType | null {
       && schema.items.type === 'string' && onlyKeys(schema.items, ['type']) ? 'string_list' : null;
   }
   if (!onlyKeys(schema, ['type', 'description'])) return null;
-  if (schema.type === 'integer') return 'number';
   return schema.type === 'string' || schema.type === 'number' || schema.type === 'boolean' || schema.type === 'object'
     ? schema.type
     : null;
@@ -38,12 +37,16 @@ function fieldType(schema: unknown): JsonFieldType | null {
 
 export function schemaToFields(schema: unknown): { editable: boolean; fields: JsonField[] } {
   if (schema === undefined || schema === null) return { editable: true, fields: [] };
-  if (!isRecord(schema) || schema.type !== 'object' || !onlyKeys(schema, ['type', 'properties', 'required', 'additionalProperties'])) {
+  if (!isRecord(schema) || schema.type !== 'object' || !onlyKeys(schema, ['type', 'properties', 'required'])) {
     return { editable: false, fields: [] };
   }
   const properties = schema.properties ?? {};
   const required = schema.required ?? [];
   if (!isRecord(properties) || !Array.isArray(required)) return { editable: false, fields: [] };
+  // The table only edits what fieldsToSchema writes back unchanged: anything else stays with the JSON editor.
+  if (!required.every((name) => typeof name === 'string' && Object.hasOwn(properties, name))) {
+    return { editable: false, fields: [] };
+  }
   const fields: JsonField[] = [];
   for (const [name, property] of Object.entries(properties)) {
     const type = fieldType(property);

@@ -44,3 +44,19 @@ def test_validator_reports_a_literal_that_breaks_a_constraint():
     assert any(f.code == "workflow_assign_invalid" and "ràng buộc" in f.message
                and f.path.endswith("assignments[0].value") for f in findings), findings
     assert not [f for f in check(4) if f.code == "workflow_assign_invalid"]
+
+
+@pytest.mark.parametrize("bad", [{"maximum": None}, {"maximum": "3"}, {"maximum": True}, {"integer": "yes"}, ["maximum"]])
+def test_validator_skips_malformed_constraints_instead_of_hiding_every_finding(bad):
+    raw = {
+        "entry": "start",
+        "variables": [{**SCORE, "constraints": bad}],
+        "nodes": [{"id": "start", "type": "start"}, assign_node(42),
+                  {"id": "done", "type": "answer", "config": {"text": "ok"}},
+                  {"id": "orphan", "type": "answer", "config": {"text": "never reached"}}],
+        "edges": [{"id": "e1", "source": "start", "source_handle": "next", "target": "a"},
+                  {"id": "e2", "source": "a", "source_handle": "next", "target": "done"}],
+    }
+    codes = {f.code for f in validate_workflow(raw, {}, {})}
+    assert "workflow_unverifiable" not in codes
+    assert codes  # the unreachable node is still reported
