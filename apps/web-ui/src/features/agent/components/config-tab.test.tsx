@@ -333,6 +333,7 @@ describe('ConfigTab with several flows', () => {
   it('edits one flow at a time and writes back only that flow', async () => {
     const onConfig = vi.fn();
     render(<Harness initial={TWO} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
     await screen.findByTestId('workflow-node-palette');
     expect(screen.getByTestId('workflow-node-a')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Nghiệp vụ đang sửa'), { target: { value: 'fee' } });
@@ -342,5 +343,15 @@ describe('ConfigTab with several flows', () => {
     const next = onConfig.mock.lastCall![0].workflow;
     expect(next.flows[1].nodes[1].description).toBe('Trả lời học phí');
     expect(next.flows[0]).toEqual((TWO.workflow as { flows: unknown[] }).flows[0]);
+  });
+
+  it('opens on the Nghiệp vụ tab and goes to a flow graph from its card', async () => {
+    render(<Harness initial={TWO} initialSection="chatflow" mode="chatflow" />);
+    expect(screen.getByRole('tab', { name: 'Nghiệp vụ' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('flow-card-fee')).toHaveTextContent('Học phí');
+    fireEvent.click(screen.getByRole('button', { name: 'Mở sơ đồ Học phí' }));
+    expect(screen.getByRole('tab', { name: 'Sơ đồ' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByTestId('workflow-node-fee_a')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nghiệp vụ đang sửa')).toHaveValue('fee');
   });
 });

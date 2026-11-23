@@ -5,6 +5,11 @@ import { RESERVED_NODE_IDS, nextUniqueId } from './edit';
 export const MAX_FLOWS = 10;
 export const RESERVED_FLOW_IDS: ReadonlySet<string> = new Set(['other', 'error']);
 export const MAX_FLOW_EXAMPLES = 5;
+/** How the runtime router picked a flow (the debug run's route.method), in words. */
+export const ROUTE_METHODS: Record<string, string> = {
+  trigger: 'điều kiện kích hoạt', single: 'chỉ một nghiệp vụ định tuyến được', classifier: 'phân loại theo mô tả',
+  default: 'nghiệp vụ mặc định',
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);

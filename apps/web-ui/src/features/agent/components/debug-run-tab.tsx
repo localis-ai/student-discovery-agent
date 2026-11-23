@@ -1,17 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { findFlow, flowOfNode, flowView } from '../model/workflow/flows';
+import { ROUTE_METHODS, findFlow, flowOfNode, flowView } from '../model/workflow/flows';
 import type { Chatflow, NodeTypeCatalog } from '../types';
 import { useDebugRun } from '../hooks/use-debug-run';
 import { DebugRunForm } from './debug-run-form';
 import { DebugTrace } from './debug-trace';
 import { WorkflowCanvas } from './workflow-canvas';
-
-export const ROUTE_METHODS: Record<string, string> = {
-  trigger: 'điều kiện kích hoạt', single: 'chỉ một nghiệp vụ định tuyến được', classifier: 'phân loại theo mô tả',
-  default: 'nghiệp vụ mặc định',
-};
 
 export function DebugRunTab({ chat, flowId, catalog, beforeRun, visible = true }: {
   chat?: Chatflow;
