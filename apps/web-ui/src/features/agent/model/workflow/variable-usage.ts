@@ -1,5 +1,5 @@
 import type { AgentConfig, Chatflow, ChatflowNode, ChatflowVariable, ChatflowWorkflow } from '../../types';
-import { isRenderableChatflow } from './flows';
+import { isRenderableChatflow, type FlowsView } from './flows';
 
 // Same placeholder grammar as agent_runtime/workflow/templates.py PLACEHOLDER (spaces allowed inside the braces).
 function placeholder(path: string): RegExp {
@@ -32,6 +32,12 @@ function mentions(value: unknown, path: string): boolean {
 export function variableUsage(workflow: ChatflowWorkflow, name: string): string[] {
   const path = `conv.${name}`;
   return workflow.nodes.filter((node) => mentions(node.config ?? {}, path)).map((node) => node.id);
+}
+
+/** Titles of the flows whose trigger reads `conv.<name>` (only the all-flows view carries triggers). */
+export function triggerUsage(workflow: FlowsView, name: string): string[] {
+  const path = `conv.${name}`;
+  return (workflow.triggers ?? []).filter((item) => mentions(item.trigger, path)).map((item) => item.title || item.flow);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -92,7 +98,11 @@ export function renameVariable(config: AgentConfig, from: string, to: string): A
   let workflow: Chatflow | ChatflowWorkflow;
   if (isRenderableChatflow(config.workflow)) {
     const chat = config.workflow;
-    workflow = { ...chat, variables: renameDeclared(chat.variables), flows: chat.flows.map((flow) => ({ ...flow, nodes: renameNodes(flow.nodes) })) };
+    workflow = { ...chat, variables: renameDeclared(chat.variables), flows: chat.flows.map((flow) => ({
+      ...flow,
+      nodes: renameNodes(flow.nodes),
+      ...(flow.trigger ? { trigger: mapStrings(flow.trigger, rewrite) as Record<string, unknown> } : {}),
+    })) };
   } else {
     const single = config.workflow as ChatflowWorkflow;
     workflow = { ...single, variables: renameDeclared(single.variables), nodes: renameNodes(single.nodes) };
@@ -111,9 +121,11 @@ export function upsertVariable(workflow: ChatflowWorkflow, variable: ChatflowVar
   return { ...workflow, variables: at < 0 ? [...list, variable] : list.map((item, index) => (index === at ? variable : item)) };
 }
 
-/** Removes an unused declaration; a variable still read or written by a node cannot be removed. */
-export function removeVariable(workflow: ChatflowWorkflow, name: string): ChatflowWorkflow {
+/** Removes an unused declaration; a variable still read or written by a node or a flow trigger cannot be removed. */
+export function removeVariable(workflow: FlowsView, name: string): ChatflowWorkflow {
   const used = variableUsage(workflow, name);
   if (used.length) throw new Error(`Biến conv.${name} đang dùng ở ${used.length} node: ${used.join(', ')}.`);
+  const triggers = triggerUsage(workflow, name);
+  if (triggers.length) throw new Error(`Biến conv.${name} đang dùng ở điều kiện kích hoạt của: ${triggers.join(', ')}.`);
   return { ...workflow, variables: (workflow.variables ?? []).filter((item) => item.name !== name) };
 }

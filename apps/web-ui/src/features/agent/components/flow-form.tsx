@@ -49,7 +49,9 @@ export function FlowForm({ chat, flow, variables, onSave, onCancel }: {
   const [examples, setExamples] = useState((flow?.examples ?? []).join('\n'));
   const [trigger, setTrigger] = useState<unknown>(flow?.trigger ?? null);
   const [routable, setRoutable] = useState(flow?.routable !== false);
-  const [isDefault, setIsDefault] = useState(flow ? chat.router.default_flow === flow.id : false);
+  // The router's default must stay routable: its routing switch is locked until another flow is made the default.
+  const isCurrentDefault = flow !== undefined && chat.router.default_flow === flow.id;
+  const [isDefault, setIsDefault] = useState(isCurrentDefault);
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
 
@@ -109,9 +111,14 @@ export function FlowForm({ chat, flow, variables, onSave, onCancel }: {
       <div className="flex items-start justify-between gap-4 rounded-md border p-3">
         <div>
           <Label htmlFor="flow-routable">Để router chọn theo mô tả</Label>
-          <p className="text-xs text-muted-foreground">Tắt nếu nghiệp vụ chỉ vào qua điều kiện kích hoạt hoặc node Chuyển nghiệp vụ.</p>
+          <p className="text-xs text-muted-foreground">
+            {isCurrentDefault
+              ? 'Đây là nghiệp vụ mặc định nên router phải chọn được. Hãy chọn nghiệp vụ mặc định khác trước khi tắt.'
+              : 'Tắt nếu nghiệp vụ chỉ vào qua điều kiện kích hoạt hoặc node Chuyển nghiệp vụ.'}
+          </p>
         </div>
-        <Switch id="flow-routable" checked={routable} onCheckedChange={checked => { setRoutable(checked); if (!checked) setIsDefault(false); }} />
+        <Switch id="flow-routable" checked={routable} disabled={isCurrentDefault}
+          onCheckedChange={checked => { setRoutable(checked); if (!checked) setIsDefault(false); }} />
       </div>
 
       <div className="flex items-start justify-between gap-4 rounded-md border p-3">
@@ -119,7 +126,7 @@ export function FlowForm({ chat, flow, variables, onSave, onCancel }: {
           <Label htmlFor="flow-default">Nghiệp vụ mặc định</Label>
           <p className="text-xs text-muted-foreground">Chạy khi router không chọn được nghiệp vụ nào (và ở lượt bấm nút không có điều kiện nào khớp).</p>
         </div>
-        <Switch id="flow-default" checked={isDefault} disabled={!routable || (flow !== undefined && chat.router.default_flow === flow.id)}
+        <Switch id="flow-default" checked={isDefault} disabled={!routable || isCurrentDefault}
           onCheckedChange={setIsDefault} />
       </div>
 

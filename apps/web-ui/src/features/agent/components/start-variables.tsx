@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Trash2, Variable } from 'lucide-react';
-import { variableUsage } from '../model/workflow/variable-usage';
+import { triggerUsage, variableUsage } from '../model/workflow/variable-usage';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { useVariablesPanel } from './variables-context';
 
@@ -47,6 +47,9 @@ export function StartVariables({ workflow, catalog }: { workflow: ChatflowWorkfl
           <ul className="space-y-1">
             {variables.map((variable) => {
               const used = variableUsage(usageView, variable.name);
+              const triggers = triggerUsage(usageView, variable.name);
+              const usedLabel = [used.length ? `${used.length} node` : '', triggers.length ? `${triggers.length} điều kiện kích hoạt` : '']
+                .filter(Boolean).join(', ');
               return (
                 <li key={variable.name} data-testid={`variable-${variable.name}`} className="group flex items-center gap-1 rounded-md border bg-card">
                   <button
@@ -62,15 +65,15 @@ export function StartVariables({ workflow, catalog }: { workflow: ChatflowWorkfl
                     <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                       · {variable.description || 'Chưa có mô tả'}
                     </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">{used.length ? `dùng ở ${used.length} node` : 'chưa dùng'}</span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">{usedLabel ? `dùng ở ${usedLabel}` : 'chưa dùng'}</span>
                     <TypeTag type={variable.type} />
                   </button>
                   {editable ? (
                     <button
                       type="button"
                       aria-label={`Xoá conv.${variable.name}`}
-                      disabled={used.length > 0}
-                      title={used.length ? `Đang dùng ở ${used.length} node, không xoá được` : undefined}
+                      disabled={Boolean(usedLabel)}
+                      title={usedLabel ? `Đang dùng ở ${usedLabel}, không xoá được` : undefined}
                       className="mr-1 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
                       onClick={() => panel!.remove(variable.name)}
                     >

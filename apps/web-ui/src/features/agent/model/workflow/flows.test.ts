@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Chatflow } from '../../types';
 import { generateNodeId } from './edit';
+import { removeVariable, renameVariable, triggerUsage } from './variable-usage';
 import {
-  addFlow, allNodeIds, flowOfNode, flowRemovalBlockers, flowView, gotoLinks, isRenderableChatflow, moveFlow,
+  addFlow, allFlowsView, allNodeIds, flowOfNode, flowRemovalBlockers, flowView, gotoLinks, isRenderableChatflow, moveFlow,
   removeFlow, setDefaultFlow, updateFlow, updateRouter, withFlowView,
 } from './flows';
 
@@ -81,5 +82,18 @@ describe('flow lens', () => {
     expect(flowOfNode(chat, 'fee_start')).toBe('fee');
     expect(flowOfNode(chat, 'nope')).toBeUndefined();
     expect(gotoLinks(chat)).toEqual([{ from: 'main', to: 'fee', nodeId: 'go' }]);
+  });
+
+  it('renames and protects a variable that only a flow trigger reads', () => {
+    const triggered: Chatflow = {
+      ...chat,
+      flows: chat.flows.map(flow => (flow.id === 'fee' ? { ...flow, trigger: { '==': [{ var: 'conv.stage' }, 'fee'] } } : flow)),
+    };
+    const view = allFlowsView(triggered);
+    expect(triggerUsage(view, 'stage')).toEqual(['Học phí']);
+    expect(() => removeVariable(view, 'stage')).toThrow(/điều kiện kích hoạt/);
+    const renamed = renameVariable({ mode: 'chatflow', workflow: triggered } as never, 'stage', 'journey').workflow as Chatflow;
+    expect(renamed.flows[1]!.trigger).toEqual({ '==': [{ var: 'conv.journey' }, 'fee'] });
+    expect(renamed.flows[0]!.trigger).toBeUndefined();
   });
 });

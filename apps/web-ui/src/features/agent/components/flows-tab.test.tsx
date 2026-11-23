@@ -108,6 +108,14 @@ describe('FlowsTab', () => {
     expect(next.router.default_flow).toBe('hoc_phi');
   });
 
+  it('keeps the default flow routable until another flow is the default', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa Hỏi đáp chung' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sửa nghiệp vụ Hỏi đáp chung' });
+    expect(within(dialog).getByLabelText('Để router chọn theo mô tả')).toBeDisabled();
+    expect(dialog).toHaveTextContent('chọn nghiệp vụ mặc định khác trước');
+  });
+
   it('blocks removing the default flow or a goto target, and removes another after confirmation', async () => {
     const extra: Chatflow = { ...CHAT, flows: [...CHAT.flows, { id: 'job', title: 'Việc làm', description: 'x', entry: 'job_s', nodes: [{ id: 'job_s', type: 'start' }] }] };
     const onChange = vi.fn();

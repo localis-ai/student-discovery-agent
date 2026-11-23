@@ -48,17 +48,24 @@ export function flowView(chat: Chatflow, flowId: string): ChatflowWorkflow {
   };
 }
 
+/** A flow's trigger, which reads variables just as node configs do. */
+export interface FlowTrigger { flow: string; title: string; trigger: unknown }
+
+/** The all-flows view: every node, plus the flows' triggers. */
+export type FlowsView = ChatflowWorkflow & { triggers?: FlowTrigger[] };
+
 /**
  * Every flow's nodes as one read-only graph (no edges): what variable usage, renames and the variables panel look
  * at, since conversation variables are shared by every flow and node ids are unique across them.
  */
-export function allFlowsView(chat: Chatflow): ChatflowWorkflow {
+export function allFlowsView(chat: Chatflow): FlowsView {
   return {
     entry: chat.flows[0]?.entry ?? '',
     nodes: chat.flows.flatMap(flow => flow.nodes),
     edges: [],
     variables: chat.variables ?? [],
     ...(chat.budget ? { budget: chat.budget } : {}),
+    triggers: chat.flows.filter(flow => flow.trigger).map(flow => ({ flow: flow.id, title: flow.title, trigger: flow.trigger })),
   };
 }
 

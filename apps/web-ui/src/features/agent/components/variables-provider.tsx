@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/features/knowledge';
 import { allFlowsView, isRenderableChatflow } from '../model/workflow/flows';
-import { removeVariable, renameVariable, upsertVariable, variableUsage } from '../model/workflow/variable-usage';
+import { removeVariable, renameVariable, triggerUsage, upsertVariable, variableUsage } from '../model/workflow/variable-usage';
 import type { AgentConfig, ChatflowVariable, ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { VariableForm } from './variable-form';
 import { VariablesPanelContext, type VariablesPanel } from './variables-context';
@@ -12,7 +12,7 @@ import { VariablesPanelContext, type VariablesPanel } from './variables-context'
 const EMPTY_WORKFLOW: ChatflowWorkflow = { entry: '', nodes: [] };
 
 type Editing = { name: string | null; onCreated?: (name: string) => void } | null;
-type PendingRename = { from: ChatflowVariable; to: ChatflowVariable; used: string[] } | null;
+type PendingRename = { from: ChatflowVariable; to: ChatflowVariable; used: string[]; triggers: string[] } | null;
 
 /**
  * Owns the conversation variables of a chatflow draft: the add/edit dialog, rename-everywhere and delete
@@ -59,8 +59,9 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
   const save = (variable: ChatflowVariable) => {
     if (current && current.name !== variable.name) {
       const used = variableUsage(workflow, current.name);
-      if (used.length) {
-        setPendingRename({ from: current, to: variable, used });
+      const triggers = triggerUsage(workflow, current.name);
+      if (used.length || triggers.length) {
+        setPendingRename({ from: current, to: variable, used, triggers });
         return;
       }
     }
@@ -103,7 +104,8 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
         open={pendingRename !== null}
         onOpenChange={(value) => { if (!value) setPendingRename(null); }}
         title={`Đổi tên conv.${pendingRename?.from.name ?? ''} thành conv.${pendingRename?.to.name ?? ''}?`}
-        description={`Mọi tham chiếu trong ${pendingRename?.used.length ?? 0} node (${pendingRename?.used.map(titleOf).join(', ') ?? ''}) và trong persona case sẽ được đổi theo.`}
+        description={`Mọi tham chiếu trong ${pendingRename?.used.length ?? 0} node (${pendingRename?.used.map(titleOf).join(', ') ?? ''})${
+          pendingRename?.triggers.length ? `, điều kiện kích hoạt của ${pendingRename.triggers.join(', ')}` : ''} và trong persona case sẽ được đổi theo.`}
         confirmLabel={`Đổi tên ở ${pendingRename?.used.length ?? 0} node`}
         onConfirm={() => {
           if (pendingRename) finishSave(pendingRename.to, pendingRename.from);
