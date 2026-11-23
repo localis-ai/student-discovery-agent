@@ -22,6 +22,8 @@ export interface ChatflowNode {
   id: string;
   type: Schemas['ChatflowNodeType'];
   title?: string;
+  /** Authoring note; the runtime never reads it. */
+  description?: string;
   config?: Record<string, unknown>;
   ui?: { position?: { x: number; y: number } };
 }
@@ -31,14 +33,28 @@ export interface ChatflowEdge {
   source_handle: string;
   target: string;
 }
+export type VariableType = 'string' | 'number' | 'boolean' | 'enum' | 'string_list';
+/** Per-type limits; mirror of agent_runtime VariableConstraints. */
+export interface VariableConstraints {
+  min_length?: number;
+  max_length?: number;
+  minimum?: number;
+  maximum?: number;
+  integer?: boolean;
+  max_items?: number;
+  item_max_length?: number;
+}
+export interface ChatflowVariable {
+  name: string;
+  description?: string;
+  type: VariableType;
+  values?: string[];
+  default: unknown;
+  constraints?: VariableConstraints;
+}
 export interface ChatflowWorkflow {
   entry: string;
-  variables?: Array<{
-    name: string;
-    type: 'string' | 'number' | 'boolean' | 'enum' | 'string_list';
-    values?: string[];
-    default: unknown;
-  }>;
+  variables?: ChatflowVariable[];
   nodes: ChatflowNode[];
   edges?: ChatflowEdge[];
   budget?: { max_nodes?: number; max_llm_calls?: number; turn_timeout_ms?: number };

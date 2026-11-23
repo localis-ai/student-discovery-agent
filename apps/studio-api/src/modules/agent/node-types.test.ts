@@ -9,6 +9,7 @@ import {
   fetchWorkflowNodeTypes,
   NODE_TYPES_TARGET,
   setNodeTypeCatalogReader,
+  workflowNodeTypeCatalogSchema,
 } from '@/modules/agent/node-types';
 
 const KEY = Buffer.alloc(32, 9).toString('base64');
@@ -119,5 +120,12 @@ describe('GET /api/v1/admin/agent/workflow/node-types route', () => {
     });
     expect(down.status).toBe(503);
     expect(await down.json()).toMatchObject({ success: false, error: { code: 'SYS_UNAVAILABLE' } });
+  });
+});
+
+describe('workflowNodeTypeCatalogSchema', () => {
+  it('accepts the runtime catalog fixture, variable descriptions and value lists included', () => {
+    const parsed = workflowNodeTypeCatalogSchema.safeParse(catalogFixture);
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
 });

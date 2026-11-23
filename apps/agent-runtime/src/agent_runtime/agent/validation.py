@@ -49,7 +49,7 @@ _CUSTOM = {
     "workflow_node_type_unsupported": "Loại node này chưa được hỗ trợ trong chatflow.",
     "workflow_node_id_reserved": "Id node không được trùng không gian tên dành riêng (sys, conv, profile, result).",
     "persona_input_invalid": "Mỗi lượt cần đúng một trong text hoặc interaction.",
-    "workflow_variable_invalid": "Biến hội thoại không hợp lệ: kiểu, danh sách giá trị hoặc giá trị mặc định không khớp.",
+    "workflow_variable_invalid": "Biến hội thoại không hợp lệ: kiểu, danh sách giá trị, ràng buộc hoặc giá trị mặc định không khớp.",
 }
 
 

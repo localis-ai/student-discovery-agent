@@ -39,6 +39,22 @@ describe('chatflow snapshot contract parity', () => {
     expect(validate(fixture('agent-snapshot-demo.json')), JSON.stringify(validate.errors)).toBe(true);
   });
 
+  it('accepts node descriptions and described, constrained variables', () => {
+    const content = structuredClone(minimal);
+    content.workflow.nodes[0].description = 'Điểm vào';
+    content.workflow.variables = [
+      { name: 'score', description: 'Điểm tạm', type: 'number', default: 0, constraints: { minimum: 0, maximum: 10, integer: true } },
+      { name: 'tags', type: 'string_list', default: [], constraints: { max_items: 3, item_max_length: 20 } },
+    ];
+    expect(validate(content), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it('rejects an unknown constraint key', () => {
+    const content = structuredClone(minimal);
+    content.workflow.variables = [{ name: 's', type: 'string', default: '', constraints: { pattern: 'a' } }];
+    expect(validate(content)).toBe(false);
+  });
+
   const withNodes = (nodes: unknown[]) => ({ ...minimal, workflow: { ...minimal.workflow, nodes } });
   const node = (patch: Record<string, unknown>) => ({ ...minimal.workflow.nodes[1], ...patch });
   it.each([

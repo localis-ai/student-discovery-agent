@@ -12,6 +12,8 @@ const namespaceVariableSchema = z.object({
   name: z.string(),
   type: z.enum(['string', 'number', 'boolean', 'enum', 'string_list']),
   nullable: z.boolean().optional(),
+  description: z.string().optional(),
+  values: z.array(z.string()).optional(),
 }).strict();
 
 const namespaceSchema = z.object({

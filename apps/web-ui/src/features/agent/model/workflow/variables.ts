@@ -1,9 +1,21 @@
-import type { ChatflowWorkflow, NodeTypeCatalog } from '../../types';
+import type { ChatflowWorkflow, NodeTypeCatalog, VariableConstraints, VariableType } from '../../types';
+import { nodeOutputs } from './node-io';
+
+/** One readable variable as pickers show it: the standard path, plus what Studio knows about its type and meaning. */
+export interface VariableInfo {
+  path: string;
+  type?: VariableType;
+  description?: string;
+  values?: string[];
+  constraints?: VariableConstraints;
+}
 
 export interface VariableGroup {
   title: string;
-  paths: string[];
+  items: VariableInfo[];
 }
+
+const VARIABLE_TYPES: ReadonlySet<string> = new Set(['string', 'number', 'boolean', 'enum', 'string_list']);
 
 function ancestors(workflow: ChatflowWorkflow, nodeId: string): Set<string> {
   const parents = new Map<string, string[]>();
@@ -32,21 +44,45 @@ export function readableVariables(
 ): VariableGroup[] {
   const groups: VariableGroup[] = [];
   for (const namespace of catalog?.namespaces ?? []) {
-    let paths: string[] = [];
+    let items: VariableInfo[] = [];
     if (namespace.source === 'static') {
-      paths = (namespace.variables ?? []).map((variable) => `${namespace.name}.${variable.name}`);
+      items = (namespace.variables ?? []).map((variable) => ({
+        path: `${namespace.name}.${variable.name}`,
+        type: variable.type,
+        description: variable.description,
+        values: variable.values,
+      }));
     } else if (namespace.source === 'workflow_variables') {
-      paths = (workflow.variables ?? []).map((variable) => `${namespace.name}.${variable.name}`);
+      items = (workflow.variables ?? []).map((variable) => ({
+        path: `${namespace.name}.${variable.name}`,
+        type: variable.type,
+        description: variable.description,
+        values: variable.values,
+        constraints: variable.constraints,
+      }));
     } else if (namespace.source === 'node_output') {
       const upstream = ancestors(workflow, nodeId);
       for (const node of workflow.nodes) {
-        if (!upstream.has(node.id)) continue;
-        const spec = catalog?.node_types.find((item) => item.type === node.type);
-        const properties = (spec?.output_schema as { properties?: Record<string, unknown> } | undefined)?.properties;
-        paths.push(...Object.keys(properties ?? {}).map((field) => `${node.id}.${field}`));
+        if (!upstream.has(node.id) || node.type === 'assign') continue;
+        for (const output of nodeOutputs(node, catalog)) {
+          items.push({
+            path: output.path,
+            type: output.type && VARIABLE_TYPES.has(output.type) ? (output.type as VariableType) : undefined,
+            description: node.title ? `Output của "${node.title}"` : undefined,
+            values: output.values,
+          });
+        }
       }
     }
-    if (paths.length) groups.push({ title: namespace.title, paths });
+    if (items.length) groups.push({ title: namespace.title, items });
   }
   return groups;
+}
+
+export function findVariable(groups: readonly VariableGroup[], path: string): VariableInfo | undefined {
+  for (const group of groups) {
+    const found = group.items.find((item) => item.path === path);
+    if (found) return found;
+  }
+  return undefined;
 }

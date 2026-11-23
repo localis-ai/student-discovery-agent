@@ -354,3 +354,12 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
     );
   });
 });
+
+describe('updateNode clearing optional fields', () => {
+  it('removes a key patched to undefined instead of keeping key: undefined', () => {
+    const wf = { entry: 'a', nodes: [{ id: 'a', type: 'start' as const, title: 'T', description: 'D' }] };
+    const next = updateNode(wf, 'a', { title: undefined, description: undefined });
+    expect(next.nodes[0]).not.toHaveProperty('title');
+    expect(next.nodes[0]).not.toHaveProperty('description');
+  });
+});

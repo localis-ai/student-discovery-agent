@@ -179,11 +179,12 @@ export function updateNode(
   const nextNodes = workflow.nodes.map((node) => {
     if (node.id !== nodeId) return node;
     changed = true;
-    return {
-      ...node,
-      ...patch,
-      id: node.id,
-    };
+    const next = { ...node, ...patch, id: node.id };
+    // A patch key set to undefined removes the field, so cleared optional fields leave no `key: undefined` behind.
+    for (const key of Object.keys(patch) as Array<keyof typeof patch>) {
+      if (patch[key] === undefined) delete (next as Record<string, unknown>)[key];
+    }
+    return next;
   });
 
   if (!changed) return workflow;

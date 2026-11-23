@@ -17,21 +17,19 @@ from agent_runtime.sessions.services.message_turns import (
 from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
+from agent_runtime.workflow.constants import EXPLAIN_OUTCOME, INTERACTION_OUTCOMES
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
 from agent_runtime.workflow.implicit import implicit_workflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort, rank_career_groups
 from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.validator import knowledge_base_ids
 
-_OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited", "select_majors": "selection_made"}
-
 
 def interaction_outcome(request, draft) -> str:
     """``sys.interaction_outcome`` of a handled interaction: what the fixed handler just did."""
     if draft.completion is not None:
         return "assessment_completed"
-    return _OUTCOMES.get(request.action, "none")
+    return INTERACTION_OUTCOMES.get(request.action, "none")
 
 
 def knowledge_base_ids_of(agent) -> set[str]:
@@ -98,7 +96,7 @@ def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, mo
     explain = request.explain is not None
     return _execute(snapshot, query="" if explain else request.content.text,
                     interaction="explain_result" if explain else None,
-                    outcome="explain_requested" if explain else "none", explain=explain, result=_result_of(snapshot),
+                    outcome=EXPLAIN_OUTCOME if explain else "none", explain=explain, result=_result_of(snapshot),
                     user_text=EXPLAIN_REQUEST_TEXT if explain else request.content.text, model=model,
                     toolbox=toolbox, knowledge_port=knowledge_port, profile=profile,
                     emit=emit, should_stop=should_stop, deadline=deadline, clock=clock,

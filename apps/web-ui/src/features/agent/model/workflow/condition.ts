@@ -3,8 +3,17 @@
  * Only a flat list of comparisons joined by one and/or maps to rows; anything else (nesting, `!`) stays JSON.
  */
 
+import type { VariableType } from '../../types';
+
 export const CONDITION_OPERATORS = ['==', '!=', '<', '<=', '>', '>=', 'in', 'missing'] as const;
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
+
+/** Comparisons offered for a variable of this type; an unknown type gets them all. */
+export function operatorsFor(type: VariableType | undefined): ConditionOperator[] {
+  if (type === 'boolean') return ['==', '!=', 'missing'];
+  if (type === 'string' || type === 'enum') return ['==', '!=', 'in', 'missing'];
+  return [...CONDITION_OPERATORS];
+}
 
 export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   '==': 'bằng',
@@ -166,4 +175,20 @@ export function formatCondition(raw: unknown): string {
   if (operator === 'var') return formatOperand(raw);
   if (items.length === 2) return `${formatOperand(items[0])} ${operator} ${formatOperand(items[1])}`;
   return JSON.stringify(raw);
+}
+
+/** A condition for the canvas card: one clause per line, `và`/`hoặc` in front of the later ones, at most `max` lines. */
+export function conditionLines(raw: unknown, max = 3): string[] {
+  if (!isRecord(raw)) return [];
+  const entry = single(raw);
+  if (!entry) return [formatCondition(raw)].filter(Boolean);
+  const [operator, args] = entry;
+  if ((operator !== 'and' && operator !== 'or') || !Array.isArray(args) || args.length < 2) return [formatCondition(raw)];
+  const joiner = operator === 'and' ? 'và' : 'hoặc';
+  const clauses = args.map((item) => {
+    const nested = isRecord(item) ? single(item)?.[0] : undefined;
+    return nested === 'and' || nested === 'or' ? `(${formatCondition(item)})` : formatCondition(item);
+  });
+  const lines = clauses.map((clause, index) => (index === 0 ? clause : `${joiner} ${clause}`));
+  return lines.length > max ? [...lines.slice(0, max - 1), `+${lines.length - (max - 1)} điều kiện`] : lines;
 }

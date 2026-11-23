@@ -7,10 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useKnowledgeBases } from '@/features/knowledge';
-import { cn } from '@/lib/utils/cn';
 import { canonical } from '../model/config';
 import {
-  CONDITION_OPERATORS,
+  operatorsFor,
   conditionToRows,
   OPERATOR_LABELS,
   rowsToCondition,
@@ -18,7 +17,10 @@ import {
   type ConditionRow,
   type ConditionRows,
 } from '../model/workflow/condition';
-import type { VariableGroup } from '../model/workflow/variables';
+import { findVariable, type VariableGroup } from '../model/workflow/variables';
+import { constraintError } from '../model/workflow/variable-rules';
+import { VariablePicker } from './variable-picker';
+import { useVariablesPanel } from './variables-context';
 import { TOOL_CATALOG } from '../model/tools';
 
 export type SchemaProperty = Record<string, unknown>;
@@ -33,6 +35,8 @@ export interface FieldProps {
   onChange: (value: unknown) => void;
   /** Reports text the field cannot store yet (invalid JSON), keyed by `name`; null once it parses. */
   onValidity: (name: string, error: string | null) => void;
+  /** The other fields of the list item this field belongs to (e.g. an assignment's variable for its value). */
+  siblings?: Record<string, unknown>;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -82,6 +86,15 @@ const FIELD_HINTS: Record<string, string> = {
   id: 'Chữ thường, số, gạch dưới; đây là tên nhánh trên sơ đồ.',
   variable: 'Dạng conv.tên_biến.',
   value: 'Số, true/false, "chuỗi" hoặc JSON; chữ thường được lưu là chuỗi.',
+};
+
+/** Config fields that tune how a node runs rather than what it does: shown under the collapsed "Nâng cao". */
+export const ADVANCED_FIELDS: Record<string, ReadonlySet<string>> = {
+  llm: new Set(['model', 'history_messages', 'max_output_tokens', 'json_schema', 'context_refs']),
+  agent: new Set(['model', 'history_messages', 'max_tool_steps', 'max_output_tokens']),
+  intent_classifier: new Set(['input', 'model', 'history_messages']),
+  knowledge_retrieval: new Set(['top_k', 'fixed_filter', 'filter_from_vars']),
+  profile_propose: new Set(['model', 'history_messages']),
 };
 
 const ITEM_NOUNS: Record<string, string> = { labels: 'Nhãn', assignments: 'Phép gán', blocks: 'Block' };
@@ -202,7 +215,7 @@ function VariableInsert({ label, variables, disabled, onInsert }: {
         <option value="">Chọn biến</option>
         {variables.map((group) => (
           <optgroup key={group.title} label={group.title}>
-            {group.paths.map((path) => <option key={path} value={path}>{path}</option>)}
+            {group.items.map((item) => <option key={item.path} value={item.path}>{item.path}</option>)}
           </optgroup>
         ))}
       </select>
@@ -503,6 +516,7 @@ function ObjectListField(props: FieldProps) {
               property={asObject(raw) ?? {}}
               value={asObject(item)?.[field]}
               required={itemRequired.includes(field)}
+              siblings={asObject(item) ?? {}}
               onChange={(fieldValue) => setItem(index, field, fieldValue)}
             />
           ))}
@@ -520,12 +534,20 @@ function ObjectListField(props: FieldProps) {
   );
 }
 
+/** A string choice as the row model stores it: quoted when it would otherwise read back as another JSON value. */
+function rowText(value: string): string {
+  try {
+    return typeof JSON.parse(value) === 'string' ? value : JSON.stringify(value);
+  } catch {
+    return value;
+  }
+}
+
 function ConditionField(props: FieldProps) {
   const { name, property, value, required, disabled, variables, onChange } = props;
   const label = fieldLabel(name, property);
   const [draft, setDraft] = useDraft(value, conditionToRows);
   const [asJson, setAsJson] = useState(draft === null);
-  const listId = `${fieldId(name)}-variables`;
 
   if (asJson || draft === null) {
     return (
@@ -556,7 +578,7 @@ function ConditionField(props: FieldProps) {
           {required ? <span aria-hidden className="ml-0.5 text-destructive">*</span> : null}
         </span>
         <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAsJson(true)}>
-          Sửa dạng JSON
+          Chế độ nâng cao (JSON)
         </button>
       </div>
       {draft.rows.length > 1 ? (
@@ -574,22 +596,23 @@ function ConditionField(props: FieldProps) {
           </select>
         </div>
       ) : null}
-      <datalist id={listId}>
-        {variables.flatMap((group) => group.paths).map((path) => <option key={path} value={path} />)}
-      </datalist>
       {draft.rows.map((row, index) => {
         const badVariable = row.variable !== '' && !VARIABLE_PATH.test(row.variable);
+        const info = findVariable(variables, row.variable);
+        const operators = operatorsFor(info?.type);
+        const choices = info?.type === 'boolean' ? ['true', 'false'] : info?.values;
+        const pickValue = Boolean(choices?.length) && (row.operator === '==' || row.operator === '!=');
         return (
           <div key={index} className="space-y-1.5 rounded-lg border bg-muted/30 p-2.5">
             <div className="flex items-center gap-1.5">
-              <Input
-                aria-label={`Biến điều kiện ${index + 1}`}
-                list={listId}
-                placeholder="sys.query"
-                className={cn('h-8 flex-1 font-mono text-xs', badVariable && 'border-destructive')}
+              <VariablePicker
+                id={`${fieldId(name)}-var-${index}`}
+                label={`Biến điều kiện ${index + 1}`}
                 value={row.variable}
+                groups={variables}
                 disabled={disabled}
-                onChange={(event) => setRow(index, { variable: event.target.value.trim() })}
+                invalid={badVariable}
+                onChange={(path) => setRow(index, { variable: path })}
               />
               <button
                 type="button"
@@ -609,11 +632,29 @@ function ConditionField(props: FieldProps) {
                 disabled={disabled}
                 onChange={(event) => setRow(index, { operator: event.target.value as ConditionRow['operator'] })}
               >
-                {CONDITION_OPERATORS.map((operator) => (
+                {/* A stored operator the type would not offer stays listed, so opening the form never changes it. */}
+                {[...operators, ...(operators.includes(row.operator) ? [] : [row.operator])].map((operator) => (
                   <option key={operator} value={operator}>{OPERATOR_LABELS[operator]}</option>
                 ))}
               </select>
-              {row.operator !== 'missing' ? (
+              {pickValue ? (
+                <select
+                  aria-label={`Giá trị so sánh ${index + 1}`}
+                  className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                  value={row.value}
+                  disabled={disabled}
+                  onChange={(event) => setRow(index, { value: event.target.value })}
+                >
+                  <option value="">Chọn giá trị…</option>
+                  {choices!.map((choice) => {
+                    const stored = info?.type === 'boolean' ? choice : rowText(choice);
+                    return <option key={choice} value={stored}>{choice}</option>;
+                  })}
+                  {row.value && !choices!.some((choice) => (info?.type === 'boolean' ? choice : rowText(choice)) === row.value) ? (
+                    <option value={row.value}>{row.value} (không thuộc danh sách)</option>
+                  ) : null}
+                </select>
+              ) : row.operator !== 'missing' ? (
                 <Input
                   aria-label={`Giá trị so sánh ${index + 1}`}
                   placeholder={row.operator === 'in' ? 'a, b, c' : 'giá trị hoặc {{biến}}'}
@@ -625,6 +666,9 @@ function ConditionField(props: FieldProps) {
               ) : null}
             </div>
             {badVariable ? <p className="text-xs text-destructive">Biến cần dạng namespace.tên, ví dụ conv.buoc.</p> : null}
+            {row.operator === 'in' && info?.values?.length ? (
+              <p className="text-xs text-muted-foreground">Giá trị hợp lệ: <code>{info.values.join(', ')}</code></p>
+            ) : null}
           </div>
         );
       })}
@@ -708,10 +752,102 @@ function KnowledgeBaseField({ name, property, value, required, disabled, onChang
   );
 }
 
+/** An assignment target: only declared conv.* variables, with a shortcut to declare a new one. */
+function AssignVariableField({ name, property, value, required, disabled, variables, onChange }: FieldProps) {
+  const label = fieldLabel(name, property);
+  const id = fieldId(name);
+  const panel = useVariablesPanel();
+  const convOnly = variables
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.path.startsWith('conv.')) }))
+    .filter((group) => group.items.length);
+  const current = typeof value === 'string' ? value : '';
+  return (
+    <FieldShell id={id} label={label} required={required} hint={FIELD_HINTS.variable}>
+      <VariablePicker
+        id={id}
+        label={label}
+        value={current}
+        groups={convOnly}
+        disabled={disabled}
+        placeholder="conv.ten_bien"
+        onChange={(path) => onChange(path || undefined)}
+        footer={panel && !panel.readOnly ? {
+          label: '+ Khai báo biến mới…',
+          onSelect: () => panel.edit(null, (created) => onChange(`conv.${created}`)),
+        } : undefined}
+      />
+    </FieldShell>
+  );
+}
+
+/**
+ * An assignment value shaped by its variable: a list for enum/boolean, a number box with the declared range for
+ * numbers, and an error under the field when the value breaks the declaration. Templates, add/append and other
+ * types keep the free value box.
+ */
+function AssignValueField(props: FieldProps) {
+  const { name, property, value, required, disabled, variables, siblings, onChange } = props;
+  const path = typeof siblings?.variable === 'string' ? siblings.variable : '';
+  const operation = typeof siblings?.operation === 'string' ? siblings.operation : 'set';
+  const info = findVariable(variables, path);
+  const isTemplate = typeof value === 'string' && value.includes('{{');
+  if (!info?.type || operation !== 'set' || isTemplate || !['enum', 'boolean', 'number'].includes(info.type)) {
+    return <AnyValueField {...props} />;
+  }
+  const label = fieldLabel(name, property);
+  const id = fieldId(name);
+  const error = value === undefined ? null : constraintError({ type: info.type, values: info.values, constraints: info.constraints }, value);
+  const shell = (control: ReactNode) => (
+    <FieldShell id={id} label={label} required={required} hint={error ? undefined : FIELD_HINTS.value}>
+      {control}
+      {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
+    </FieldShell>
+  );
+  if (info.type === 'number') {
+    return shell(
+      <Input
+        id={id}
+        aria-label={label}
+        aria-invalid={Boolean(error)}
+        type="number"
+        className="font-mono"
+        value={typeof value === 'number' ? value : ''}
+        min={info.constraints?.minimum}
+        max={info.constraints?.maximum}
+        step={info.constraints?.integer ? 1 : 'any'}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+      />,
+    );
+  }
+  const options = info.type === 'enum' ? info.values ?? [] : ['true', 'false'];
+  const current = value === undefined ? '' : String(value);
+  return shell(
+    <select
+      id={id}
+      aria-label={label}
+      aria-invalid={Boolean(error)}
+      className={`${selectClass} font-mono`}
+      value={current}
+      disabled={disabled}
+      onChange={(event) => {
+        const text = event.target.value;
+        onChange(text === '' ? undefined : info.type === 'boolean' ? text === 'true' : text);
+      }}
+    >
+      <option value="">Chọn giá trị…</option>
+      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      {current && !options.includes(current) ? <option value={current}>{current} (không hợp lệ)</option> : null}
+    </select>,
+  );
+}
+
 /** One config field, with an editor chosen from its schema; unknown shapes fall back to JSON. */
 export function NodeField(props: FieldProps) {
   const property = resolve(props.property);
   const resolved = { ...props, property };
+  if (/^assignments\.\d+\.variable$/.test(props.name)) return <AssignVariableField {...resolved} />;
+  if (/^assignments\.\d+\.value$/.test(props.name)) return <AssignValueField {...resolved} />;
   switch (fieldKind(property)) {
     case 'condition': return <ConditionField {...resolved} />;
     case 'tool': return <ToolField {...resolved} />;

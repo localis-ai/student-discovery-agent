@@ -5,27 +5,53 @@ import { nodeSummary } from './summary';
 import { readableVariables } from './variables';
 
 describe('nodeSummary', () => {
-  it('says what each kind of node is set to do', () => {
-    expect(nodeSummary({ id: 'b', type: 'if_else', config: { condition: { '==': [{ var: 'conv.step' }, 'x'] } } })).toEqual([
-      'conv.step == "x"',
-    ]);
-    expect(nodeSummary({ id: 'k', type: 'knowledge_retrieval', config: { knowledge_base_id: 'tuyen_sinh', query: '{{sys.query}}' } }))
-      .toEqual(['KB tuyen_sinh', '{{sys.query}}']);
-    expect(nodeSummary({ id: 't', type: 'tool' })).toEqual(['Chưa chọn tool']);
-    expect(
-      nodeSummary({
-        id: 'a',
-        type: 'assign',
-        config: { assignments: [{ variable: 'conv.step', value: 'done' }, { variable: 'conv.n', operation: 'add', value: 1 }, { variable: 'conv.x', operation: 'clear' }] },
-      }),
-    ).toEqual(['conv.step = "done"', 'conv.n += 1', 'xoá conv.x']);
-    expect(nodeSummary({ id: 's', type: 'start' })).toEqual([]);
+  const ctx = {
+    knowledgeBaseName: (id: string) => (id === 'kb1' ? 'Tuyển sinh 2026' : undefined),
+    toolLabel: (name: string) => (name === 'assessment.start' ? 'Bắt đầu bài Holland' : undefined),
+  };
+
+  it('shows conditions and assignments as code, one clause per line', () => {
+    expect(nodeSummary({ id: 'b', type: 'if_else', config: { condition: { '==': [{ var: 'conv.step' }, 'x'] } } }))
+      .toEqual({ lines: [{ text: 'conv.step == "x"', code: true }], chips: [] });
+    const assign = nodeSummary({
+      id: 'a',
+      type: 'assign',
+      config: { assignments: [
+        { variable: 'conv.step', value: 'done' }, { variable: 'conv.n', operation: 'add', value: 1 },
+        { variable: 'conv.x', operation: 'clear' }, { variable: 'conv.y', value: 1 },
+      ] },
+    });
+    expect(assign.lines.map((line) => line.text)).toEqual(['conv.step = "done"', 'conv.n += 1', 'xoá conv.x', '+1 phép gán']);
   });
 
-  it('keeps each line short', () => {
-    const [line] = nodeSummary({ id: 'l', type: 'llm', config: { prompt: 'x'.repeat(200) } });
-    expect(line).toHaveLength(72);
-    expect(line?.endsWith('…')).toBe(true);
+  it('names knowledge bases and tools instead of ids', () => {
+    expect(nodeSummary({ id: 'k', type: 'knowledge_retrieval', config: { knowledge_base_id: 'kb1', query: '{{sys.query}}' } }, ctx).lines)
+      .toEqual([{ text: 'Tuyển sinh 2026', code: false }, { text: '{{sys.query}}', code: true }]);
+    expect(nodeSummary({ id: 't', type: 'tool', config: { tool: 'assessment.start' } }, ctx).lines)
+      .toEqual([{ text: 'Bắt đầu bài Holland', code: false }]);
+  });
+
+  it('turns side facts into chips', () => {
+    expect(nodeSummary({ id: 'l', type: 'llm', config: { prompt: 'Bạn là bộ điều phối', output: 'json' } }))
+      .toEqual({ lines: [{ text: 'Bạn là bộ điều phối', code: false }], chips: ['JSON'] });
+    expect(nodeSummary({ id: 'r', type: 'answer', config: { text: 'Chào', blocks: [{}, {}] } }).chips).toEqual(['+2 block']);
+    expect(nodeSummary({ id: 'c', type: 'intent_classifier', config: { labels: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } }).chips)
+      .toEqual(['3 nhãn']);
+  });
+
+  it('warns about a node that cannot run yet', () => {
+    expect(nodeSummary({ id: 'b', type: 'if_else' }).warning).toBe('Chưa có điều kiện');
+    expect(nodeSummary({ id: 'r', type: 'answer' }).warning).toBe('Chưa có nội dung');
+    expect(nodeSummary({ id: 'k', type: 'knowledge_retrieval' }).warning).toBe('Chưa chọn KB');
+    expect(nodeSummary({ id: 't', type: 'tool' }).warning).toBe('Chưa chọn tool');
+    expect(nodeSummary({ id: 'l', type: 'llm' }).warning).toBe('Chưa có prompt');
+    expect(nodeSummary({ id: 'c', type: 'intent_classifier' }).warning).toBe('Chưa có nhãn');
+    expect(nodeSummary({ id: 's', type: 'start' })).toEqual({ lines: [], chips: [] });
+  });
+
+  it('keeps an unknown knowledge base visible by id', () => {
+    expect(nodeSummary({ id: 'k', type: 'knowledge_retrieval', config: { knowledge_base_id: 'zzz' } }, ctx).lines[0])
+      .toEqual({ text: 'zzz', code: true });
   });
 });
 
@@ -63,7 +89,9 @@ describe('readableVariables', () => {
         { id: 'e2', source: 'up', source_handle: 'success', target: 'me' },
       ],
     };
-    expect(readableVariables(workflow, catalog, 'me')).toEqual([
+    const groups = readableVariables(workflow, catalog, 'me');
+    expect(groups[0]!.items[0]).toMatchObject({ path: 'sys.query', type: 'string' });
+    expect(groups.map((group) => ({ title: group.title, paths: group.items.map((item) => item.path) }))).toEqual([
       { title: 'Hệ thống', paths: ['sys.query'] },
       { title: 'Biến hội thoại', paths: ['conv.step'] },
       { title: 'Output', paths: ['up.text'] },

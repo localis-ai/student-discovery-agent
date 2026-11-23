@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conditionToRows, formatCondition, rowsToCondition } from './condition';
+import { conditionLines, conditionToRows, formatCondition, operatorsFor, rowsToCondition } from './condition';
 
 describe('conditionToRows', () => {
   it('reads an absent or empty condition as no rows', () => {
@@ -66,5 +66,27 @@ describe('formatCondition', () => {
       formatCondition({ and: [{ '!=': [{ var: 'conv.step' }, 'done'] }, { or: [{ missing: ['conv.a'] }, { '>': [{ var: 'conv.n' }, 1] }] }] }),
     ).toBe('conv.step != "done" và (conv.a chưa có giá trị hoặc conv.n > 1)');
     expect(formatCondition({})).toBe('');
+  });
+});
+
+describe('conditionLines', () => {
+  it('puts each clause on its own line and folds the rest', () => {
+    expect(conditionLines({ '==': [{ var: 'sys.interaction_outcome' }, 'assessment_completed'] }))
+      .toEqual(['sys.interaction_outcome == "assessment_completed"']);
+    expect(conditionLines({ and: [{ '==': [{ var: 'a.b' }, 1] }, { missing: ['c.d'] }] }))
+      .toEqual(['a.b == 1', 'và c.d chưa có giá trị']);
+    expect(conditionLines({ or: [1, 2, 3, 4, 5].map((n) => ({ '==': [{ var: 'a.b' }, n] })) }))
+      .toEqual(['a.b == 1', 'hoặc a.b == 2', '+3 điều kiện']);
+    expect(conditionLines(undefined)).toEqual([]);
+  });
+});
+
+describe('operatorsFor', () => {
+  it('offers the comparisons that make sense for a type', () => {
+    expect(operatorsFor('number')).toEqual(['==', '!=', '<', '<=', '>', '>=', 'in', 'missing']);
+    expect(operatorsFor('string')).toEqual(['==', '!=', 'in', 'missing']);
+    expect(operatorsFor('enum')).toEqual(['==', '!=', 'in', 'missing']);
+    expect(operatorsFor('boolean')).toEqual(['==', '!=', 'missing']);
+    expect(operatorsFor(undefined)).toHaveLength(8);
   });
 });

@@ -87,6 +87,59 @@ describe('WorkflowCanvas', () => {
     expect(screen.queryByTestId('delete-node-classify')).not.toBeInTheDocument();
   });
 
+  it('shows the node note, the full code summary, KB names and missing-config warnings', () => {
+    const noted: ChatflowWorkflow = {
+      entry: 'start',
+      nodes: [
+        { id: 'start', type: 'start' },
+        {
+          id: 'check', type: 'if_else', title: 'Vừa hoàn tất Holland?', description: 'Bắt lượt sau khi nộp bài.',
+          config: { condition: { '==': [{ var: 'sys.interaction_outcome' }, 'assessment_completed'] } },
+        },
+        { id: 'empty', type: 'answer' },
+      ],
+      edges: [],
+    };
+    render(<WorkflowCanvas workflow={noted} catalog={catalog} />);
+    const card = screen.getByTestId('workflow-node-check');
+    expect(within(card).getByTestId('node-description')).toHaveTextContent('Bắt lượt sau khi nộp bài.');
+    expect(card).toHaveTextContent('sys.interaction_outcome == "assessment_completed"');
+    expect(card.style.width).toBe('260px');
+    expect(screen.getByTestId('workflow-node-empty')).toHaveTextContent('Chưa có nội dung');
+    expect(within(screen.getByTestId('workflow-node-empty')).queryByTestId('node-description')).not.toBeInTheDocument();
+  });
+
+  it('lists the conversation variables on the start card and input sources on later cards', () => {
+    const vars: ChatflowWorkflow = {
+      entry: 'start',
+      variables: Array.from({ length: 8 }, (_, index) => ({ name: `v${index + 1}`, type: 'string' as const, default: '' })),
+      nodes: [
+        { id: 'start', type: 'start', title: 'Bắt đầu lượt chat' },
+        { id: 'classify', type: 'intent_classifier', title: 'Hiểu ý', config: { labels: [{ id: 'a' }] } },
+        { id: 'answer', type: 'answer', config: { text: '{{classify.label}} {{conv.v1}} {{sys.query}} {{conv.v2}}' } },
+      ],
+      edges: [],
+    };
+    render(<WorkflowCanvas workflow={vars} catalog={catalog} />);
+    const start = screen.getByTestId('workflow-node-start');
+    expect(within(start).getAllByTestId('card-variable')).toHaveLength(6);
+    expect(start).toHaveTextContent('+2 biến');
+    const answer = screen.getByTestId('workflow-node-answer');
+    const chips = within(answer).getAllByTestId('card-input');
+    expect(chips).toHaveLength(3);
+    expect(chips[0]).toHaveTextContent('Hiểu ý');
+    expect(chips[1]).toHaveTextContent('Bắt đầu lượt chat');
+    expect(answer).toHaveTextContent('+1 biến đầu vào');
+    expect(within(screen.getByTestId('workflow-node-classify')).queryByTestId('card-input')).not.toBeInTheDocument();
+  });
+
+  it('names a knowledge base from the summary context', () => {
+    const kb: ChatflowWorkflow = { entry: 'start', nodes: [{ id: 'start', type: 'start' },
+      { id: 'kb', type: 'knowledge_retrieval', config: { knowledge_base_id: 'kb1' } }], edges: [] };
+    render(<WorkflowCanvas workflow={kb} catalog={catalog} summaryContext={{ knowledgeBaseName: (id) => (id === 'kb1' ? 'Tuyển sinh' : undefined) }} />);
+    expect(screen.getByTestId('workflow-node-kb')).toHaveTextContent('Tuyển sinh');
+  });
+
   it('places each source handle inside the row of its own label', () => {
     render(<WorkflowCanvas workflow={workflow} catalog={catalog} />);
     for (const label of ['study', 'other']) {

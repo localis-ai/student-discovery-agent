@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { agentApi } from '../api/agent';
@@ -181,6 +181,21 @@ describe('ConfigTab', () => {
     fireEvent.click(screen.getByTestId('workflow-node-b'));
     expect(screen.getByRole('region', { name: /Biểu mẫu node B/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Block')).toHaveValue('[]');
+  });
+
+  it('opens the start node panel from the header Biến button and declares a variable in a dialog', async () => {
+    const onConfig = vi.fn();
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
+    await screen.findByTestId('workflow-node-palette');
+    fireEvent.click(screen.getByRole('button', { name: 'Biến (0)' }));
+    const panel = screen.getByRole('complementary', { name: 'Cấu hình node' });
+    expect(within(panel).getByRole('region', { name: 'Biến hội thoại' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Thêm biến' }));
+    expect(screen.getByRole('dialog', { name: 'Thêm biến hội thoại' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Tên biến'), { target: { value: 'score' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu biến' }));
+    expect(onConfig.mock.lastCall![0].workflow.variables).toEqual([{ name: 'score', type: 'string', default: '' }]);
+    expect(onConfig.mock.lastCall![0].extra_field).toEqual({ keep: true });
   });
 
   it('opens the node panel over the canvas and closes it', async () => {

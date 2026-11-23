@@ -62,7 +62,7 @@ def run(ctx: NodeContext, config: AssignConfig) -> NodeResult:
             raise NodeError("invalid_output")
         current = pending[name] if name in pending else ctx.scope.get(item.variable)
         new = _new_value(item, variable, current, _resolve(item.value, ctx))
-        if not value_fits(variable.type, new, variable.values):
+        if not value_fits(variable.type, new, variable.values, variable.limits):
             raise NodeError("invalid_output")
         pending[name] = new
         effects.append(AssignConv(name, new, item.operation))

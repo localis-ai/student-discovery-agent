@@ -9,29 +9,60 @@
       "variables": [
         {
           "name": "query",
-          "type": "string"
+          "type": "string",
+          "description": "Câu học sinh vừa gõ trong lượt này; rỗng khi học sinh bấm nút."
         },
         {
           "name": "interaction",
           "type": "string",
-          "nullable": true
+          "nullable": true,
+          "values": [
+            "set_name",
+            "submit_answer",
+            "confirm_answer",
+            "edit_answer",
+            "explain_result",
+            "select_majors"
+          ],
+          "description": "Thao tác học sinh vừa bấm trên giao diện; null khi học sinh gõ chữ."
         },
         {
           "name": "interaction_outcome",
-          "type": "string"
+          "type": "string",
+          "values": [
+            "none",
+            "name_set",
+            "answer_recorded",
+            "answer_confirmed",
+            "answer_edited",
+            "selection_made",
+            "explain_requested",
+            "assessment_completed"
+          ],
+          "description": "Kết quả hệ thống đã xử lý thao tác vừa bấm."
         },
         {
           "name": "turn_index",
-          "type": "number"
+          "type": "number",
+          "description": "Thứ tự lượt chat, lượt đầu là 0."
         },
         {
           "name": "client_blocks",
-          "type": "string_list"
+          "type": "string_list",
+          "description": "Các block mà ứng dụng của học sinh hiển thị được."
         },
         {
           "name": "activity_status",
           "type": "string",
-          "nullable": true
+          "nullable": true,
+          "values": [
+            "collecting_name",
+            "in_progress",
+            "completed",
+            "ended",
+            "expired"
+          ],
+          "description": "Trạng thái hoạt động khám phá đang mở; null khi chưa có."
         }
       ]
     },
@@ -56,16 +87,19 @@
         {
           "name": "house_id",
           "type": "string",
-          "nullable": true
+          "nullable": true,
+          "description": "Mã nhóm Holland của học sinh; null khi chưa làm bài."
         },
         {
           "name": "career_groups",
-          "type": "string_list"
+          "type": "string_list",
+          "description": "Các nhóm nghề phù hợp theo kết quả."
         },
         {
           "name": "revision",
           "type": "number",
-          "nullable": true
+          "nullable": true,
+          "description": "Số lần kết quả được cập nhật."
         }
       ]
     },
@@ -80,7 +114,7 @@
     {
       "type": "start",
       "title": "Bắt đầu",
-      "description": "Điểm vào duy nhất của đồ thị.",
+      "description": "Điểm vào duy nhất của đồ thị; mỗi lượt chat bắt đầu từ đây.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {},
@@ -99,7 +133,7 @@
     {
       "type": "if_else",
       "title": "Rẽ nhánh",
-      "description": "Chọn nhánh true hoặc false theo điều kiện chỉ đọc biến.",
+      "description": "Đi nhánh Đúng nếu điều kiện thỏa, ngược lại đi nhánh Sai. Điều kiện chỉ đọc biến, không gọi model.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -132,7 +166,7 @@
     {
       "type": "intent_classifier",
       "title": "Phân loại ý định",
-      "description": "Model chọn đúng một nhãn trong danh sách hoặc other.",
+      "description": "LLM chọn đúng một nhãn trong danh sách; không khớp nhãn nào thì đi nhánh other.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -230,8 +264,8 @@
     },
     {
       "type": "llm",
-      "title": "Gọi model",
-      "description": "Sinh văn bản hoặc JSON từ prompt.",
+      "title": "Gọi LLM",
+      "description": "Gửi prompt tới LLM, nhận lại văn bản hoặc JSON cho các bước sau.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -403,8 +437,8 @@
     },
     {
       "type": "knowledge_retrieval",
-      "title": "Truy xuất tri thức",
-      "description": "Tìm tài liệu trong một knowledge base, có lọc theo metadata.",
+      "title": "Tra cứu Knowledge base",
+      "description": "Tìm đoạn tài liệu trong một knowledge base, có lọc theo metadata.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -595,8 +629,8 @@
     },
     {
       "type": "profile_propose",
-      "title": "Đề xuất hồ sơ",
-      "description": "Model trích giá trị hồ sơ; server kiểm và tạo proposal, không ghi hồ sơ.",
+      "title": "Đề xuất cập nhật hồ sơ",
+      "description": "LLM trích giá trị hồ sơ từ hội thoại; server kiểm và tạo đề xuất, không ghi thẳng vào hồ sơ.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -668,7 +702,7 @@
     {
       "type": "assign",
       "title": "Gán biến",
-      "description": "Gán giá trị cho biến hội thoại conv.*.",
+      "description": "Gán giá trị cho biến conv.* để các bước sau (và các lượt sau) đọc lại.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {
@@ -721,7 +755,7 @@
     {
       "type": "answer",
       "title": "Trả lời",
-      "description": "Dựng response từ template và block; kết thúc nhánh.",
+      "description": "Dựng nội dung gửi cho học sinh từ template và block. Nhánh kết thúc tại đây.",
       "config_schema": {
         "additionalProperties": false,
         "properties": {

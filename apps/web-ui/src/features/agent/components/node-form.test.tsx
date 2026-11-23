@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { NodeForm } from './node-form';
@@ -61,7 +61,84 @@ const workflow: ChatflowWorkflow = {
   ],
 };
 
+const llmCatalog: NodeTypeCatalog = {
+  ...catalog,
+  node_types: [
+    ...catalog.node_types,
+    {
+      type: 'llm',
+      title: 'Gọi LLM',
+      description: 'Gửi prompt tới LLM',
+      config_schema: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string' },
+          model: { type: 'string' },
+          json_schema: { type: 'object' },
+        },
+      },
+      handles: { static: ['success', 'error'] },
+      output_schema: { type: 'object' },
+    },
+  ],
+};
+
+const llmWorkflow: ChatflowWorkflow = {
+  entry: 'start_node',
+  nodes: [
+    { id: 'start_node', type: 'start' },
+    { id: 'gen', type: 'llm', title: 'Phân loại', config: { prompt: 'x' } },
+    { id: 'reply', type: 'answer', title: 'Có' },
+    { id: 'reply_two', type: 'answer', title: 'Có' },
+  ],
+  edges: [{ id: 'e1', source: 'start_node', source_handle: 'next', target: 'gen' }],
+};
+
+function LlmForm({ nodeId, onChange }: { nodeId: string; onChange?: (next: ChatflowWorkflow) => void }) {
+  const [current, setCurrent] = useState(llmWorkflow);
+  return (
+    <NodeForm workflow={current} nodeId={nodeId} catalog={llmCatalog}
+      onChange={(next) => { setCurrent(next); onChange?.(next); }} />
+  );
+}
+
 describe('NodeForm', () => {
+  it('edits the node description and stores an emptied one as absent', () => {
+    const onChange = vi.fn();
+    render(<LlmForm nodeId="gen" onChange={onChange} />);
+    const box = screen.getByLabelText('Mô tả');
+    fireEvent.change(box, { target: { value: 'Phân loại ý định' } });
+    const find = () => onChange.mock.lastCall![0].nodes.find((node: { id: string }) => node.id === 'gen');
+    expect(find().description).toBe('Phân loại ý định');
+    fireEvent.change(box, { target: { value: '   ' } });
+    expect(find()).not.toHaveProperty('description');
+  });
+
+  it('keeps model settings and the node id under a collapsed "Nâng cao"', () => {
+    render(<LlmForm nodeId="gen" />);
+    const advanced = screen.getByText(/^Nâng cao/).closest('details')!;
+    expect(advanced).not.toHaveAttribute('open');
+    expect(within(advanced).getByLabelText('Model')).toBeInTheDocument();
+    expect(within(advanced).getByText('gen')).toBeInTheDocument();
+    expect(screen.getByLabelText('Prompt').closest('details')).toBeNull();
+    expect(screen.queryByText('ID: gen')).not.toBeInTheDocument();
+  });
+
+  it('opens "Nâng cao" when a field inside it holds invalid JSON', () => {
+    render(<LlmForm nodeId="gen" />);
+    const advanced = screen.getByText(/^Nâng cao/).closest('details')!;
+    fireEvent.change(within(advanced).getByLabelText('JSON schema của output'), { target: { value: '{' } });
+    expect(advanced).toHaveAttribute('open');
+  });
+
+  it('labels next-step choices with the target title and node type, and tells twins apart', () => {
+    render(<LlmForm nodeId="gen" />);
+    const select = screen.getByRole('combobox', { name: 'Khi success' });
+    const labels = [...(select as HTMLSelectElement).options].map((option) => option.textContent);
+    expect(labels).toContain('Có (reply) · Trả lời');
+    expect(labels).toContain('Có (reply_two) · Trả lời');
+  });
+
   it('renders catalog fields and keeps a condition the builder cannot show as JSON', () => {
     render(<NodeForm workflow={workflow} nodeId="branch" catalog={catalog} />);
     expect(screen.getByLabelText('Điều kiện')).toHaveValue(JSON.stringify({ '==': [1, 1] }, null, 2));

@@ -1,20 +1,31 @@
 import type { ChatflowNode } from '../../types';
-import { formatCondition } from './condition';
+import { conditionLines } from './condition';
 
-const MAX_LINE = 72;
 const MAX_LINES = 3;
 
-function clip(text: string): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
-  return oneLine.length > MAX_LINE ? `${oneLine.slice(0, MAX_LINE - 1)}…` : oneLine;
+/** What a canvas card shows under its title: code stays code, names replace ids where Studio knows them. */
+export interface CardSummary {
+  lines: Array<{ text: string; code: boolean }>;
+  chips: string[];
+  /** Set when the node cannot run yet (a required setting is missing). */
+  warning?: string;
+}
+
+export interface SummaryContext {
+  knowledgeBaseName?: (id: string) => string | undefined;
+  toolLabel?: (name: string) => string | undefined;
 }
 
 function text(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
+  return typeof value === 'string' && value.trim() ? value.replace(/\s+/g, ' ').trim() : undefined;
 }
 
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function count(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
 }
 
 function valueText(value: unknown): string {
@@ -30,47 +41,89 @@ function assignmentLine(raw: unknown): string | undefined {
   return `${variable} = ${valueText(value)}`;
 }
 
-/** What a node does, in at most three short lines for its canvas card; empty when there is nothing set yet. */
-export function nodeSummary(node: ChatflowNode): string[] {
+const code = (value: string) => ({ text: value, code: true });
+const plain = (value: string) => ({ text: value, code: false });
+
+/** What a node does, for its canvas card; empty lines and chips when there is nothing to show. */
+export function nodeSummary(node: ChatflowNode, context: SummaryContext = {}): CardSummary {
   const config = node.config ?? {};
-  const lines: Array<string | undefined> = [];
+  const summary: CardSummary = { lines: [], chips: [] };
   switch (node.type) {
-    case 'if_else':
-      lines.push(formatCondition(config.condition) || undefined);
+    case 'if_else': {
+      const lines = conditionLines(config.condition, MAX_LINES);
+      summary.lines = lines.map(code);
+      if (!lines.length) summary.warning = 'Chưa có điều kiện';
       break;
-    case 'intent_classifier':
-      lines.push(`Đầu vào ${text(config.input) ?? '{{sys.query}}'}`);
+    }
+    case 'intent_classifier': {
+      summary.lines = [code(text(config.input) ?? '{{sys.query}}')];
+      const labels = count(config.labels);
+      if (labels) summary.chips.push(`${labels} nhãn`);
+      else summary.warning = 'Chưa có nhãn';
       break;
-    case 'llm':
-      lines.push(text(config.prompt), config.output === 'json' ? 'Output JSON' : undefined);
+    }
+    case 'llm': {
+      const prompt = text(config.prompt);
+      if (prompt) summary.lines = [plain(prompt)];
+      else summary.warning = 'Chưa có prompt';
+      if (config.output === 'json') summary.chips.push('JSON');
       break;
+    }
     case 'agent': {
       const tools = strings(config.tools);
-      lines.push(tools.length ? `Tool: ${tools.join(', ')}` : 'Chưa chọn tool', text(config.instructions));
+      const instructions = text(config.instructions);
+      if (tools.length) summary.lines.push(plain(tools.map((name) => context.toolLabel?.(name) ?? name).join(', ')));
+      else summary.chips.push('Chưa chọn tool');
+      if (instructions) summary.lines.push(plain(instructions));
       break;
     }
-    case 'knowledge_retrieval':
-      lines.push(
-        text(config.knowledge_base_id) ? `KB ${config.knowledge_base_id as string}` : 'Chưa chọn knowledge base',
-        text(config.query),
-      );
+    case 'knowledge_retrieval': {
+      const id = text(config.knowledge_base_id);
+      if (id) {
+        const name = context.knowledgeBaseName?.(id);
+        summary.lines.push(name ? plain(name) : code(id));
+      } else {
+        summary.warning = 'Chưa chọn KB';
+      }
+      const query = text(config.query);
+      if (query) summary.lines.push(code(query));
       break;
-    case 'tool':
-      lines.push(text(config.tool) ?? 'Chưa chọn tool');
+    }
+    case 'tool': {
+      const tool = text(config.tool);
+      if (tool) {
+        const label = context.toolLabel?.(tool);
+        summary.lines = [label ? plain(label) : code(tool)];
+      } else {
+        summary.warning = 'Chưa chọn tool';
+      }
       break;
+    }
     case 'profile_propose': {
       const fields = strings(config.fields);
-      lines.push(fields.length ? `Trường: ${fields.join(', ')}` : undefined);
+      if (fields.length) summary.lines = [code(fields.join(', '))];
       break;
     }
-    case 'assign':
-      lines.push(...(Array.isArray(config.assignments) ? config.assignments.map(assignmentLine) : []));
+    case 'assign': {
+      const lines = (Array.isArray(config.assignments) ? config.assignments.map(assignmentLine) : [])
+        .filter((line): line is string => Boolean(line));
+      const shown = lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `+${lines.length - MAX_LINES} phép gán`] : lines;
+      summary.lines = shown.map(code);
       break;
+    }
     case 'answer': {
-      const blocks = Array.isArray(config.blocks) ? config.blocks.length : 0;
-      lines.push(text(config.text), blocks ? `${blocks} block` : undefined);
+      const body = text(config.text);
+      const blocks = count(config.blocks);
+      if (body) summary.lines = [plain(body)];
+      if (blocks) summary.chips.push(`+${blocks} block`);
+      if (!body && !blocks) summary.warning = 'Chưa có nội dung';
       break;
     }
   }
-  return lines.filter((line): line is string => Boolean(line)).slice(0, MAX_LINES).map(clip);
+  return summary;
+}
+
+/** Text rows a card reserves for its summary: each line wraps to at most 2 rows; chips and warning share one. */
+export function summaryHeightLines(summary: CardSummary): number {
+  return summary.lines.length * 2 + (summary.chips.length || summary.warning ? 1 : 0);
 }

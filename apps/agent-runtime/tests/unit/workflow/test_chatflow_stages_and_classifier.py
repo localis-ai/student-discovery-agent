@@ -314,3 +314,7 @@ def test_switching_between_flows_only_reassigns_the_stage():
         run = run_workflow(wf, scope, ports_for(model=FakeModel(ModelReply(text=label_id))), budget=budget_for(wf))
         assert run.status == "completed" and run.conv == {"stage": label_id}
         conv = run.conv
+
+
+def test_stage_variable_carries_a_description():
+    assert stage_variable()["description"]
