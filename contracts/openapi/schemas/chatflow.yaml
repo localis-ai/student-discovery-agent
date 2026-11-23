@@ -6,8 +6,8 @@ components:
       description: Định danh ổn định của node, cạnh, biến hoặc persona case.
     ChatflowNodeType:
       type: string
-      enum: [start, if_else, intent_classifier, llm, agent, knowledge_retrieval, tool, profile_propose, assign, answer]
-      description: Mười loại node của đợt 1. code, http, vòng lặp, nhánh song song và sub-workflow chưa được hỗ trợ (workflow_node_type_unsupported).
+      enum: [start, if_else, intent_classifier, llm, agent, knowledge_retrieval, tool, profile_propose, assign, answer, goto_flow]
+      description: Loại node người dựng luồng dùng được; goto_flow chuyển sang nghiệp vụ khác trong cùng lượt. code, http, vòng lặp và nhánh song song chưa được hỗ trợ (workflow_node_type_unsupported).
     ChatflowVariable:
       type: object
       additionalProperties: false
@@ -79,16 +79,26 @@ components:
         max_llm_calls: {type: integer, minimum: 1, default: 6}
         turn_timeout_ms: {type: integer, minimum: 1, default: 25000}
       description: Mặc định theo baseline DEC-24; trần cứng do validator đồ thị kiểm sau khi DEC-24 chốt.
-    ChatflowWorkflow:
+    ChatflowFlow:
       type: object
       additionalProperties: false
-      required: [entry, nodes]
+      required: [id, title, entry, nodes]
       properties:
-        entry: {$ref: '#/components/schemas/ChatflowIdentifier'}
-        variables:
+        id: {$ref: '#/components/schemas/ChatflowIdentifier'}
+        title: {type: string, minLength: 1, maxLength: 100, pattern: '\S'}
+        description: {type: string, maxLength: 300, description: Router gửi mô tả này cho LLM để chọn nghiệp vụ; bắt buộc khi routable (workflow_flow_invalid).}
+        examples:
           type: array
-          maxItems: 30
-          items: {$ref: '#/components/schemas/ChatflowVariable'}
+          maxItems: 5
+          items: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+          description: Câu mẫu giúp router chọn nghiệp vụ.
+        trigger:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Điều kiện JSONLogic (DEC-23). Khớp thì vào nghiệp vụ này trước mọi cách chọn khác, theo thứ tự flows.
+        routable: {type: boolean, default: true, description: false thì chỉ vào được qua trigger hoặc goto_flow.}
+        entry: {$ref: '#/components/schemas/ChatflowIdentifier'}
         nodes:
           type: array
           minItems: 1
@@ -98,8 +108,35 @@ components:
           type: array
           maxItems: 100
           items: {$ref: '#/components/schemas/ChatflowEdge'}
+      description: Một nghiệp vụ. id không được là other hoặc error (workflow_flow_invalid).
+    ChatflowRouter:
+      type: object
+      additionalProperties: false
+      required: [default_flow]
+      properties:
+        default_flow: {$ref: '#/components/schemas/ChatflowIdentifier'}
+        model: {type: string, minLength: 1, nullable: true, description: Bỏ trống để dùng model của agent.}
+        instructions: {type: string, maxLength: 2000}
+        history_messages: {type: integer, minimum: 0, maximum: 6, default: 0}
+      description: Router do runtime sở hữu; mỗi lượt chọn nghiệp vụ theo trigger, rồi phân loại theo mô tả và câu mẫu, không khớp thì default_flow.
+    ChatflowWorkflow:
+      type: object
+      additionalProperties: false
+      required: [router, flows]
+      properties:
+        variables:
+          type: array
+          maxItems: 60
+          items: {$ref: '#/components/schemas/ChatflowVariable'}
+          description: Biến conv.* dùng chung cho mọi nghiệp vụ.
         budget: {$ref: '#/components/schemas/ChatflowBudget'}
-      description: Trùng id (node, cạnh, tên biến) là duplicate_items; id node sys, conv, profile, result là workflow_node_id_reserved. Kiểm DAG, handle, biểu thức, tool và KB thuộc validator đồ thị (T14).
+        router: {$ref: '#/components/schemas/ChatflowRouter'}
+        flows:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: {$ref: '#/components/schemas/ChatflowFlow'}
+      description: Trùng id (biến, nghiệp vụ, node hoặc cạnh trong một nghiệp vụ) là duplicate_items; id node phải duy nhất trên toàn agent (workflow_node_id_duplicate); id node sys, conv, profile, result, router là workflow_node_id_reserved. Kiểm DAG, handle, biểu thức, tool, KB, trigger và goto_flow thuộc validator đồ thị.
     ChatflowPersonaTurn:
       type: object
       additionalProperties: false

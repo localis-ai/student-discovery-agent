@@ -103,7 +103,11 @@ components:
         llm_stubs:
           type: object
           additionalProperties: true
-          description: "Output cố định cho node gọi model, khóa là node id; node không có stub gọi model thật."
+          description: "Output cố định cho node gọi model, khóa là node id (router: khóa router); node không có stub gọi model thật."
+        stop_after:
+          type: string
+          enum: [route]
+          description: "route: chỉ chạy định tuyến và trả route (tab Nghiệp vụ › Thử định tuyến)."
       oneOf:
         - required: [message]
         - required: [interaction]
@@ -121,7 +125,11 @@ components:
       required: [node_id, type, order, handle, duration_ms, llm_calls, tokens]
       properties:
         node_id: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
-        type: {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+        type:
+          anyOf:
+            - {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+            - {type: string, enum: [router], description: "Node định tuyến do runtime dựng khi có từ 2 nghiệp vụ."}
+        flow_id: {type: string, nullable: true, description: "Nghiệp vụ chứa node; null với router."}
         order: {type: integer, minimum: 1}
         handle: {type: string, nullable: true, description: "Handle đã chọn; null với node kết thúc nhánh."}
         reason:
@@ -156,6 +164,16 @@ components:
           type: array
           items: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
           description: "Node đã chạy theo thứ tự."
+        route:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [flow, method]
+          properties:
+            flow: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+            method: {type: string, enum: [trigger, single, classifier, default]}
+            label: {type: string, description: "Nhãn classifier trả về; other hoặc error khi rơi về default_flow."}
+          description: "Nghiệp vụ router đã chọn; null khi chỉ có một nghiệp vụ và không hỏi định tuyến."
         node_runs:
           type: array
           items: {$ref: '#/components/schemas/WorkflowDebugNodeRun'}
@@ -180,7 +198,10 @@ components:
           properties:
             event: {type: string, enum: [workflow.node_started]}
             node_id: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
-            type: {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+            type:
+              anyOf:
+                - {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+                - {type: string, enum: [router]}
             order: {type: integer, minimum: 1}
             started_at: {type: string, format: date-time}
         - type: object

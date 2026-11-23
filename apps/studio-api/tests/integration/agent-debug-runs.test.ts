@@ -18,8 +18,12 @@ let admin: string;
 const CHATFLOW_DRAFT = {
   greeting_text: 'Chào!', allowed_activity_profiles: [], mode: 'chatflow',
   workflow: {
-    entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'reply', type: 'answer', config: { text: 'ok' } }],
-    edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'reply' }],
+    router: { default_flow: 'main' },
+    flows: [{
+      id: 'main', title: 'Chính', description: 'Mọi câu hỏi', entry: 'start',
+      nodes: [{ id: 'start', type: 'start' }, { id: 'reply', type: 'answer', config: { text: 'ok' } }],
+      edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'reply' }],
+    }],
   },
 };
 beforeEach(async () => {
@@ -118,14 +122,14 @@ describe('POST /admin/agent/draft/debug-runs', () => {
   });
 
   it('rejects a draft that does not validate with 422 VAL_INVALID_INPUT and the issues, without calling the runtime', async () => {
-    setAgentValidator(async () => ({ valid: false, content_hash: 'h', issues: [{ path: 'workflow.nodes[1]', code: 'workflow_dead_end', message: 'x' }] }));
+    setAgentValidator(async () => ({ valid: false, content_hash: 'h', issues: [{ path: 'workflow.flows[0].nodes[1]', code: 'workflow_dead_end', message: 'x' }] }));
     const runtime = vi.fn();
     setRuntimeCaller(runtime);
     const res = await dispatch(call('POST', '/admin/agent/draft/debug-runs', admin, { message: 'a' }));
     expect(res.status).toBe(422);
     const body = await json(res);
     expect(body.error.code).toBe('VAL_INVALID_INPUT');
-    expect(body.error.details.issues[0].path).toBe('workflow.nodes[1]');
+    expect(body.error.details.issues[0].path).toBe('workflow.flows[0].nodes[1]');
     expect(runtime).not.toHaveBeenCalled();
   });
 

@@ -26,6 +26,7 @@ export const debugRunRequestSchema = z.object({
     profile: object.optional(), result: object.nullable().optional(), conv: object.optional(), activity: object.nullable().optional(),
   }).strict().optional(),
   llm_stubs: object.optional(),
+  stop_after: z.literal('route').optional(),
 }).strict().refine(v => (v.message === undefined) !== (v.interaction === undefined),
   'Cần đúng một trong message hoặc interaction');
 export type DebugRunRequest = z.infer<typeof debugRunRequestSchema>;
