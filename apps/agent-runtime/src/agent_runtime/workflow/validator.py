@@ -3,6 +3,7 @@
 It works on the raw dict, not the parsed model, so one bad node cannot hide the rest. Each check only uses what the
 earlier checks accepted; anything it cannot read is skipped here and reported by the schema layer instead.
 """
+import json
 import logging
 import re
 from collections import defaultdict, deque
@@ -458,6 +459,12 @@ class _Check:
             listed = declared.get("values")
             allowed = tuple(item for item in listed if isinstance(item, str)) if isinstance(listed, list) else None
             fits = value_fits(kind, value, allowed or None)
+            limits = declared.get("constraints")
+            if fits and isinstance(limits, dict) and not value_fits(kind, value, allowed or None, limits):
+                shown = json.dumps(value, ensure_ascii=False)
+                self.add(f"{base}.value", "workflow_assign_invalid",
+                         f"Giá trị {shown} vi phạm ràng buộc của conv.{declared['name']}.")
+                return
         if not fits:
             self.add(f"{base}.value", "workflow_assign_invalid", f"Giá trị không khớp biến kiểu {kind}.")
 

@@ -24,7 +24,7 @@ class Scope:
         self._conv = {}
         for name, variable in self._declared.items():
             stored = conv.get(name, variable.default)
-            fits = value_fits(variable.type, stored, variable.values)
+            fits = value_fits(variable.type, stored, variable.values, variable.limits)
             self._conv[name] = deepcopy(stored if fits else variable.default)
         self._outputs: dict[str, Any] = {}
 
