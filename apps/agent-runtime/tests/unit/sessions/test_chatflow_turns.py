@@ -276,7 +276,10 @@ def test_only_a_message_turn_requires_the_graph_to_produce_a_reply(monkeypatch):
     assert required == [True, False]  # a handled interaction already has the handler's block as its reply
 
 
-def test_outcome_values_cover_every_outcome_the_handler_returns():
-    from agent_runtime.sessions.services.chatflow_turns import _OUTCOMES
-    from agent_runtime.workflow.constants import OUTCOME_VALUES
-    assert set(_OUTCOMES.values()) | {"none", "assessment_completed"} == set(OUTCOME_VALUES)
+def test_outcome_values_cover_every_outcome_a_turn_sets():
+    from agent_runtime.sessions.services.debug_runs import _OUTCOMES as debug_outcomes
+    from agent_runtime.workflow.constants import INTERACTION_OUTCOMES, OUTCOME_VALUES
+    handled = {interaction_outcome(request(action), draft()) for action in INTERACTION_OUTCOMES}
+    completed = interaction_outcome(request("submit_answer"), draft(completion=object()))
+    explained = "explain_requested"  # what an explain message turn sets, asserted in the explain scope test above
+    assert handled | {completed, explained, "none"} | set(debug_outcomes.values()) == set(OUTCOME_VALUES)

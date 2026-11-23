@@ -36,6 +36,7 @@
             "answer_confirmed",
             "answer_edited",
             "selection_made",
+            "explain_requested",
             "assessment_completed"
           ],
           "description": "Kết quả hệ thống đã xử lý thao tác vừa bấm."

@@ -3,7 +3,7 @@ import { isRenderableChatflow } from './flows';
 
 // Same placeholder grammar as agent_runtime/workflow/templates.py PLACEHOLDER (spaces allowed inside the braces).
 function placeholder(path: string): RegExp {
-  return new RegExp(`\\{\\{\\s*${path.replace(/\./g, '\\.')}\\s*\\}\\}`, 'g');
+  return new RegExp(`\\{\\{\\s*${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\}\\}`, 'g');
 }
 
 /** Deep-maps every string in a JSON value, keeping its shape. */

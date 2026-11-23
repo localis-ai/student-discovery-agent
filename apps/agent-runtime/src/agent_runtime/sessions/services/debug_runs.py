@@ -28,6 +28,7 @@ from agent_runtime.tools.kit import TurnWorld
 from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import open_turn
 from agent_runtime.workflow.budget import Budget
+from agent_runtime.workflow.constants import EXPLAIN_OUTCOME, INTERACTION_OUTCOMES
 from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
@@ -37,9 +38,7 @@ from agent_runtime.workflow.scope import Scope
 from agent_runtime.workflow.trace import NodeRunTrace, Redaction
 
 KEEP_SECONDS = 24 * 3600
-_OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
-             "edit_answer": "answer_edited", "explain_result": "explain_requested",
-             "select_majors": "selection_made"}
+_OUTCOMES = {**INTERACTION_OUTCOMES, "explain_result": EXPLAIN_OUTCOME}
 _BLOCK_TYPES = ["text", "markdown", "suggestions", "assessment_question", "assessment_clarification",
                 "personality_card", "knowledge_card"]
 

@@ -72,6 +72,16 @@ def knowledge_base_ids(raw: object) -> list[str]:
     return sorted({item for item in found if isinstance(item, str)})
 
 
+def _usable_limits(raw: object) -> dict[str, Any]:
+    """The constraints of a raw declaration that can be compared against: a malformed limit is the schema layer's
+    finding (workflow_variable_invalid), and must not crash this check and hide every other finding."""
+    if not isinstance(raw, dict):
+        return {}
+    return {key: limit for key, limit in raw.items()
+            if (key == "integer" and isinstance(limit, bool))
+            or (key != "integer" and isinstance(limit, int | float) and not isinstance(limit, bool))}
+
+
 def validate_workflow(raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]]) -> list[Finding]:
     """Every finding of a chatflow (``agent.workflow``): its flows one by one, then how they route to each other."""
     try:
@@ -464,8 +474,8 @@ class _Check:
             listed = declared.get("values")
             allowed = tuple(item for item in listed if isinstance(item, str)) if isinstance(listed, list) else None
             fits = value_fits(kind, value, allowed or None)
-            limits = declared.get("constraints")
-            if fits and isinstance(limits, dict) and not value_fits(kind, value, allowed or None, limits):
+            limits = _usable_limits(declared.get("constraints"))
+            if fits and limits and not value_fits(kind, value, allowed or None, limits):
                 shown = json.dumps(value, ensure_ascii=False)
                 self.add(f"{base}.value", "workflow_assign_invalid",
                          f"Giá trị {shown} vi phạm ràng buộc của conv.{declared['name']}.")

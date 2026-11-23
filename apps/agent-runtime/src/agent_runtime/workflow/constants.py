@@ -16,7 +16,9 @@ STAGE_VALUES: tuple[str, ...] = BASE_STAGE_VALUES + JOURNEY_STAGE_VALUES
 INTERACTION_OUTCOMES: dict[str, str] = {
     "set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
     "edit_answer": "answer_edited", "select_majors": "selection_made"}
-OUTCOME_VALUES: tuple[str, ...] = ("none", *INTERACTION_OUTCOMES.values(), "assessment_completed")
+# An explain request is a message turn, not a handled interaction, so it is set apart from the table above.
+EXPLAIN_OUTCOME = "explain_requested"
+OUTCOME_VALUES: tuple[str, ...] = ("none", *INTERACTION_OUTCOMES.values(), EXPLAIN_OUTCOME, "assessment_completed")
 
 _STAGE_VARIABLE: dict[str, Any] = {
     "name": "stage", "description": "Giai đoạn hiện tại của học sinh trong hành trình tư vấn.",
