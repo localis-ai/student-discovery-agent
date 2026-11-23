@@ -84,6 +84,15 @@ const FIELD_HINTS: Record<string, string> = {
   value: 'Số, true/false, "chuỗi" hoặc JSON; chữ thường được lưu là chuỗi.',
 };
 
+/** Config fields that tune how a node runs rather than what it does: shown under the collapsed "Nâng cao". */
+export const ADVANCED_FIELDS: Record<string, ReadonlySet<string>> = {
+  llm: new Set(['model', 'history_messages', 'max_output_tokens', 'json_schema', 'context_refs']),
+  agent: new Set(['model', 'history_messages', 'max_tool_steps', 'max_output_tokens']),
+  intent_classifier: new Set(['input', 'model', 'history_messages']),
+  knowledge_retrieval: new Set(['top_k', 'fixed_filter', 'filter_from_vars']),
+  profile_propose: new Set(['model', 'history_messages']),
+};
+
 const ITEM_NOUNS: Record<string, string> = { labels: 'Nhãn', assignments: 'Phép gán', blocks: 'Block' };
 
 const OPTION_LABELS: Record<string, string> = {

@@ -1,14 +1,15 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { ChevronRight, Copy, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils/cn';
 import { removeEdge, setHandleEdge, updateNode, WorkflowEditError } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
 import { handleLabel, isErrorHandle, nodeHandles } from '../model/workflow/handles';
 import { readableVariables } from '../model/workflow/variables';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
-import { NodeField, type SchemaProperty } from './node-fields';
+import { ADVANCED_FIELDS, NodeField, type SchemaProperty } from './node-fields';
 import { NodeIcon, nodeVisual } from './node-visuals';
 
 export interface NodeFormProps {
@@ -36,6 +37,43 @@ function Section({ title, children, tone }: { title: string; children: ReactNode
       <h4 className={cn('text-xs font-semibold text-muted-foreground', tone === 'danger' && 'text-destructive')}>{title}</h4>
       {children}
     </section>
+  );
+}
+
+const ADVANCED_OPEN_KEY = 'studio.chatflow.advanced-open';
+const MAX_NODE_DESCRIPTION = 500;
+
+/** Collapsed settings that tune how a node runs; remembered per browser session, forced open on an error inside. */
+function AdvancedSection({ count, forceOpen, children }: { count: number; forceOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return sessionStorage.getItem(ADVANCED_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const shown = open || forceOpen;
+  return (
+    <details
+      className="group border-t"
+      open={shown}
+      onToggle={(event) => {
+        const next = (event.currentTarget as HTMLDetailsElement).open;
+        if (next === shown) return;
+        setOpen(next);
+        try {
+          sessionStorage.setItem(ADVANCED_OPEN_KEY, next ? '1' : '0');
+        } catch {
+          // Storage blocked: the choice still holds for this panel.
+        }
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="size-3.5 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+        Nâng cao ({count})
+      </summary>
+      <div className="space-y-4 px-4 pb-4">{children}</div>
+    </details>
   );
 }
 
@@ -88,6 +126,25 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
     onChange?.(updateNode(workflow, node.id, { config: nextConfig }));
   };
 
+  const advancedNames = ADVANCED_FIELDS[node.type] ?? new Set<string>();
+  const mainProperties = properties.filter(([name]) => !advancedNames.has(name));
+  const advancedProperties = properties.filter(([name]) => advancedNames.has(name));
+  const advancedHasError = Object.keys(fieldErrors).some((name) => advancedNames.has(name.split('.')[0]!));
+  const renderField = ([name, property]: [string, SchemaProperty]) => (
+    <NodeField
+      key={name}
+      name={name}
+      property={property}
+      value={node.config?.[name]}
+      required={required.includes(name)}
+      disabled={readOnly}
+      variables={variables}
+      onChange={(value) => changeConfig(name, value)}
+      onValidity={setFieldValidity}
+    />
+  );
+  const typeTitleOf = (type: string) => catalog?.node_types.find((candidate) => candidate.type === type)?.title ?? type;
+
   const typeTitle = definition?.title ?? node.type;
   const displayName = node.title?.trim() || typeTitle;
 
@@ -118,33 +175,40 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
             </button>
           ) : null}
         </div>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           <span className="font-medium text-foreground/80">{typeTitle}</span>
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono">ID: {node.id}</span>
+          {definition?.description ? <> · {definition.description}</> : null}
         </p>
-        {definition?.description ? <p className="text-sm text-muted-foreground">{definition.description}</p> : null}
+        <div className="space-y-1">
+          <label htmlFor="node-description" className="text-xs font-medium text-muted-foreground">Mô tả</label>
+          <Textarea
+            id="node-description"
+            aria-label="Mô tả"
+            rows={2}
+            maxLength={MAX_NODE_DESCRIPTION}
+            className="min-h-[56px] resize-y text-sm"
+            placeholder="Node này làm gì, vì sao cần, lưu ý khi sửa…"
+            value={node.description ?? ''}
+            disabled={readOnly}
+            onChange={(event) => {
+              const next = event.target.value;
+              onChange?.(updateNode(workflow, node.id, { description: next.trim() ? next : undefined }));
+            }}
+          />
+          {(node.description?.length ?? 0) > 400 ? (
+            <p className="text-right text-[11px] text-muted-foreground">{node.description!.length}/{MAX_NODE_DESCRIPTION}</p>
+          ) : null}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Section title="Cấu hình">
           {!definition ? (
             <p className="text-sm text-muted-foreground">Chưa có catalog cho loại node này, chỉ sửa được ở tab JSON.</p>
-          ) : properties.length ? (
-            <div className="space-y-4">
-              {properties.map(([name, property]) => (
-                <NodeField
-                  key={name}
-                  name={name}
-                  property={property}
-                  value={node.config?.[name]}
-                  required={required.includes(name)}
-                  disabled={readOnly}
-                  variables={variables}
-                  onChange={(value) => changeConfig(name, value)}
-                  onValidity={setFieldValidity}
-                />
-              ))}
-            </div>
+          ) : mainProperties.length ? (
+            <div className="space-y-4">{mainProperties.map(renderField)}</div>
+          ) : advancedProperties.length ? (
+            <p className="text-sm text-muted-foreground">Mọi thiết lập của node này nằm trong phần Nâng cao.</p>
           ) : (
             <p className="text-sm text-muted-foreground">Node này không có cấu hình.</p>
           )}
@@ -182,11 +246,15 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
                       }}
                     >
                       <option value="">Chưa nối</option>
-                      {targets.map((target) => (
-                        <option key={target.id} value={target.id}>
-                          {target.title?.trim() || target.id}
-                        </option>
-                      ))}
+                      {targets.map((target) => {
+                        const title = target.title?.trim() || target.id;
+                        const twin = targets.some((other) => other.id !== target.id && (other.title?.trim() || other.id) === title);
+                        return (
+                          <option key={target.id} value={target.id}>
+                            {title}{twin ? ` (${target.id})` : ''} · {typeTitleOf(target.type)}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 );
@@ -216,6 +284,24 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
             </Section>
           </div>
         ) : null}
+
+        <AdvancedSection count={advancedProperties.length + 1} forceOpen={advancedHasError}>
+          {advancedProperties.length ? <div className="space-y-4">{advancedProperties.map(renderField)}</div> : null}
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>ID node</span>
+            <span className="flex items-center gap-1">
+              <code className="rounded bg-muted px-1.5 py-0.5">{node.id}</code>
+              <button
+                type="button"
+                aria-label="Chép ID node"
+                className="rounded p-1 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => void navigator.clipboard?.writeText(node.id)}
+              >
+                <Copy className="size-3.5" />
+              </button>
+            </span>
+          </div>
+        </AdvancedSection>
       </div>
     </section>
   );
