@@ -110,7 +110,9 @@ class PersonaRunner:
                 mismatches.append(Mismatch(path=at, message=f"Lượt không chạy được ({type(error).__name__}); xem log runtime."))
                 break
             for run in result["node_runs"]:  # a wired ``error`` edge would otherwise hide a model node with no stub
-                if run["type"] in MODEL_NODE_TYPES and run["node_id"] not in turn.llm_stubs:
+                # The router calls the model only to classify; picking by trigger or default needs no stub.
+                needs_stub = run["type"] in MODEL_NODE_TYPES and (run["type"] != "router" or run["llm_calls"] > 0)
+                if needs_stub and run["node_id"] not in turn.llm_stubs:
                     mismatches.append(Mismatch(path=f"{at}.llm_stubs",
                                                message=f"Node model '{run['node_id']}' đã chạy nhưng chưa có stub."))
             for effect in result["effects"]:  # the run only proposes: conv.* is the one thing a turn hands on

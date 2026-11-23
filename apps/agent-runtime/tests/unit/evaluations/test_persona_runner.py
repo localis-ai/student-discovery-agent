@@ -114,3 +114,29 @@ def test_an_unreachable_knowledge_store_is_a_503_for_the_persona_gate_but_degrad
     with pytest.raises(RuntimeSessionError) as raised:
         DebugRunService(models, _DownKnowledge(), strict_knowledge=True)._fields(["kb"])
     assert raised.value.status == 503 and "secret" not in str(raised.value.details)
+
+
+def test_a_router_that_picks_by_trigger_needs_no_stub_but_a_classifying_one_does():
+    from tests.helpers.chatflow import single_flow
+
+    main = single_flow(copy.deepcopy(FLOW))
+    welcome = {"id": "chao", "title": "Chào", "routable": False, "entry": "chao_s",
+               "trigger": {"==": [{"var": "conv.stage"}, "welcome"]},
+               "nodes": [{"id": "chao_s", "type": "start"}, {"id": "chao_a", "type": "answer", "config": {"text": "Chào!"}}],
+               "edges": [{"id": "e1", "source": "chao_s", "source_handle": "next", "target": "chao_a"}]}
+    other = {**copy.deepcopy(welcome), "id": "khac", "title": "Khác", "routable": True, "description": "câu khác",
+             "trigger": None, "entry": "khac_s",
+             "nodes": [{"id": "khac_s", "type": "start"}, {"id": "khac_a", "type": "answer", "config": {"text": "?"}}],
+             "edges": [{"id": "e1", "source": "khac_s", "source_handle": "next", "target": "khac_a"}]}
+    content = chatflow_content({**main, "flows": [welcome, *main["flows"], other]})
+    content["tools"] = []
+    content["persona_cases"] = [
+        case("by_trigger", turns=[{"input": {"text": "xin chào"}, "expect": {"path": ["router", "chao_s", "chao_a"]}}],
+             initial_state={"conv": {"stage": "welcome"}}),
+        case("by_model", turns=[{"input": {"text": "?"}, "llm_stubs": {"ask": "other"}}],
+             initial_state={"conv": {"stage": "explore"}}),
+    ]
+    report = runner().run(AgentSnapshotV1.model_validate(content), content)
+    assert report.cases[0].passed, report.cases[0].mismatches
+    assert not report.cases[1].passed
+    assert any("router" in m.message for m in report.cases[1].mismatches)
