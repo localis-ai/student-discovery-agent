@@ -3,8 +3,17 @@
  * Only a flat list of comparisons joined by one and/or maps to rows; anything else (nesting, `!`) stays JSON.
  */
 
+import type { VariableType } from '../../types';
+
 export const CONDITION_OPERATORS = ['==', '!=', '<', '<=', '>', '>=', 'in', 'missing'] as const;
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
+
+/** Comparisons offered for a variable of this type; an unknown type gets them all. */
+export function operatorsFor(type: VariableType | undefined): ConditionOperator[] {
+  if (type === 'boolean') return ['==', '!=', 'missing'];
+  if (type === 'string' || type === 'enum') return ['==', '!=', 'in', 'missing'];
+  return [...CONDITION_OPERATORS];
+}
 
 export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   '==': 'bằng',

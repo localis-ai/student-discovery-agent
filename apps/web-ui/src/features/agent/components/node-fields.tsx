@@ -7,10 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useKnowledgeBases } from '@/features/knowledge';
-import { cn } from '@/lib/utils/cn';
 import { canonical } from '../model/config';
 import {
-  CONDITION_OPERATORS,
+  operatorsFor,
   conditionToRows,
   OPERATOR_LABELS,
   rowsToCondition,
@@ -18,7 +17,8 @@ import {
   type ConditionRow,
   type ConditionRows,
 } from '../model/workflow/condition';
-import type { VariableGroup } from '../model/workflow/variables';
+import { findVariable, type VariableGroup } from '../model/workflow/variables';
+import { VariablePicker } from './variable-picker';
 import { TOOL_CATALOG } from '../model/tools';
 
 export type SchemaProperty = Record<string, unknown>;
@@ -529,12 +529,20 @@ function ObjectListField(props: FieldProps) {
   );
 }
 
+/** A string choice as the row model stores it: quoted when it would otherwise read back as another JSON value. */
+function rowText(value: string): string {
+  try {
+    return typeof JSON.parse(value) === 'string' ? value : JSON.stringify(value);
+  } catch {
+    return value;
+  }
+}
+
 function ConditionField(props: FieldProps) {
   const { name, property, value, required, disabled, variables, onChange } = props;
   const label = fieldLabel(name, property);
   const [draft, setDraft] = useDraft(value, conditionToRows);
   const [asJson, setAsJson] = useState(draft === null);
-  const listId = `${fieldId(name)}-variables`;
 
   if (asJson || draft === null) {
     return (
@@ -565,7 +573,7 @@ function ConditionField(props: FieldProps) {
           {required ? <span aria-hidden className="ml-0.5 text-destructive">*</span> : null}
         </span>
         <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAsJson(true)}>
-          Sửa dạng JSON
+          Chế độ nâng cao (JSON)
         </button>
       </div>
       {draft.rows.length > 1 ? (
@@ -583,22 +591,23 @@ function ConditionField(props: FieldProps) {
           </select>
         </div>
       ) : null}
-      <datalist id={listId}>
-        {variables.flatMap((group) => group.items).map((item) => <option key={item.path} value={item.path} />)}
-      </datalist>
       {draft.rows.map((row, index) => {
         const badVariable = row.variable !== '' && !VARIABLE_PATH.test(row.variable);
+        const info = findVariable(variables, row.variable);
+        const operators = operatorsFor(info?.type);
+        const choices = info?.type === 'boolean' ? ['true', 'false'] : info?.values;
+        const pickValue = Boolean(choices?.length) && (row.operator === '==' || row.operator === '!=');
         return (
           <div key={index} className="space-y-1.5 rounded-lg border bg-muted/30 p-2.5">
             <div className="flex items-center gap-1.5">
-              <Input
-                aria-label={`Biến điều kiện ${index + 1}`}
-                list={listId}
-                placeholder="sys.query"
-                className={cn('h-8 flex-1 font-mono text-xs', badVariable && 'border-destructive')}
+              <VariablePicker
+                id={`${fieldId(name)}-var-${index}`}
+                label={`Biến điều kiện ${index + 1}`}
                 value={row.variable}
+                groups={variables}
                 disabled={disabled}
-                onChange={(event) => setRow(index, { variable: event.target.value.trim() })}
+                invalid={badVariable}
+                onChange={(path) => setRow(index, { variable: path })}
               />
               <button
                 type="button"
@@ -618,11 +627,29 @@ function ConditionField(props: FieldProps) {
                 disabled={disabled}
                 onChange={(event) => setRow(index, { operator: event.target.value as ConditionRow['operator'] })}
               >
-                {CONDITION_OPERATORS.map((operator) => (
+                {/* A stored operator the type would not offer stays listed, so opening the form never changes it. */}
+                {[...operators, ...(operators.includes(row.operator) ? [] : [row.operator])].map((operator) => (
                   <option key={operator} value={operator}>{OPERATOR_LABELS[operator]}</option>
                 ))}
               </select>
-              {row.operator !== 'missing' ? (
+              {pickValue ? (
+                <select
+                  aria-label={`Giá trị so sánh ${index + 1}`}
+                  className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                  value={row.value}
+                  disabled={disabled}
+                  onChange={(event) => setRow(index, { value: event.target.value })}
+                >
+                  <option value="">Chọn giá trị…</option>
+                  {choices!.map((choice) => {
+                    const stored = info?.type === 'boolean' ? choice : rowText(choice);
+                    return <option key={choice} value={stored}>{choice}</option>;
+                  })}
+                  {row.value && !choices!.some((choice) => (info?.type === 'boolean' ? choice : rowText(choice)) === row.value) ? (
+                    <option value={row.value}>{row.value} (không thuộc danh sách)</option>
+                  ) : null}
+                </select>
+              ) : row.operator !== 'missing' ? (
                 <Input
                   aria-label={`Giá trị so sánh ${index + 1}`}
                   placeholder={row.operator === 'in' ? 'a, b, c' : 'giá trị hoặc {{biến}}'}
@@ -634,6 +661,9 @@ function ConditionField(props: FieldProps) {
               ) : null}
             </div>
             {badVariable ? <p className="text-xs text-destructive">Biến cần dạng namespace.tên, ví dụ conv.buoc.</p> : null}
+            {row.operator === 'in' && info?.values?.length ? (
+              <p className="text-xs text-muted-foreground">Giá trị hợp lệ: <code>{info.values.join(', ')}</code></p>
+            ) : null}
           </div>
         );
       })}

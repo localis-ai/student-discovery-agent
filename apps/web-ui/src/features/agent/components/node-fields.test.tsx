@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import type { VariableGroup } from '../model/workflow/variables';
 import { NodeField, type SchemaProperty } from './node-fields';
 
-function Stateful({ name, property, initial, onValue }: {
-  name: string; property: SchemaProperty; initial?: unknown; onValue: (value: unknown) => void;
+const DEFAULT_GROUPS: VariableGroup[] = [
+  { title: 'Hệ thống', items: [{ path: 'sys.query', type: 'string' }, { path: 'sys.turn_index', type: 'number' }] },
+];
+
+function Stateful({ name, property, initial, onValue, variables = DEFAULT_GROUPS }: {
+  name: string; property: SchemaProperty; initial?: unknown; onValue: (value: unknown) => void; variables?: VariableGroup[];
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -13,7 +18,7 @@ function Stateful({ name, property, initial, onValue }: {
       property={property}
       value={value}
       disabled={false}
-      variables={[{ title: 'Hệ thống', items: [{ path: 'sys.query', type: 'string' }, { path: 'sys.turn_index', type: 'number' }] }]}
+      variables={variables}
       onChange={(next) => { setValue(next); onValue(next); }}
       onValidity={() => {}}
     />
@@ -21,6 +26,20 @@ function Stateful({ name, property, initial, onValue }: {
 }
 
 describe('NodeField', () => {
+  it('offers the values of a fixed-value variable and only the comparisons of its type', () => {
+    const onValue = vi.fn();
+    render(<Stateful name="condition" property={{ type: 'object', 'x-widget': 'condition_builder' }} onValue={onValue}
+      variables={[{ title: 'Hệ thống', items: [{ path: 'sys.interaction_outcome', type: 'string', values: ['none', 'assessment_completed'] }] }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm điều kiện' }));
+    fireEvent.change(screen.getByLabelText('Biến điều kiện 1'), { target: { value: 'sys.interaction_outcome' } });
+    const operators = [...(screen.getByLabelText('Phép so sánh 1') as HTMLSelectElement).options].map((option) => option.value);
+    expect(operators).toEqual(['==', '!=', 'in', 'missing']);
+    const valueBox = screen.getByLabelText('Giá trị so sánh 1');
+    expect(valueBox.tagName).toBe('SELECT');
+    fireEvent.change(valueBox, { target: { value: 'assessment_completed' } });
+    expect(onValue).toHaveBeenLastCalledWith({ '==': [{ var: 'sys.interaction_outcome' }, 'assessment_completed'] });
+  });
+
   it('builds an if_else condition from rows', () => {
     const onValue = vi.fn();
     render(<Stateful name="condition" property={{ type: 'object', 'x-widget': 'condition_builder' }} onValue={onValue} />);
@@ -41,7 +60,7 @@ describe('NodeField', () => {
   it('switches a simple condition to JSON and back', () => {
     render(<Stateful name="condition" property={{ type: 'object', 'x-widget': 'condition_builder' }}
       initial={{ '==': [{ var: 'sys.query' }, 'hi'] }} onValue={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Sửa dạng JSON' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chế độ nâng cao (JSON)' }));
     expect(screen.getByLabelText('Điều kiện')).toHaveValue(JSON.stringify({ '==': [{ var: 'sys.query' }, 'hi'] }, null, 2));
     fireEvent.click(screen.getByRole('button', { name: 'Dùng trình tạo điều kiện' }));
     expect(screen.getByLabelText('Giá trị so sánh 1')).toHaveValue('hi');
