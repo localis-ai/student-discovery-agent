@@ -16,6 +16,7 @@ from agent_runtime.sessions.services.chatflow_turns import (
 )
 from agent_runtime.sessions.services.message_turns import EXPLAIN_FALLBACK, EXPLAIN_REQUEST_TEXT
 from agent_runtime.workflow.executor import WorkflowRun
+from tests.helpers.chatflow import single_flow
 from tests.helpers.toolbox import scripted_toolbox
 from tests.unit.workflow.helpers import MIN
 from tests.unit.workflow.helpers import agent as demo_agent
@@ -183,6 +184,7 @@ def test_an_explain_request_that_falls_back_gets_the_card_only_explanation():
     assert plan.conv_vars is None  # mode = agent
 
 
+
 KB_FIELDS = {"kb1": (MetadataField(id="f1", name="entry_levels", type="string_list", filterable=True),),
              "kb2": (MetadataField(id="f2", name="tuition", type="number", filterable=True),)}
 
@@ -195,8 +197,8 @@ def kb_agent(kb_id="kb2", variables=(), tools=(), **config):
              {"id": "e2", "source": "kb", "source_handle": "found", "target": "reply"},
              {"id": "e3", "source": "kb", "source_handle": "empty", "target": "reply"},
              {"id": "e4", "source": "kb", "source_handle": "error", "target": "reply"}]
-    return AgentSnapshotV1.model_validate({**MIN, "workflow": {
-        "entry": "start", "variables": list(variables), "nodes": nodes, "edges": edges, "budget": {}},
+    return AgentSnapshotV1.model_validate({**MIN, "workflow": single_flow({
+        "entry": "start", "variables": list(variables), "nodes": nodes, "edges": edges, "budget": {}}),
         "tools": list(tools)})
 
 

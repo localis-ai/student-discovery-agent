@@ -92,7 +92,7 @@ def test_stale_cases_point_at_nodes_and_variables_that_no_longer_exist():
 def test_a_model_node_without_a_stub_fails_even_when_its_error_edge_is_wired():
     content = chatflow_content(copy.deepcopy(FLOW))
     content["tools"] = []
-    content["workflow"]["edges"].append({"id": "e6", "source": "ask", "source_handle": "error", "target": "reply"})
+    content["workflow"]["flows"][0]["edges"].append({"id": "e6", "source": "ask", "source_handle": "error", "target": "reply"})
     content["persona_cases"] = [case(turns=[{"input": {"text": "x"}}])]  # no stub, and nothing else is expected
     report = runner().run(AgentSnapshotV1.model_validate(content), content)
     assert not report.cases[0].passed

@@ -47,7 +47,9 @@ _CUSTOM = {
     "workflow_required": "Chế độ chatflow cần có workflow.",
     "workflow_not_allowed": "Chế độ agent không dùng workflow; đổi mode sang chatflow hoặc xóa workflow.",
     "workflow_node_type_unsupported": "Loại node này chưa được hỗ trợ trong chatflow.",
-    "workflow_node_id_reserved": "Id node không được trùng không gian tên dành riêng (sys, conv, profile, result).",
+    "workflow_node_id_reserved": "Id node không được trùng tên dành riêng (sys, conv, profile, result, router).",
+    "workflow_node_id_duplicate": "Id node phải duy nhất trên toàn agent (mọi nghiệp vụ).",
+    "workflow_flow_invalid": "Nghiệp vụ không hợp lệ: id trùng hoặc dành riêng (other, error), thiếu mô tả, hoặc default_flow không phải nghiệp vụ định tuyến được.",
     "persona_input_invalid": "Mỗi lượt cần đúng một trong text hoặc interaction.",
     "workflow_variable_invalid": "Biến hội thoại không hợp lệ: kiểu, danh sách giá trị, ràng buộc hoặc giá trị mặc định không khớp.",
 }

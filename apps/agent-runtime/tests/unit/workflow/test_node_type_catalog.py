@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from agent_runtime.sessions.schemas.workflow import NODE_TYPES
+from agent_runtime.sessions.schemas.workflow import INTERNAL_NODE_TYPES, NODE_TYPES
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.catalog import HANDLE_SPECS, ORDER, TITLES, node_type_catalog
 
@@ -12,8 +12,8 @@ def test_catalog_covers_every_node_type_once_and_in_the_golden_order():
     catalog = node_type_catalog()
     assert [item["type"] for item in catalog["node_types"]] == [
         "start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval", "tool", "profile_propose",
-        "assign", "answer"]
-    assert {item["type"] for item in catalog["node_types"]} == NODE_TYPES == set(registry.REGISTRY)
+        "assign", "answer", "goto_flow"]
+    assert {item["type"] for item in catalog["node_types"]} == NODE_TYPES == set(registry.REGISTRY) - INTERNAL_NODE_TYPES
 
 
 def test_catalog_matches_the_golden_fixture():
@@ -25,13 +25,14 @@ SAMPLES = {
     "intent_classifier": {"labels": [{"id": "a", "description": "x"}, {"id": "b", "description": "y"}]},
     "llm": {"prompt": "x"}, "agent": {}, "tool": {"tool": "assessment.start"},
     "knowledge_retrieval": {"knowledge_base_id": "kb", "query": "q"}, "profile_propose": {"fields": ["a"]},
-    "assign": {"assignments": [{"variable": "conv.x", "operation": "clear"}]}, "answer": {"text": ""}}
+    "assign": {"assignments": [{"variable": "conv.x", "operation": "clear"}]}, "answer": {"text": ""},
+    "goto_flow": {"flow": "hoc_phi"}}
 
 
 def test_every_registered_node_type_is_in_the_hand_kept_catalog_tables():
     # A new node type must be added to ORDER, TITLES and HANDLE_SPECS (and SAMPLES below), then the golden
     # regenerated: python -m agent_runtime.workflow.catalog > contracts/fixtures/workflow-node-types.json
-    registered = set(registry.REGISTRY)
+    registered = set(registry.REGISTRY) - INTERNAL_NODE_TYPES  # the router is built by the runtime, never authored
     assert len(ORDER) == len(set(ORDER))
     assert set(ORDER) == registered and set(TITLES) == registered and set(HANDLE_SPECS) == registered
     assert set(SAMPLES) == registered
@@ -39,6 +40,8 @@ def test_every_registered_node_type_is_in_the_hand_kept_catalog_tables():
 
 def test_handle_specs_agree_with_what_each_node_reports_for_a_real_config():
     for node_type, spec in registry.REGISTRY.items():
+        if node_type in INTERNAL_NODE_TYPES:
+            continue
         config = spec.config_model.model_validate(SAMPLES[node_type])
         handles = HANDLE_SPECS[node_type]
         expected = list(handles.get("static", ()))

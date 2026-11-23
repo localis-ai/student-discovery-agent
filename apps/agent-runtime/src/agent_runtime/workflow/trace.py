@@ -23,6 +23,7 @@ from agent_runtime.workflow.nodes.base import ErrorType
 class NodeRunTrace(ContractModel):
     node_id: str
     type: str
+    flow_id: str | None = None  # the flow (nghiệp vụ) the node belongs to; None for the router
     order: JsonSafeInt
     handle: str | None
     duration_ms: JsonSafeInt
@@ -48,7 +49,7 @@ class WorkflowTrace(ContractModel):
 
 # Output keys whose values are workflow config or ids, never student text.
 _KEEP = {("if_else", "matched"), ("intent_classifier", "label"), ("knowledge_retrieval", "refs"),
-         ("profile_propose", "fields"), ("profile_propose", "proposal_id")}
+         ("profile_propose", "fields"), ("profile_propose", "proposal_id"), ("router", "flow"), ("goto_flow", "flow")}
 # Values a model or a tool result could also put under these keys: kept only when they are what the engine wrote.
 _ERROR_TYPES = frozenset({"", *get_args(ErrorType)})
 
@@ -60,7 +61,7 @@ def _handoffs() -> frozenset[str]:
     return frozenset(tool.name for tool in TOOLS.values() if tool.kind == "handoff")
 
 
-_REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded"}
+_REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded", "method", "flow"}
 _SAFE_SYS = {"sys.interaction_outcome", "sys.turn_index", "sys.activity_status"}
 
 
@@ -156,10 +157,14 @@ def _shrink(value: Any) -> Any:
 
 
 def build_trace(run: WorkflowRun, *, redaction: Redaction, agent_release_id: str | None, content_hash: str | None,
-                mode: Literal["agent", "chatflow"], budget: Budget, activity_conflict: bool = False) -> WorkflowTrace:
-    """``budget`` must be the Budget the run used, so its counters are this turn's."""
+                mode: Literal["agent", "chatflow"], budget: Budget, activity_conflict: bool = False,
+                flow_of: Mapping[str, str] | None = None) -> WorkflowTrace:
+    """``budget`` must be the Budget the run used, so its counters are this turn's; ``flow_of`` maps a node id to
+    its flow (the compiled graph's ``flow_of``)."""
+    flows = flow_of or {}
     runs = tuple(NodeRunTrace(
-        node_id=record.node_id, type=record.type, order=record.order, handle=record.handle,
+        node_id=record.node_id, type=record.type, flow_id=flows.get(record.node_id), order=record.order,
+        handle=record.handle,
         duration_ms=record.duration_ms, reason=redaction.reason(record), input=redaction.input(record.input),
         output=redaction.io(record.type, record.output), llm_calls=record.llm_calls,
         tokens={"input": record.tokens[0], "output": record.tokens[1]}, refs=record.refs, error=record.error)

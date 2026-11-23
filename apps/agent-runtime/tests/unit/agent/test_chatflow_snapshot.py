@@ -44,9 +44,14 @@ def issues_of(content):
         (item.path, item.code) for item in schema]
 
 
+_FLOW_KEYS = {"entry", "nodes", "edges"}
+
+
 def with_workflow(**changes):
+    """Graph keys go to the one flow of MIN; variables and budget stay at the chatflow level."""
     content = deepcopy(MIN)
-    content["workflow"].update(changes)
+    content["workflow"]["flows"][0].update({key: value for key, value in changes.items() if key in _FLOW_KEYS})
+    content["workflow"].update({key: value for key, value in changes.items() if key not in _FLOW_KEYS})
     return content
 
 
@@ -59,7 +64,7 @@ def test_minimal_chatflow_snapshot_is_valid():
     report, found = issues_of(MIN)
     assert report.valid and found == []
     snapshot = AgentSnapshotV1.model_validate(MIN)
-    assert snapshot.mode == "chatflow" and len(snapshot.workflow.nodes) == 3
+    assert snapshot.mode == "chatflow" and len(snapshot.workflow.flows[0].nodes) == 3
     assert snapshot.persona_cases[0].mandatory is True
 
 
@@ -88,22 +93,22 @@ def test_unknown_mode_is_rejected():
 
 
 def nodes_with(index, **changes):
-    nodes = deepcopy(MIN["workflow"]["nodes"])
+    nodes = deepcopy(MIN["workflow"]["flows"][0]["nodes"])
     nodes[index].update(changes)
     return with_workflow(nodes=nodes)
 
 
 @pytest.mark.parametrize("content, expected", [
-    (nodes_with(1, type="code"), ("workflow.nodes[1].type", "workflow_node_type_unsupported")),
-    (nodes_with(1, type="http"), ("workflow.nodes[1].type", "workflow_node_type_unsupported")),
-    (nodes_with(1, id="in_test_2", extra="x"), ("workflow.nodes[1].extra", "extra_forbidden")),
-    (nodes_with(2, id="in_test"), ("workflow.nodes[2].id", "duplicate_items")),
-    (nodes_with(1, id="Bad-Id"), ("workflow.nodes[1].id", "string_pattern_mismatch")),
+    (nodes_with(1, type="code"), ("workflow.flows[0].nodes[1].type", "workflow_node_type_unsupported")),
+    (nodes_with(1, type="http"), ("workflow.flows[0].nodes[1].type", "workflow_node_type_unsupported")),
+    (nodes_with(1, id="in_test_2", extra="x"), ("workflow.flows[0].nodes[1].extra", "extra_forbidden")),
+    (nodes_with(2, id="in_test"), ("workflow.flows[0].nodes[2].id", "duplicate_items")),
+    (nodes_with(1, id="Bad-Id"), ("workflow.flows[0].nodes[1].id", "string_pattern_mismatch")),
     (with_workflow(nodes=[dict(id=f"n{i}", type="start") for i in range(51)]),
-     ("workflow.nodes", "too_long")),
+     ("workflow.flows[0].nodes", "too_long")),
     (with_workflow(edges=[dict(id=f"e{i}", source="start", source_handle="next", target="reply")
-                          for i in range(101)]), ("workflow.edges", "too_long")),
-    (with_workflow(variables=[dict(name=f"v{i}", type="boolean", default=False) for i in range(31)]),
+                          for i in range(101)]), ("workflow.flows[0].edges", "too_long")),
+    (with_workflow(variables=[dict(name=f"v{i}", type="boolean", default=False) for i in range(61)]),
      ("workflow.variables", "too_long")),
     (with_workflow(variables=[MIN["workflow"]["variables"][0], MIN["workflow"]["variables"][0]]),
      ("workflow.variables[1].name", "duplicate_items")),
@@ -143,7 +148,7 @@ def test_number_variable_accepts_json_safe_numbers(default):
 
 def test_node_ui_position_changes_hash_but_not_shape():
     moved = deepcopy(MIN)
-    moved["workflow"]["nodes"][0]["ui"]["position"] = {"x": 99, "y": 99}
+    moved["workflow"]["flows"][0]["nodes"][0]["ui"]["position"] = {"x": 99, "y": 99}
     assert calculate_content_hash(moved) != calculate_content_hash(MIN)
     assert issues_of(moved)[0].valid
 
@@ -154,9 +159,9 @@ def test_persona_case_needs_a_turn():
     assert issues_of(content)[1] == [("persona_cases[0].turns", "too_short")]
 
 
-def test_node_types_match_the_ten_phase_one_types():
+def test_node_types_match_the_authorable_types():
     assert NODE_TYPES == {"start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval",
-                          "tool", "profile_propose", "assign", "answer"}
+                          "tool", "profile_propose", "assign", "answer", "goto_flow"}
 
 
 def test_runtime_node_types_match_the_published_catalog_fixture():
@@ -167,7 +172,7 @@ def test_runtime_node_types_match_the_published_catalog_fixture():
 @pytest.mark.parametrize("reserved", sorted(RESERVED_NODE_IDS))
 def test_a_node_id_that_shadows_a_scope_namespace_is_rejected(reserved):
     report, found = issues_of(nodes_with(1, id=reserved))
-    assert not report.valid and found == [("workflow.nodes[1].id", "workflow_node_id_reserved")]
+    assert not report.valid and found == [("workflow.flows[0].nodes[1].id", "workflow_node_id_reserved")]
 
 
 def test_reserved_node_ids_are_exactly_the_heads_scope_routes_to_a_namespace():
@@ -175,4 +180,52 @@ def test_reserved_node_ids_are_exactly_the_heads_scope_routes_to_a_namespace():
     for head in ("sys", "profile", "result"):
         scope.set_output(head, {"x": "node"})
         assert scope.get(f"{head}.x") != "node"
-    assert RESERVED_NODE_IDS == {"conv", *_STATIC}
+    assert RESERVED_NODE_IDS == {"conv", *_STATIC, "router"}  # router: the routing node
+
+
+# -- flows (multi-flow chatflow) ----------------------------------------------------------------------------------
+
+from agent_runtime.sessions.schemas.workflow import Chatflow  # noqa: E402
+
+
+def _flow(fid, nodes, **extra):
+    return {"id": fid, "title": fid, "description": f"mô tả {fid}", "entry": nodes[0]["id"], "nodes": nodes, **extra}
+
+
+def _chatflow(*flows, default="a"):
+    return {"router": {"default_flow": default}, "flows": list(flows)}
+
+
+def test_two_flows_parse():
+    chat = Chatflow.model_validate(_chatflow(_flow("a", [{"id": "a_start", "type": "start"}]),
+                                             _flow("b", [{"id": "b_start", "type": "start"}])))
+    assert [flow.id for flow in chat.flows] == ["a", "b"] and chat.flow("b").entry == "b_start"
+    assert [node.id for _, node in chat.nodes()] == ["a_start", "b_start"]
+
+
+@pytest.mark.parametrize("raw, code", [
+    (_chatflow(_flow("a", [{"id": "s", "type": "start"}]), _flow("b", [{"id": "s", "type": "start"}])),
+     "workflow_node_id_duplicate"),
+    (_chatflow(_flow("a", [{"id": "router", "type": "start"}])), "workflow_node_id_reserved"),
+    (_chatflow(_flow("a", [{"id": "s", "type": "start"}]), default="zzz"), "workflow_flow_invalid"),
+    (_chatflow(_flow("other", [{"id": "s", "type": "start"}]), default="other"), "workflow_flow_invalid"),
+    (_chatflow({**_flow("a", [{"id": "s", "type": "start"}]), "description": " "}), "workflow_flow_invalid"),
+    (_chatflow(*[_flow(f"f{i}", [{"id": f"s{i}", "type": "start"}]) for i in range(11)], default="f0"), "too_long"),
+])
+def test_chatflow_rules(raw, code):
+    with pytest.raises(ValidationError) as caught:
+        Chatflow.model_validate(raw)
+    assert code in {error["type"] for error in caught.value.errors()}
+
+
+def test_unroutable_flow_needs_no_description_but_cannot_be_default():
+    raw = _chatflow(_flow("a", [{"id": "s", "type": "start"}]),
+                    {**_flow("b", [{"id": "t", "type": "start"}]), "description": "", "routable": False})
+    assert Chatflow.model_validate(raw).flow("b").routable is False
+    with pytest.raises(ValidationError):
+        Chatflow.model_validate({**raw, "router": {"default_flow": "b"}})
+
+
+def test_sixty_variables_allowed():
+    variables = [{"name": f"v{i}", "type": "string", "default": ""} for i in range(60)]
+    Chatflow.model_validate({**_chatflow(_flow("a", [{"id": "s", "type": "start"}])), "variables": variables})

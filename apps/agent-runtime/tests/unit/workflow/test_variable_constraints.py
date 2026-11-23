@@ -3,6 +3,7 @@ import pytest
 import agent_runtime.workflow.nodes  # noqa: F401  (registers the node types)
 from agent_runtime.workflow.nodes.base import NodeError
 from agent_runtime.workflow.validator import validate_workflow
+from tests.helpers.chatflow import single_flow
 from tests.unit.workflow.helpers import run_node, scope_for, workflow
 
 SCORE = {"name": "score", "type": "number", "default": 0, "constraints": {"minimum": 0, "maximum": 10}}
@@ -38,7 +39,7 @@ def test_validator_reports_a_literal_that_breaks_a_constraint():
             "edges": [{"id": "e1", "source": "start", "source_handle": "next", "target": "a"},
                       {"id": "e2", "source": "a", "source_handle": "next", "target": "done"}],
         }
-        return validate_workflow(raw, {}, {})
+        return validate_workflow(single_flow(raw), {}, {})
 
     findings = check(42)
     assert any(f.code == "workflow_assign_invalid" and "ràng buộc" in f.message

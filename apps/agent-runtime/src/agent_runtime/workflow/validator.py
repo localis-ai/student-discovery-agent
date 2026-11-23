@@ -12,7 +12,7 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_NODE_IDS, value_fits
+from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_FLOW_IDS, RESERVED_NODE_IDS, value_fits
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import HARD_CEILING
 from agent_runtime.workflow.catalog import HANDLE_SPECS, NAMESPACES
@@ -21,7 +21,7 @@ from agent_runtime.workflow.templates import placeholders
 
 logger = logging.getLogger(__name__)
 
-MAX_NODES, MAX_EDGES, MAX_VARIABLES = 50, 100, 30
+MAX_NODES, MAX_EDGES, MAX_VARIABLES, MAX_FLOWS = 50, 100, 60, 10
 IDENT = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 VARIABLE_KINDS = {"string": "string", "enum": "string", "number": "number", "boolean": "boolean",
                   "string_list": "string_list"}
@@ -62,23 +62,31 @@ def _literal_kind(value: Any) -> str | None:
 
 
 def knowledge_base_ids(raw: object) -> list[str]:
-    """Every knowledge base a ``knowledge_retrieval`` node names, so the caller can fetch their fields once."""
-    found = [_dict(node.get("config")).get("knowledge_base_id") for node in _list(_dict(raw).get("nodes"))
+    """Every knowledge base a ``knowledge_retrieval`` node names, so the caller can fetch their fields once.
+
+    ``raw`` is a chatflow (its flows' nodes) or a single graph (its own nodes)."""
+    root = _dict(raw)
+    graphs = [_dict(flow) for flow in _list(root.get("flows"))] or [root]
+    found = [_dict(node.get("config")).get("knowledge_base_id") for graph in graphs for node in _list(graph.get("nodes"))
              if isinstance(node, dict) and node.get("type") == "knowledge_retrieval"]
     return sorted({item for item in found if isinstance(item, str)})
 
 
 def validate_workflow(raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]]) -> list[Finding]:
+    """Every finding of a chatflow (``agent.workflow``): its flows one by one, then how they route to each other."""
     try:
-        return _Check(raw, agent, kb_fields).run()
+        return _Chatflow(raw, agent, kb_fields).run()
     except Exception as error:  # the input is hostile by nature: a checker bug must read as a failure, never a 500
         logger.error("workflow validation failed to run: %s", type(error).__name__)
         return [Finding("workflow", "workflow_unverifiable", "Không kiểm tra được workflow này; kiểm tra lại cấu trúc JSON.")]
 
 
 class _Check:
-    def __init__(self, raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]]):
-        self.raw, self.agent, self.kb_fields = raw, agent, kb_fields
+    """The checks of one flow's graph; ``raw`` is the flow with the chatflow's variables, ``at`` its path."""
+
+    def __init__(self, raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]], *,
+                 at: str = "workflow"):
+        self.raw, self.agent, self.kb_fields, self.at = raw, agent, kb_fields, at
         self.out: dict[tuple[str, str, str], Finding] = {}
         self.nodes: list[Any] = []
         self.edges: list[Any] = []
@@ -115,41 +123,38 @@ class _Check:
         if reached is not None:
             self._wiring(reached)
         self._semantics()
-        self._budget()
         return list(self.out.values())
 
     # -- structure ---------------------------------------------------------------------------------------------
 
     def _sizes(self) -> None:
-        for name, items, limit in (("nodes", self.nodes, MAX_NODES), ("edges", self.edges, MAX_EDGES),
-                                   ("variables", self.variables, MAX_VARIABLES)):
+        for name, items, limit in (("nodes", self.nodes, MAX_NODES), ("edges", self.edges, MAX_EDGES)):
             if len(items) > limit:
-                self.add(f"workflow.{name}", "workflow_too_large", f"Tối đa {limit} {_NAMES[name]}.")
+                self.add(f"{self.at}.{name}", "workflow_too_large", f"Tối đa {limit} {_NAMES[name]}.")
 
     def _duplicates(self) -> None:
-        for name, items, key in (("variables", self.variables, "name"), ("nodes", self.nodes, "id"),
-                                 ("edges", self.edges, "id")):
+        for name, items, key in (("nodes", self.nodes, "id"), ("edges", self.edges, "id")):
             seen: set[str] = set()
             for index, item in enumerate(items):
                 value = _dict(item).get(key)
                 if not isinstance(value, str):
                     continue
                 if value in seen:
-                    self.add(f"workflow.{name}[{index}].{key}", "duplicate_items", f"'{value}' bị trùng.")
+                    self.add(f"{self.at}.{name}[{index}].{key}", "duplicate_items", f"'{value}' bị trùng.")
                 seen.add(value)
 
     def _nodes(self) -> None:
         for index, node in enumerate(self.nodes):
             if not isinstance(node, dict):
                 continue
-            at = f"workflow.nodes[{index}]"
+            at = f"{self.at}.nodes[{index}]"
             node_id, kind = node.get("id"), node.get("type")
             well_formed = isinstance(node_id, str) and IDENT.match(node_id) is not None
             if well_formed:
                 self.by_id.setdefault(node_id, index)
                 if node_id in RESERVED_NODE_IDS:
                     self.add(f"{at}.id", "workflow_node_id_reserved",
-                             "Id node không được trùng không gian tên dành riêng (sys, conv, profile, result).")
+                             "Id node không được trùng tên dành riêng (sys, conv, profile, result, router).")
             if not isinstance(kind, str) or kind not in NODE_TYPES:
                 self.add(f"{at}.type", "workflow_node_type_unsupported", "Loại node này chưa được hỗ trợ trong chatflow.")
                 continue
@@ -178,13 +183,13 @@ class _Check:
     def _start(self) -> None:
         starts = [(i, _dict(n).get("id")) for i, n in enumerate(self.nodes) if _dict(n).get("type") == "start"]
         if len(starts) != 1:
-            self.add("workflow.nodes", "workflow_start_invalid", "Đồ thị phải có đúng một node start.")
+            self.add(f"{self.at}.nodes", "workflow_start_invalid", "Đồ thị phải có đúng một node start.")
             return
         start_id = starts[0][1]
         if isinstance(start_id, str):
             self.start_id = start_id
         if _dict(self.raw).get("entry") != start_id:
-            self.add("workflow.entry", "workflow_start_invalid", "entry phải là id của node start.")
+            self.add(f"{self.at}.entry", "workflow_start_invalid", "entry phải là id của node start.")
 
     def _handles(self, index: int) -> set[str]:
         node = self.nodes[index]
@@ -200,7 +205,7 @@ class _Check:
         for index, edge in enumerate(self.edges):
             if not isinstance(edge, dict):
                 continue
-            at = f"workflow.edges[{index}]"
+            at = f"{self.at}.edges[{index}]"
             source, handle, target = edge.get("source"), edge.get("source_handle"), edge.get("target")
             for key, node_id in (("source", source), ("target", target)):
                 if isinstance(node_id, str) and node_id not in self.by_id:
@@ -239,7 +244,7 @@ class _Check:
                     queue.append(target)
         for node_id, index in self.typed.items():
             if node_id not in seen:
-                self.add(f"workflow.nodes[{index}]", "workflow_unreachable_node",
+                self.add(f"{self.at}.nodes[{index}]", "workflow_unreachable_node",
                          f"Node '{node_id}' không đi tới được từ start.")
         return seen
 
@@ -261,7 +266,7 @@ class _Check:
                 edge_index, target = step
                 if state.get(target) == 1:
                     ring = [*stack[stack.index(target):], target]
-                    self.add(f"workflow.edges[{edge_index}]", "workflow_cycle",
+                    self.add(f"{self.at}.edges[{edge_index}]", "workflow_cycle",
                              "Chu trình giữa các node: " + " → ".join(ring) + ".")
                 elif target not in state:
                     state[target] = 1
@@ -279,10 +284,10 @@ class _Check:
                 labels = _list(_dict(self.nodes[index].get("config")).get("labels"))
                 for handle in loose:
                     position = next((j for j, item in enumerate(labels) if _dict(item).get("id") == handle), None)
-                    at = f"workflow.nodes[{index}]" + (f".config.labels[{position}]" if position is not None else "")
+                    at = f"{self.at}.nodes[{index}]" + (f".config.labels[{position}]" if position is not None else "")
                     self.add(at, "workflow_unwired_label", f"Nhãn '{handle}' của node '{node_id}' chưa được nối.")
             elif loose:
-                self.add(f"workflow.nodes[{index}]", "workflow_dead_end",
+                self.add(f"{self.at}.nodes[{index}]", "workflow_dead_end",
                          f"Node '{node_id}' có nhánh chưa nối ({', '.join(loose)}) nên đường đi không kết thúc ở answer.")
 
     # -- semantics ---------------------------------------------------------------------------------------------
@@ -331,7 +336,7 @@ class _Check:
         for node_id, index in self.typed.items():
             node = self.nodes[index]
             kind, config = node["type"], _dict(node.get("config"))
-            at = f"workflow.nodes[{index}].config"
+            at = f"{self.at}.nodes[{index}].config"
             if kind == "if_else":
                 self._expression(node_id, config.get("condition"), f"{at}.condition")
             for field in TEMPLATE_FIELDS.get(kind, ()):
@@ -477,7 +482,7 @@ class _Check:
     def _terminal(self, node_id: str, index: int, handle: str) -> None:
         for _edge, source, edge_handle, target in self.good:
             if source == node_id and edge_handle == handle and self.nodes[self.typed[target]]["type"] != "answer":
-                self.add(f"workflow.nodes[{index}]", "workflow_handoff_not_terminal",
+                self.add(f"{self.at}.nodes[{index}]", "workflow_handoff_not_terminal",
                          f"Handle '{handle}' của node '{node_id}' phải nối thẳng tới node answer.")
 
     def _tool(self, node_id: str, index: int, config: dict[str, Any], at: str) -> None:
@@ -501,8 +506,138 @@ class _Check:
                      f"max_tool_steps không được vượt limits.max_tool_steps ({limit}).")
         self._terminal(node_id, index, "handoff")
 
-    def _budget(self) -> None:
-        budget = _dict(self.raw.get("budget")) if isinstance(self.raw, dict) else {}
+
+_HEADS = frozenset({"conv", "sys", "profile", "result"})
+
+
+class _Chatflow:
+    """Checks above one flow: sizes, ids across flows, the router, triggers, goto_flow targets and the budget."""
+
+    def __init__(self, raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]]):
+        self.raw, self.agent, self.kb_fields = raw, agent, kb_fields
+        self.out: dict[tuple[str, str, str], Finding] = {}
+
+    def add(self, path: str, code: str, message: str) -> None:
+        self.out.setdefault((path, code, message), Finding(path, code, message))
+
+    def run(self) -> list[Finding]:
+        if not isinstance(self.raw, dict):
+            self.add("workflow", "type_error", "Workflow phải là một JSON object.")
+            return list(self.out.values())
+        variables, flows = _list(self.raw.get("variables")), _list(self.raw.get("flows"))
+        if len(variables) > MAX_VARIABLES:
+            self.add("workflow.variables", "workflow_too_large", f"Tối đa {MAX_VARIABLES} biến.")
+        if not flows:
+            self.add("workflow.flows", "workflow_flow_invalid", "Cần ít nhất một nghiệp vụ.")
+        if len(flows) > MAX_FLOWS:
+            self.add("workflow.flows", "workflow_too_large", f"Tối đa {MAX_FLOWS} nghiệp vụ.")
+        self._unique(variables, "name", "workflow.variables")
+        self._unique(flows, "id", "workflow.flows")
+        self.by_flow = {flow["id"]: (k, flow) for k, flow in enumerate(flows)
+                        if isinstance(flow, dict) and isinstance(flow.get("id"), str)}
+        declared = {item["name"] for item in variables if isinstance(item, dict) and isinstance(item.get("name"), str)}
+        self._flows(flows)
+        self._router(_dict(self.raw.get("router")))
+        self._node_ids(flows)
+        for k, flow in enumerate(flows):
+            if not isinstance(flow, dict):
+                continue
+            self._trigger(flow.get("trigger"), f"workflow.flows[{k}].trigger", declared)
+            view = {"entry": flow.get("entry"), "nodes": flow.get("nodes"), "edges": flow.get("edges"),
+                    "variables": variables}
+            for finding in _Check(view, self.agent, self.kb_fields, at=f"workflow.flows[{k}]").run():
+                self.out.setdefault(tuple(finding), finding)
+        self._gotos(flows)
+        self._budget(_dict(self.raw.get("budget")))
+        return list(self.out.values())
+
+    def _unique(self, items: list[Any], key: str, at: str) -> None:
+        seen: set[str] = set()
+        for index, item in enumerate(items):
+            value = _dict(item).get(key)
+            if isinstance(value, str):
+                if value in seen:
+                    self.add(f"{at}[{index}].{key}", "duplicate_items", f"'{value}' bị trùng.")
+                seen.add(value)
+
+    def _flows(self, flows: list[Any]) -> None:
+        for k, flow in enumerate(flows):
+            flow = _dict(flow)
+            if flow.get("id") in RESERVED_FLOW_IDS:
+                self.add(f"workflow.flows[{k}].id", "workflow_flow_invalid",
+                         "Id nghiệp vụ không được là other hoặc error.")
+            description = flow.get("description")
+            if flow.get("routable", True) is not False and not (isinstance(description, str) and description.strip()):
+                self.add(f"workflow.flows[{k}].description", "workflow_flow_invalid",
+                         "Nghiệp vụ định tuyến được cần mô tả để router chọn.")
+
+    def _router(self, router: dict[str, Any]) -> None:
+        default = router.get("default_flow")
+        found = self.by_flow.get(default) if isinstance(default, str) else None
+        if found is None or found[1].get("routable", True) is False:
+            self.add("workflow.router.default_flow", "workflow_flow_invalid",
+                     "default_flow phải là một nghiệp vụ định tuyến được.")
+
+    def _node_ids(self, flows: list[Any]) -> None:
+        seen: dict[str, str] = {}
+        for k, flow in enumerate(flows):
+            flow = _dict(flow)
+            local: set[str] = set()
+            for i, node in enumerate(_list(flow.get("nodes"))):
+                node_id = _dict(node).get("id")
+                if not isinstance(node_id, str) or node_id in local:
+                    continue  # a duplicate inside one flow is that flow's own duplicate_items
+                local.add(node_id)
+                if node_id in seen:
+                    self.add(f"workflow.flows[{k}].nodes[{i}].id", "workflow_node_id_duplicate",
+                             f"Id node '{node_id}' đã dùng ở nghiệp vụ '{seen[node_id]}'.")
+                else:
+                    seen[node_id] = str(flow.get("id"))
+
+    def _trigger(self, trigger: Any, at: str, declared: set[str]) -> None:
+        if trigger is None:
+            return
+        try:
+            expression = parse(trigger)
+        except ExpressionError as error:
+            self.add(at, "workflow_trigger_invalid", f"Điều kiện kích hoạt không hợp lệ: {error}")
+            return
+        for path in sorted(variables(expression)):
+            head, _, name = path.partition(".")
+            if head not in _HEADS or (head == "conv" and name not in declared):
+                self.add(at, "workflow_trigger_invalid", f"Điều kiện kích hoạt đọc biến không tồn tại: {path}.")
+
+    def _gotos(self, flows: list[Any]) -> None:
+        links: dict[str, list[tuple[str, str]]] = defaultdict(list)  # flow -> [(target flow, node path)]
+        for k, flow in enumerate(flows):
+            flow = _dict(flow)
+            for i, node in enumerate(_list(flow.get("nodes"))):
+                node = _dict(node)
+                if node.get("type") != "goto_flow":
+                    continue
+                target = _dict(node.get("config")).get("flow")
+                at = f"workflow.flows[{k}].nodes[{i}]"
+                if not isinstance(target, str) or target not in self.by_flow or target == flow.get("id"):
+                    self.add(f"{at}.config.flow", "workflow_goto_invalid",
+                             "Nghiệp vụ đích không tồn tại hoặc chính là nghiệp vụ này.")
+                elif isinstance(flow.get("id"), str):
+                    links[flow["id"]].append((target, at))
+        state: dict[str, int] = {}
+
+        def visit(flow_id: str) -> None:
+            state[flow_id] = 1
+            for target, at in links.get(flow_id, ()):
+                if state.get(target) == 1:
+                    self.add(at, "workflow_goto_cycle", "Các nghiệp vụ chuyển vòng qua nhau bằng goto_flow.")
+                elif target not in state:
+                    visit(target)
+            state[flow_id] = 2
+
+        for flow_id in list(links):
+            if flow_id not in state:
+                visit(flow_id)
+
+    def _budget(self, budget: dict[str, Any]) -> None:
         for key, ceiling in (("max_nodes", HARD_CEILING.max_nodes), ("max_llm_calls", HARD_CEILING.max_llm_calls),
                              ("turn_timeout_ms", HARD_CEILING.turn_timeout_ms)):
             value = budget.get(key)

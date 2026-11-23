@@ -13,10 +13,12 @@ from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.workflow import PersonaCase, PersonaExpect
 from agent_runtime.sessions.services.debug_runs import DebugRunService
+from agent_runtime.workflow.flows import ROUTER_ID
 
 logger = logging.getLogger(__name__)
 
-MODEL_NODE_TYPES = frozenset({"intent_classifier", "llm", "profile_propose", "agent"})
+
+MODEL_NODE_TYPES = frozenset({"intent_classifier", "llm", "profile_propose", "agent", "router"})
 
 
 class Mismatch(ContractModel):
@@ -123,7 +125,9 @@ def stale_cases(snapshot: AgentSnapshotV1) -> list[tuple[str, str]]:
     """``(path, message)`` for expectations that name a node or variable the graph no longer has (DEC-29)."""
     if snapshot.workflow is None:
         return []
-    kinds = {node.id: node.type for node in snapshot.workflow.nodes}
+    kinds = {node.id: node.type for _, node in snapshot.workflow.nodes()}
+    if len(snapshot.workflow.flows) > 1:  # the runtime's routing node runs first and may be stubbed
+        kinds[ROUTER_ID] = "router"
     declared = {variable.name for variable in snapshot.workflow.variables}
     out: list[tuple[str, str]] = []
     for index, case in enumerate(snapshot.persona_cases):

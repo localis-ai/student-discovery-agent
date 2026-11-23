@@ -33,6 +33,7 @@ from agent_runtime.tools.knowledge import KnowledgePort
 from agent_runtime.tools.toolbox import Toolbox, open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun
+from agent_runtime.workflow.flows import RunGraph
 from agent_runtime.workflow.ports import ProfilePort
 from agent_runtime.workflow.trace import Redaction, build_trace
 
@@ -163,7 +164,8 @@ class TurnService:
                 on_event(("tool_call", event.name))
         return emit
 
-    def _observe(self, observed: dict, run: WorkflowRun, used: Budget, workflow: Workflow, snapshot: MessageSnapshot,
+    def _observe(self, observed: dict, run: WorkflowRun, used: Budget, workflow: Workflow | RunGraph,
+                 snapshot: MessageSnapshot,
                  response_id: str, toolbox: Toolbox, *, activity_conflict: bool = False) -> None:
         observed.update(agent_steps=run.agent_steps, input_tokens=run.usage.input_tokens,
                         output_tokens=run.usage.output_tokens, fallback=run.fallback is not None,
@@ -175,7 +177,7 @@ class TurnService:
                 run, redaction=Redaction("production", {variable.name: variable for variable in workflow.variables}),
                 agent_release_id=snapshot.parent.agent_snapshot.release_id,
                 content_hash=snapshot.agent_content_hash, mode=snapshot.agent.mode, budget=used,
-                activity_conflict=activity_conflict)
+                activity_conflict=activity_conflict, flow_of=getattr(workflow, "flow_of", None))
         except Exception as error:
             logger.warning("workflow trace dropped: %s", type(error).__name__)
         searches = (*toolbox.trace(), *run.knowledge)[:8]

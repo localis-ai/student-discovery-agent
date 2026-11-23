@@ -828,6 +828,35 @@
           }
         }
       }
+    },
+    {
+      "type": "goto_flow",
+      "title": "Chuyển nghiệp vụ",
+      "description": "Kết thúc nghiệp vụ này và chạy một nghiệp vụ khác ngay trong lượt.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "flow": {
+            "pattern": "^[a-z][a-z0-9_]{0,39}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "flow"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": []
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string"
+          }
+        }
+      }
     }
   ]
 }

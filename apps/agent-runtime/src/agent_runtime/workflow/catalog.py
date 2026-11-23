@@ -9,7 +9,7 @@ from agent_runtime.workflow.constants import OUTCOME_VALUES
 
 CATALOG_VERSION = "chatflow.catalog.v1"
 ORDER = ("start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval", "tool", "profile_propose",
-         "assign", "answer")
+         "assign", "answer", "goto_flow")
 TITLES = {
     "start": ("Bắt đầu", "Điểm vào duy nhất của đồ thị; mỗi lượt chat bắt đầu từ đây."),
     "if_else": ("Rẽ nhánh",
@@ -24,6 +24,7 @@ TITLES = {
                         "LLM trích giá trị hồ sơ từ hội thoại; server kiểm và tạo đề xuất, không ghi thẳng vào hồ sơ."),
     "assign": ("Gán biến", "Gán giá trị cho biến conv.* để các bước sau (và các lượt sau) đọc lại."),
     "answer": ("Trả lời", "Dựng nội dung gửi cho học sinh từ template và block. Nhánh kết thúc tại đây."),
+    "goto_flow": ("Chuyển nghiệp vụ", "Kết thúc nghiệp vụ này và chạy một nghiệp vụ khác ngay trong lượt."),
 }
 HANDLE_SPECS: dict[str, dict[str, Any]] = {
     "start": {"static": ["next"]}, "if_else": {"static": ["true", "false"]},
@@ -31,7 +32,7 @@ HANDLE_SPECS: dict[str, dict[str, Any]] = {
     "llm": {"static": ["success", "error"]}, "agent": {"static": ["success", "handoff", "error"]},
     "knowledge_retrieval": {"static": ["found", "empty", "error"]}, "tool": {"static": ["success", "error"]},
     "profile_propose": {"static": ["proposed", "none", "error"]}, "assign": {"static": ["next"]},
-    "answer": {"static": []}}
+    "answer": {"static": []}, "goto_flow": {"static": []}}
 ERROR_TYPE = {"type": "string", "enum": ["", "model_unavailable", "invalid_output", "tool_error", "kb_unavailable"]}
 _ACTIONS = list(get_args(StoredInteraction.model_fields["action"].annotation))
 NAMESPACES = [

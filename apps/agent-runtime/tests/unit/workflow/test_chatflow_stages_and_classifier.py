@@ -97,7 +97,7 @@ def test_validator_rejects_invalid_stage_in_assign(bad_stage):
         ],
     }
     found = codes(check(wf))
-    assert ("workflow.nodes[1].config.assignments[0].value", "workflow_assign_invalid") in found
+    assert ("workflow.flows[0].nodes[1].config.assignments[0].value", "workflow_assign_invalid") in found
 
 
 @pytest.mark.parametrize("stage", STAGE_VALUES)
@@ -143,7 +143,7 @@ def test_validator_rejects_invalid_stage_in_if_else(bad_stage):
         ],
     }
     found = codes(check(wf))
-    assert ("workflow.nodes[1].config.condition", "workflow_type_mismatch") in found
+    assert ("workflow.flows[0].nodes[1].config.condition", "workflow_type_mismatch") in found
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ def test_validator_reports_unwired_classifier_label_at_exact_position(idx, label
     wf = build_journey_classifier_flow(omit_handle=label_id)
     issues = check(wf)
     found = codes(issues)
-    expected_path = f"workflow.nodes[1].config.labels[{idx}]"
+    expected_path = f"workflow.flows[0].nodes[1].config.labels[{idx}]"
     assert (expected_path, "workflow_unwired_label") in found
 
     # Verify message mentions the missing label handle
@@ -203,7 +203,7 @@ def test_validator_reports_unwired_other_handle_on_classifier_node():
     wf = build_journey_classifier_flow(omit_handle="other")
     issues = check(wf)
     found = codes(issues)
-    expected_path = "workflow.nodes[1]"
+    expected_path = "workflow.flows[0].nodes[1]"
     assert (expected_path, "workflow_unwired_label") in found
 
     issue = next(i for i in issues if i.path == expected_path and i.code == "workflow_unwired_label")
