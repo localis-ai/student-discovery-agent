@@ -183,6 +183,19 @@ describe('ConfigTab', () => {
     expect(screen.getByLabelText('Block')).toHaveValue('[]');
   });
 
+  it('opens the Biến sheet from the chatflow editor header and declares a variable', async () => {
+    const onConfig = vi.fn();
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
+    await screen.findByTestId('workflow-node-palette');
+    fireEvent.click(screen.getByRole('button', { name: 'Biến (0)' }));
+    expect(screen.getByRole('dialog', { name: 'Biến' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm biến' }));
+    fireEvent.change(screen.getByLabelText('Tên biến'), { target: { value: 'score' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu biến' }));
+    expect(onConfig.mock.lastCall![0].workflow.variables).toEqual([{ name: 'score', type: 'string', default: '' }]);
+    expect(onConfig.mock.lastCall![0].extra_field).toEqual({ keep: true });
+  });
+
   it('opens the node panel over the canvas and closes it', async () => {
     render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
     await screen.findByTestId('workflow-node-palette');
