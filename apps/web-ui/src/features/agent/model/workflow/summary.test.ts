@@ -98,3 +98,11 @@ describe('readableVariables', () => {
     ]);
   });
 });
+
+describe('goto_flow summary', () => {
+  it('names the target flow, or warns when none is chosen', () => {
+    const titled = nodeSummary({ id: 'go', type: 'goto_flow', config: { flow: 'fee' } }, { flowTitle: id => (id === 'fee' ? 'Học phí' : undefined) });
+    expect(titled.lines).toEqual([{ text: '→ Học phí', code: false }]);
+    expect(nodeSummary({ id: 'go', type: 'goto_flow', config: {} }).warning).toBe('Chưa chọn nghiệp vụ đích');
+  });
+});

@@ -21,6 +21,7 @@ import { findVariable, type VariableGroup } from '../model/workflow/variables';
 import { constraintError } from '../model/workflow/variable-rules';
 import { VariablePicker } from './variable-picker';
 import { useVariablesPanel } from './variables-context';
+import { useFlows } from './flows-context';
 import { TOOL_CATALOG } from '../model/tools';
 
 export type SchemaProperty = Record<string, unknown>;
@@ -74,6 +75,7 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'Loại',
   ref: 'Tham chiếu',
   items: 'Lựa chọn',
+  flow: 'Nghiệp vụ đích',
 };
 
 const FIELD_HINTS: Record<string, string> = {
@@ -86,6 +88,7 @@ const FIELD_HINTS: Record<string, string> = {
   id: 'Chữ thường, số, gạch dưới; đây là tên nhánh trên sơ đồ.',
   variable: 'Dạng conv.tên_biến.',
   value: 'Số, true/false, "chuỗi" hoặc JSON; chữ thường được lưu là chuỗi.',
+  flow: 'Lượt chat chạy tiếp từ node Bắt đầu của nghiệp vụ này và không quay lại.',
 };
 
 /** Config fields that tune how a node runs rather than what it does: shown under the collapsed "Nâng cao". */
@@ -842,10 +845,31 @@ function AssignValueField(props: FieldProps) {
   );
 }
 
+/** goto_flow's target: one of the other flows, by title. */
+function GotoFlowField({ name, property, value, required, disabled, onChange }: FieldProps) {
+  const flows = useFlows();
+  const label = fieldLabel(name, property);
+  const id = fieldId(name);
+  const options = (flows?.flows ?? []).filter((flow) => flow.id !== flows?.currentFlowId);
+  const current = typeof value === 'string' ? value : '';
+  return (
+    <FieldShell id={id} label={label} required={required} hint={FIELD_HINTS.flow}>
+      <select id={id} aria-label={label} className={selectClass} value={current} disabled={disabled}
+        onChange={(event) => onChange(event.target.value || undefined)}>
+        <option value="">{options.length ? 'Chọn nghiệp vụ…' : 'Chưa có nghiệp vụ khác'}</option>
+        {options.map((flow) => <option key={flow.id} value={flow.id}>{flow.title} ({flow.id})</option>)}
+        {current && !options.some((flow) => flow.id === current) ? <option value={current}>{current} (không hợp lệ)</option> : null}
+      </select>
+    </FieldShell>
+  );
+}
+
 /** One config field, with an editor chosen from its schema; unknown shapes fall back to JSON. */
 export function NodeField(props: FieldProps) {
   const property = resolve(props.property);
   const resolved = { ...props, property };
+  // Only goto_flow has a top-level "flow" field.
+  if (props.name === 'flow') return <GotoFlowField {...resolved} />;
   if (/^assignments\.\d+\.variable$/.test(props.name)) return <AssignVariableField {...resolved} />;
   if (/^assignments\.\d+\.value$/.test(props.name)) return <AssignValueField {...resolved} />;
   switch (fieldKind(property)) {

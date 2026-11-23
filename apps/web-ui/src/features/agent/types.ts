@@ -52,12 +52,46 @@ export interface ChatflowVariable {
   default: unknown;
   constraints?: VariableConstraints;
 }
+export type ChatflowBudget = { max_nodes?: number; max_llm_calls?: number; turn_timeout_ms?: number };
+/**
+ * One graph as the canvas, node form and variables panel edit it: a flow's entry, nodes and edges plus the
+ * chatflow's shared variables and budget (see model/workflow/flows.ts `flowView`).
+ */
 export interface ChatflowWorkflow {
   entry: string;
   variables?: ChatflowVariable[];
   nodes: ChatflowNode[];
   edges?: ChatflowEdge[];
-  budget?: { max_nodes?: number; max_llm_calls?: number; turn_timeout_ms?: number };
+  budget?: ChatflowBudget;
+  /** Node ids of the other flows: new ids must avoid them too. View-only; never written to the draft. */
+  takenNodeIds?: string[];
+}
+/** One business flow (nghiệp vụ); mirror of agent_runtime `Flow`. */
+export interface ChatflowFlow {
+  id: string;
+  title: string;
+  /** Read by the router to pick this flow; required while the flow is routable. */
+  description?: string;
+  examples?: string[];
+  /** DEC-23 condition; a match routes the turn here before anything else. */
+  trigger?: Record<string, unknown> | null;
+  routable?: boolean;
+  entry: string;
+  nodes: ChatflowNode[];
+  edges?: ChatflowEdge[];
+}
+export interface ChatflowRouter {
+  default_flow: string;
+  model?: string | null;
+  instructions?: string;
+  history_messages?: number;
+}
+/** The draft's `workflow`: shared variables and budget, the router and one to ten flows. */
+export interface Chatflow {
+  variables?: ChatflowVariable[];
+  budget?: ChatflowBudget;
+  router: ChatflowRouter;
+  flows: ChatflowFlow[];
 }
 export type ChatflowNodeType = Schemas['ChatflowNodeType'];
 export type WorkflowNodeType = Schemas['WorkflowNodeType'];

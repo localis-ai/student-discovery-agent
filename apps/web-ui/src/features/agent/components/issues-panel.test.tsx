@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ChatflowWorkflow } from '../types';
+import type { Chatflow } from '../types';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 
-const workflow: ChatflowWorkflow = {
-  entry: 'start',
-  nodes: [
-    { id: 'start', type: 'start' },
-    { id: 'classify', type: 'if_else', config: { labels: ['hoc_phi', 'tuyen_sinh'] } },
-  ],
-  edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'classify' }],
+const workflow: Chatflow = {
+  router: { default_flow: 'main' },
+  flows: [{
+    id: 'main', title: 'Chính', description: 'mọi thứ', entry: 'start',
+    nodes: [
+      { id: 'start', type: 'start' },
+      { id: 'classify', type: 'if_else', config: { labels: ['hoc_phi', 'tuyen_sinh'] } },
+    ],
+    edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'classify' }],
+  }],
 };
 
 const state: ValidationState = {
@@ -17,8 +20,8 @@ const state: ValidationState = {
   stale: false,
   checkedAt: '2026-01-01T00:00:00Z',
   issues: [
-    { path: 'workflow.nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' },
-    { path: 'workflow.nodes[1].config.labels[1]', code: 'workflow_unwired_label', message: 'Nhãn thứ hai chưa nối' },
+    { path: 'workflow.flows[0].nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' },
+    { path: 'workflow.flows[0].nodes[1].config.labels[1]', code: 'workflow_unwired_label', message: 'Nhãn thứ hai chưa nối' },
   ],
 };
 
@@ -43,7 +46,7 @@ describe('IssuesPanel', () => {
 
     expect(onOpenSection).toHaveBeenCalledWith('chatflow');
     expect(onOpenWorkflowIssue).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'node', nodeId: 'classify', configPath: ['labels', 0] }),
+      expect.objectContaining({ kind: 'node', nodeId: 'classify', configPath: ['labels', 0], flowId: 'main' }),
       state.issues[0],
     );
     await waitFor(() => expect(editor.selectionStart).toBeGreaterThan(0));
@@ -54,7 +57,7 @@ describe('IssuesPanel', () => {
     const onOpenSection = vi.fn();
     render(
       <IssuesPanel
-        state={{ ...state, stale: true, issues: [{ path: 'workflow.nodes[9]', code: 'workflow', message: 'Node không tồn tại' }] }}
+        state={{ ...state, stale: true, issues: [{ path: 'workflow.flows[0].nodes[9]', code: 'workflow', message: 'Node không tồn tại' }] }}
         workflow={workflow}
         onOpenSection={onOpenSection}
       />,

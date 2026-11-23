@@ -3,30 +3,31 @@
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { focusIssue } from '../model/config';
 import { sectionLabel, sectionOf, type SectionId } from '../model/sections';
+import { isRenderableChatflow } from '../model/workflow/flows';
 import {
   findWorkflowIssueRange,
-  parseWorkflowIssuePath,
+  parseChatflowIssuePath,
   workflowIssueKey,
   type WorkflowIssueTarget,
 } from '../model/workflow/issue-path';
-import type { AgentIssue, ChatflowWorkflow } from '../types';
+import type { AgentIssue, Chatflow } from '../types';
 import { WorkflowIssueBadge } from './workflow-issue-badge';
 
 export interface ValidationState {
   issues: AgentIssue[]; valid: boolean; checkedAt: string; stale: boolean;
   /** Draft revision the report was computed for; a different current revision marks it stale. */
   draftRevision?: number;
-  /** Workflow the report was computed for; issue paths index into it, not into the edited copy. */
-  workflow?: ChatflowWorkflow;
+  /** Chatflow the report was computed for; issue paths index into it, not into the edited copy. */
+  workflow?: unknown;
 }
 
 type IndexedIssue = { issue: AgentIssue; index: number };
 type WorkflowGroup = { key: string; target: WorkflowIssueTarget; items: IndexedIssue[] };
 
-function groupWorkflowIssues(issues: IndexedIssue[], workflow: ChatflowWorkflow): WorkflowGroup[] {
+function groupWorkflowIssues(issues: IndexedIssue[], workflow: Chatflow): WorkflowGroup[] {
   const groups = new Map<string, WorkflowGroup>();
   for (const item of issues) {
-    const target = parseWorkflowIssuePath(item.issue.path, workflow);
+    const target = parseChatflowIssuePath(item.issue.path, workflow);
     const key = workflowIssueKey(target);
     const existing = groups.get(key);
     if (existing) existing.items.push(item);
@@ -35,12 +36,14 @@ function groupWorkflowIssues(issues: IndexedIssue[], workflow: ChatflowWorkflow)
   return Array.from(groups.values());
 }
 
-export function IssuesPanel({ state, onOpenSection, workflow, onOpenWorkflowIssue }: {
+export function IssuesPanel({ state, onOpenSection, workflow: raw, onOpenWorkflowIssue }: {
   state: ValidationState;
   onOpenSection: (id: SectionId) => void;
-  workflow?: ChatflowWorkflow;
+  /** The chatflow the issue paths index into; anything else lists them without grouping. */
+  workflow?: unknown;
   onOpenWorkflowIssue?: (target: WorkflowIssueTarget, issue: AgentIssue) => void;
 }) {
+  const workflow = isRenderableChatflow(raw) ? raw : undefined;
   const label = (path: string) => sectionLabel(sectionOf(path));
   const locate = (issue: AgentIssue) => {
     if (!workflow || sectionOf(issue.path) !== 'chatflow') {
@@ -48,7 +51,7 @@ export function IssuesPanel({ state, onOpenSection, workflow, onOpenWorkflowIssu
       setTimeout(() => focusIssue(issue.path), 0);
       return;
     }
-    const target = parseWorkflowIssuePath(issue.path, workflow);
+    const target = parseChatflowIssuePath(issue.path, workflow);
     onOpenSection('chatflow');
     onOpenWorkflowIssue?.(target, issue);
     setTimeout(() => {

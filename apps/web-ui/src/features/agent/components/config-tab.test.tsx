@@ -51,8 +51,14 @@ function Harness({
   );
 }
 
+/** A one-flow chatflow around a single graph, as the draft stores it. */
+const one = (graph: Record<string, unknown>) => ({
+  router: { default_flow: 'main' },
+  flows: [{ id: 'main', title: 'Chính', description: 'Mọi câu hỏi', ...graph }],
+});
+
 const CHATFLOW_SEED: AgentConfig = {
-  ...SEED, mode: 'chatflow', workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'a', type: 'answer' }], edges: [] },
+  ...SEED, mode: 'chatflow', workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'a', type: 'answer' }], edges: [] }),
 };
 
 describe('ConfigTab', () => {
@@ -88,7 +94,7 @@ describe('ConfigTab', () => {
     const chatflowSeed: AgentConfig = {
       ...SEED,
       mode: 'chatflow',
-      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Bắt đầu' }], edges: [] },
+      workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Bắt đầu' }], edges: [] }),
     };
     render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
 
@@ -96,7 +102,7 @@ describe('ConfigTab', () => {
     const editor = screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement;
     expect(editor.value).toContain('"entry": "start"');
 
-    const edited = { entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Khởi đầu mới' }], edges: [] };
+    const edited = one({ entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Khởi đầu mới' }], edges: [] });
     fireEvent.change(editor, { target: { value: JSON.stringify(edited, null, 2) } });
     expect(onConfig).toHaveBeenLastCalledWith(expect.objectContaining({ workflow: edited, extra_field: { keep: true } }));
 
@@ -110,44 +116,62 @@ describe('ConfigTab', () => {
     expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
   });
 
-  it('opens the Chatflow JSON tab and highlights the target node when a workflow issue is clicked', async () => {
+  it('opens the flow of a clicked node issue on the canvas with that node selected', async () => {
     const chatflowSeed: AgentConfig = {
       ...SEED,
       mode: 'chatflow',
       workflow: {
-        entry: 'start',
-        nodes: [
-          { id: 'start', type: 'start', title: 'Bắt đầu' },
-          { id: 'classify', type: 'if_else', config: { labels: ['hoc_phi'] } },
+        router: { default_flow: 'main' },
+        flows: [
+          { id: 'main', title: 'Chính', description: 'x', entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] },
+          {
+            id: 'fee', title: 'Học phí', description: 'y', entry: 'fee_start', edges: [],
+            nodes: [
+              { id: 'fee_start', type: 'start', title: 'Bắt đầu' },
+              { id: 'classify', type: 'if_else', title: 'Phân nhánh', config: { labels: ['hoc_phi'] } },
+            ],
+          },
         ],
-        edges: [],
       },
     };
     const validation: ValidationState = {
       valid: false,
       stale: false,
       checkedAt: new Date().toISOString(),
-      issues: [{ path: 'workflow.nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+      issues: [{ path: 'workflow.flows[1].nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
     };
     render(<Harness initial={chatflowSeed} initialSection="model" mode="chatflow" validation={validation} />);
 
     expect(screen.queryByLabelText('Workflow JSON')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Nhãn chưa nối/ }));
 
+    expect(await screen.findByRole('region', { name: /Biểu mẫu node Phân nhánh/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Nghiệp vụ đang sửa')).toHaveValue('fee');
+  });
+
+  it('opens the Chatflow JSON tab and highlights the property of a router issue', async () => {
+    const chatflowSeed: AgentConfig = { ...SEED, mode: 'chatflow', workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] }) };
+    const validation: ValidationState = {
+      valid: false,
+      stale: false,
+      checkedAt: new Date().toISOString(),
+      issues: [{ path: 'workflow.router.default_flow', code: 'workflow_flow_invalid', message: 'Mặc định sai' }],
+    };
+    render(<Harness initial={chatflowSeed} initialSection="model" mode="chatflow" validation={validation} />);
+    fireEvent.click(screen.getByRole('button', { name: /Mặc định sai/ }));
     const editor = await screen.findByLabelText('Workflow JSON') as HTMLTextAreaElement;
     await new Promise(r => setTimeout(r, 0));
-    expect(document.activeElement).toBe(editor);
-    expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
+    expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"default_flow"');
   });
 
   it('survives a half-typed workflow in the JSON tab and explains it on the canvas tab', () => {
-    const chatflowSeed: AgentConfig = { ...SEED, mode: 'chatflow', workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] } };
+    const chatflowSeed: AgentConfig = { ...SEED, mode: 'chatflow', workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] }) };
     render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" />);
     fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
-    // Valid JSON, wrong shape: one deleted letter of "nodes".
-    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: '{ "entry": "start", "node": [] }' } });
+    // Valid JSON, wrong shape: one deleted letter of "flows".
+    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: '{ "router": { "default_flow": "main" }, "flow": [] }' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Workflow chưa đúng cấu trúc');
+    expect(screen.getByRole('alert')).toHaveTextContent('Chatflow chưa đúng cấu trúc');
     expect(screen.queryByTestId('workflow-canvas')).not.toBeInTheDocument();
   });
 
@@ -156,7 +180,7 @@ describe('ConfigTab', () => {
     const chatflowSeed: AgentConfig = {
       ...SEED,
       mode: 'chatflow',
-      workflow: {
+      workflow: one({
         entry: 'start',
         nodes: [
           { id: 'start', type: 'start' },
@@ -164,7 +188,7 @@ describe('ConfigTab', () => {
           { id: 'b', type: 'answer', title: 'B' },
         ],
         edges: [],
-      },
+      }),
     };
     render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onJsonValidity={onJsonValidity} />);
     await screen.findByTestId('workflow-node-palette');
@@ -260,14 +284,14 @@ describe('ConfigTab', () => {
     const edited: AgentConfig = {
       ...SEED,
       mode: 'chatflow',
-      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'answer', type: 'answer' }], edges: [] },
+      workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'answer', type: 'answer' }], edges: [] }),
     };
     const validation: ValidationState = {
       valid: false,
       stale: true,
       checkedAt: new Date().toISOString(),
-      issues: [{ path: 'workflow.nodes[1].config.labels', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
-      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'classify', type: 'if_else' }] },
+      issues: [{ path: 'workflow.flows[0].nodes[1].config.labels', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+      workflow: one({ entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'classify', type: 'if_else' }] }),
     };
     render(<Harness initial={edited} initialSection="chatflow" mode="chatflow" validation={validation} />);
     expect(screen.getByText('node classify')).toBeInTheDocument();
@@ -289,5 +313,34 @@ describe('ConfigTab', () => {
     expect(screen.getByLabelText('Chạy thử Chatflow')).not.toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
     expect(screen.getByLabelText('Nội dung input')).toHaveValue('giữ nguyên');
+  });
+});
+
+describe('ConfigTab with several flows', () => {
+  const TWO: AgentConfig = {
+    ...SEED,
+    mode: 'chatflow',
+    workflow: {
+      variables: [],
+      router: { default_flow: 'main' },
+      flows: [
+        { id: 'main', title: 'Chính', description: 'x', entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'a', type: 'answer', title: 'A' }], edges: [] },
+        { id: 'fee', title: 'Học phí', description: 'y', entry: 'fee_start', nodes: [{ id: 'fee_start', type: 'start' }, { id: 'fee_a', type: 'answer', title: 'Phí' }], edges: [] },
+      ],
+    },
+  };
+
+  it('edits one flow at a time and writes back only that flow', async () => {
+    const onConfig = vi.fn();
+    render(<Harness initial={TWO} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
+    await screen.findByTestId('workflow-node-palette');
+    expect(screen.getByTestId('workflow-node-a')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Nghiệp vụ đang sửa'), { target: { value: 'fee' } });
+    expect(screen.queryByTestId('workflow-node-a')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('workflow-node-fee_a'));
+    fireEvent.change(await screen.findByLabelText('Mô tả'), { target: { value: 'Trả lời học phí' } });
+    const next = onConfig.mock.lastCall![0].workflow;
+    expect(next.flows[1].nodes[1].description).toBe('Trả lời học phí');
+    expect(next.flows[0]).toEqual((TWO.workflow as { flows: unknown[] }).flows[0]);
   });
 });

@@ -1,22 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import type { AgentConfig, ChatflowWorkflow, NodeTypeCatalog } from '../types';
+import type { AgentConfig, Chatflow, NodeTypeCatalog } from '../types';
+import { flowView } from '../model/workflow/flows';
 import { StartVariables } from './start-variables';
 import { VariablesProvider } from './variables-provider';
 
 const SEED: AgentConfig = {
   workflow: {
-    entry: 'start',
     variables: [
       { name: 'stage', type: 'enum', values: ['a', 'b'], default: 'a', description: 'Giai đoạn' },
       { name: 'free', type: 'string', default: '' },
     ],
-    nodes: [
-      { id: 'start', type: 'start' },
-      { id: 'check', type: 'if_else', title: 'Kiểm tra', config: { condition: { '==': [{ var: 'conv.stage' }, 'b'] } } },
+    router: { default_flow: 'main' },
+    flows: [
+      {
+        id: 'main', title: 'Chính', description: 'mọi thứ', entry: 'start',
+        nodes: [
+          { id: 'start', type: 'start' },
+          { id: 'check', type: 'if_else', title: 'Kiểm tra', config: { condition: { '==': [{ var: 'conv.stage' }, 'b'] } } },
+        ],
+        edges: [],
+      },
+      {
+        id: 'fee', title: 'Học phí', description: 'học phí', entry: 'fee_start',
+        nodes: [
+          { id: 'fee_start', type: 'start' },
+          { id: 'fee_check', type: 'if_else', config: { condition: { '==': [{ var: 'conv.stage' }, 'a'] } } },
+        ],
+      },
     ],
-    edges: [],
   },
   persona_cases: [{ id: 'p', title: 'P', initial_state: { conv: { stage: 'a' } }, turns: [{ input: { text: 'x' } }] }],
 };
@@ -34,12 +47,12 @@ function Harness({ onConfig, readOnly = false }: { onConfig: (next: AgentConfig)
   return (
     <VariablesProvider config={config} catalog={catalog} readOnly={readOnly} onJumpToNode={() => {}}
       onConfigChange={(next) => { setConfig(next); onConfig(next); }}>
-      <StartVariables workflow={config.workflow as ChatflowWorkflow} catalog={catalog} />
+      <StartVariables workflow={flowView(config.workflow as Chatflow, 'main')} catalog={catalog} />
     </VariablesProvider>
   );
 }
 
-const names = (config: AgentConfig) => (config.workflow as ChatflowWorkflow).variables!.map((variable) => variable.name);
+const names = (config: AgentConfig) => (config.workflow as Chatflow).variables!.map((variable) => variable.name);
 
 describe('StartVariables', () => {
   it('lists conversation variables with description, type and usage, and system variables read-only', () => {
@@ -48,7 +61,8 @@ describe('StartVariables', () => {
     expect(row).toHaveTextContent('stage');
     expect(row).toHaveTextContent('Giai đoạn');
     expect(row).toHaveTextContent('enum');
-    expect(row).toHaveTextContent('dùng ở 1 node');
+    expect(row).toHaveTextContent('dùng ở 2 node'); // both flows read it
+    expect(screen.getByText('Dùng chung cho mọi nghiệp vụ.')).toBeInTheDocument();
     expect(screen.getByTestId('variable-free')).toHaveTextContent('Chưa có mô tả');
     const system = screen.getByRole('region', { name: 'Biến hệ thống' });
     expect(within(system).getByText('sys.query')).toBeInTheDocument();
@@ -84,10 +98,11 @@ describe('StartVariables', () => {
     fireEvent.change(within(dialog).getByLabelText('Tên biến'), { target: { value: 'journey' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu biến' }));
     expect(onConfig).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Đổi tên ở 1 node' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi tên ở 2 node' }));
     const next = onConfig.mock.lastCall![0];
     expect(names(next)).toEqual(['journey', 'free']);
-    expect((next.workflow as ChatflowWorkflow).nodes[1]!.config!.condition).toEqual({ '==': [{ var: 'conv.journey' }, 'b'] });
+    expect((next.workflow as Chatflow).flows[0]!.nodes[1]!.config!.condition).toEqual({ '==': [{ var: 'conv.journey' }, 'b'] });
+    expect((next.workflow as Chatflow).flows[1]!.nodes[1]!.config!.condition).toEqual({ '==': [{ var: 'conv.journey' }, 'a'] });
     expect(next.persona_cases[0].initial_state.conv).toEqual({ journey: 'a' });
   });
 

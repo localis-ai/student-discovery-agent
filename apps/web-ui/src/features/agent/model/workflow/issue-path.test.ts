@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { findWorkflowIssueRange, parseWorkflowIssuePath, workflowIssueKey, workflowIssueLabel } from './issue-path';
-import type { ChatflowWorkflow } from '../../types';
+import { findWorkflowIssueRange, issuesForFlow, parseChatflowIssuePath, parseWorkflowIssuePath, workflowIssueKey, workflowIssueLabel } from './issue-path';
+import type { Chatflow, ChatflowWorkflow } from '../../types';
 
 const workflow: ChatflowWorkflow = {
   entry: 'start',
@@ -124,5 +124,43 @@ describe('findWorkflowIssueRange', () => {
 
     const missingRange = findWorkflowIssueRange(text, { kind: 'workflow' });
     expect(missingRange).toBeNull();
+  });
+});
+
+describe('parseChatflowIssuePath', () => {
+  const chat: Chatflow = {
+    variables: [{ name: 'grade', type: 'string', default: '12' }],
+    router: { default_flow: 'main' },
+    flows: [
+      { id: 'main', title: 'Chính', entry: 'start', nodes: [{ id: 'start', type: 'start' }] },
+      { id: 'fee', title: 'Học phí', entry: 'fee_start', nodes: [{ id: 'fee_start', type: 'start' }, { id: 'go', type: 'goto_flow', config: { flow: 'x' } }],
+        edges: [{ id: 'e1', source: 'fee_start', source_handle: 'next', target: 'go' }] },
+    ],
+  };
+
+  it('resolves nodes and edges inside a flow and names the flow', () => {
+    expect(parseChatflowIssuePath('workflow.flows[1].nodes[1].config.flow', chat)).toEqual({
+      kind: 'node', nodeId: 'go', nodeIndex: 1, configPath: ['flow'], flowId: 'fee',
+    });
+    expect(parseChatflowIssuePath('workflow.flows[1].edges[0]', chat)).toMatchObject({ kind: 'edge', edgeId: 'e1', flowId: 'fee' });
+  });
+
+  it('resolves flow fields, the router and shared variables', () => {
+    expect(parseChatflowIssuePath('workflow.flows[1].description', chat)).toEqual({
+      kind: 'flow', flowId: 'fee', flowIndex: 1, flowTitle: 'Học phí', configPath: ['description'],
+    });
+    expect(parseChatflowIssuePath('workflow.router.default_flow', chat)).toEqual({ kind: 'workflow', configPath: ['router', 'default_flow'] });
+    expect(parseChatflowIssuePath('workflow.variables[0]', chat)).toMatchObject({ kind: 'variable', variableName: 'grade' });
+    expect(parseChatflowIssuePath('workflow.flows[9].nodes[0]', chat)).toEqual({ kind: 'workflow' });
+    expect(workflowIssueLabel(parseChatflowIssuePath('workflow.flows[0]', chat))).toBe('nghiệp vụ Chính');
+  });
+
+  it('keeps one flow\'s issues with paths the canvas understands', () => {
+    const issues = [
+      { path: 'workflow.flows[1].nodes[1]', code: 'workflow_goto_invalid', message: 'x' },
+      { path: 'workflow.flows[0].nodes[0]', code: 'y', message: 'y' },
+      { path: 'workflow.variables[0]', code: 'z', message: 'z' },
+    ];
+    expect(issuesForFlow(issues, chat, 'fee')).toEqual([{ path: 'workflow.nodes[1]', code: 'workflow_goto_invalid', message: 'x' }]);
   });
 });

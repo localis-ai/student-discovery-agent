@@ -7,6 +7,11 @@ import { streamDebugRun, type DebugRunEvent } from '../api/debug-run';
 import type { AgentDraft } from '../types';
 import { AgentPage } from './agent-page';
 
+const EMPTY_CHATFLOW = {
+  router: { default_flow: 'main' },
+  flows: [{ id: 'main', title: 'Chính', description: 'Mọi câu hỏi', entry: 'start', nodes: [], edges: [] }],
+};
+
 const draft: AgentDraft = {
   content: { greeting_text: 'Chào', tools: [{ name: 'a', version: 1, params: {} }] },
   revision: 1, content_hash: 'h1', updated_at: '2026-01-01T00:00:00Z', updated_by: 'admin',
@@ -85,7 +90,7 @@ describe('AgentPage', () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
     expect(sent.mode).toBe('chatflow');
-    expect(sent.workflow).toMatchObject({ entry: 'start' });
+    expect(sent.workflow).toMatchObject({ router: { default_flow: 'main' }, flows: [{ id: 'main', entry: 'start' }] });
   });
 
   it('lets a debug run wait for the save in flight instead of failing or saving twice', async () => {
@@ -106,7 +111,7 @@ describe('AgentPage', () => {
   });
 
   it('gives the editor a history entry, so Back closes it', async () => {
-    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } } };
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: EMPTY_CHATFLOW } } };
     window.history.replaceState(null, '', '/admin/agent');
     render(<AgentPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
@@ -118,7 +123,7 @@ describe('AgentPage', () => {
   });
 
   it('confirms before removing chatflow fields when switching back to Agent', async () => {
-    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] }, persona_cases: [] } } };
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: EMPTY_CHATFLOW, persona_cases: [] } } };
     render(<AgentPage />);
     expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
@@ -229,7 +234,7 @@ describe('AgentPage', () => {
   });
 
   it('shows a section of the new mode when the loaded server copy changes the mode', async () => {
-    const chatflowDraft: AgentDraft = { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } };
+    const chatflowDraft: AgentDraft = { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: EMPTY_CHATFLOW } };
     draftQuery = { ...draftQuery, data: chatflowDraft };
     save.mockRejectedValueOnce(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { current: { ...server, content: { ...server.content, mode: 'agent' } } } }));
     render(<AgentPage />);
@@ -246,7 +251,7 @@ describe('AgentPage', () => {
   });
 
   it('keeps the whole-config JSON section, where persona_cases is edited, in Chatflow mode', () => {
-    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } } };
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: EMPTY_CHATFLOW } } };
     render(<AgentPage />);
     fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
     expect(screen.getByLabelText('Cấu hình JSON')).toBeInTheDocument();

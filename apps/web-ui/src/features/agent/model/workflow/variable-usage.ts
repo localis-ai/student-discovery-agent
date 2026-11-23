@@ -1,4 +1,5 @@
-import type { AgentConfig, ChatflowVariable, ChatflowWorkflow } from '../../types';
+import type { AgentConfig, Chatflow, ChatflowNode, ChatflowVariable, ChatflowWorkflow } from '../../types';
+import { isRenderableChatflow } from './flows';
 
 // Same placeholder grammar as agent_runtime/workflow/templates.py PLACEHOLDER (spaces allowed inside the braces).
 function placeholder(path: string): RegExp {
@@ -75,21 +76,28 @@ function renameInPersonaCase(raw: unknown, from: string, to: string): unknown {
   return next;
 }
 
-/** Renames `conv.<from>` to `conv.<to>`: the declaration, every reference in node configs, and persona case keys. */
+/**
+ * Renames `conv.<from>` to `conv.<to>`: the declaration, every reference in node configs (of every flow, when the
+ * workflow is a chatflow of flows), and persona case keys.
+ */
 export function renameVariable(config: AgentConfig, from: string, to: string): AgentConfig {
-  const workflow = config.workflow as ChatflowWorkflow;
   const oldPath = `conv.${from}`;
   const newPath = `conv.${to}`;
   const template = placeholder(oldPath);
   const rewrite = (text: string) => (text === oldPath ? newPath : text.replace(template, `{{${newPath}}}`));
-  const next: AgentConfig = {
-    ...config,
-    workflow: {
-      ...workflow,
-      variables: (workflow.variables ?? []).map((variable) => (variable.name === from ? { ...variable, name: to } : variable)),
-      nodes: workflow.nodes.map((node) => (node.config ? { ...node, config: mapStrings(node.config, rewrite) as Record<string, unknown> } : node)),
-    },
-  };
+  const renameNodes = (nodes: ChatflowNode[]) =>
+    nodes.map((node) => (node.config ? { ...node, config: mapStrings(node.config, rewrite) as Record<string, unknown> } : node));
+  const renameDeclared = (variables: ChatflowVariable[] | undefined) =>
+    (variables ?? []).map((variable) => (variable.name === from ? { ...variable, name: to } : variable));
+  let workflow: Chatflow | ChatflowWorkflow;
+  if (isRenderableChatflow(config.workflow)) {
+    const chat = config.workflow;
+    workflow = { ...chat, variables: renameDeclared(chat.variables), flows: chat.flows.map((flow) => ({ ...flow, nodes: renameNodes(flow.nodes) })) };
+  } else {
+    const single = config.workflow as ChatflowWorkflow;
+    workflow = { ...single, variables: renameDeclared(single.variables), nodes: renameNodes(single.nodes) };
+  }
+  const next: AgentConfig = { ...config, workflow };
   if (Array.isArray(config.persona_cases)) {
     next.persona_cases = config.persona_cases.map((item) => renameInPersonaCase(item, from, to));
   }

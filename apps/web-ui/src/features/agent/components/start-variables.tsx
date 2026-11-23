@@ -5,19 +5,21 @@ import { variableUsage } from '../model/workflow/variable-usage';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { useVariablesPanel } from './variables-context';
 
-const MAX_VARIABLES = 30;
+const MAX_VARIABLES = 60;
 
 function TypeTag({ type }: { type: string }) {
   return <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{type}</span>;
 }
 
 /**
- * The start node panel: the conversation variables of the flow (declared here, read and written by later nodes)
- * and the read-only system variables every node can read.
+ * The start node panel: the conversation variables (shared by every flow; declared here, read and written by later
+ * nodes) and the read-only system variables every node can read.
  */
 export function StartVariables({ workflow, catalog }: { workflow: ChatflowWorkflow; catalog?: NodeTypeCatalog }) {
   const panel = useVariablesPanel();
   const variables = workflow.variables ?? [];
+  // Usage counts every flow: the provider's view holds all of their nodes.
+  const usageView = panel?.workflow ?? workflow;
   const editable = Boolean(panel && !panel.readOnly);
   const systemSpaces = (catalog?.namespaces ?? []).filter((space) => space.name !== 'conv' && space.name !== 'node');
 
@@ -40,10 +42,11 @@ export function StartVariables({ workflow, catalog }: { workflow: ChatflowWorkfl
             </button>
           ) : null}
         </div>
+        <p className="text-[11px] text-muted-foreground">Dùng chung cho mọi nghiệp vụ.</p>
         {variables.length ? (
           <ul className="space-y-1">
             {variables.map((variable) => {
-              const used = variableUsage(workflow, variable.name);
+              const used = variableUsage(usageView, variable.name);
               return (
                 <li key={variable.name} data-testid={`variable-${variable.name}`} className="group flex items-center gap-1 rounded-md border bg-card">
                   <button

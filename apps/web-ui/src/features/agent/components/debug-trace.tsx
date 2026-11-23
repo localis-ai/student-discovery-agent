@@ -30,6 +30,13 @@ export function DebugTrace({ result, notSavedReason = null }: DebugTraceProps) {
         </p>
       )}
 
+      {result.route && (
+        <p className="text-xs">
+          Nghiệp vụ: <code>{result.route.flow}</code> · cách chọn: <code>{result.route.method}</code>
+          {result.route.label ? <> · nhãn <code>{result.route.label}</code></> : null}
+        </p>
+      )}
+
       <div>
         <h4 className="text-xs font-semibold">Đường đi workflow</h4>
         <ol aria-label="Đường đi workflow" className="mt-1 flex flex-wrap gap-1 text-xs">

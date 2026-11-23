@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/features/knowledge';
+import { allFlowsView, isRenderableChatflow } from '../model/workflow/flows';
 import { removeVariable, renameVariable, upsertVariable, variableUsage } from '../model/workflow/variable-usage';
 import type { AgentConfig, ChatflowVariable, ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { VariableForm } from './variable-form';
@@ -25,8 +26,12 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
   onJumpToNode: (nodeId: string) => void;
   children: ReactNode;
 }) {
-  // A draft without a renderable workflow still gets the provider: it then simply has no variables.
-  const workflow = (config.workflow ?? EMPTY_WORKFLOW) as ChatflowWorkflow;
+  // Variables are shared by every flow: usage, renames and removals look at all of them as one node list.
+  // A draft without a renderable chatflow still gets the provider: it then simply has no variables.
+  const chat = isRenderableChatflow(config.workflow) ? config.workflow : undefined;
+  const workflow = useMemo(() => (chat ? allFlowsView(chat) : EMPTY_WORKFLOW), [chat]);
+  const writeVariables = (next: AgentConfig, view: ChatflowWorkflow): AgentConfig =>
+    (isRenderableChatflow(next.workflow) ? { ...next, workflow: { ...next.workflow, variables: view.variables ?? [] } } : next);
   const variables = workflow.variables ?? [];
   const [editing, setEditing] = useState<Editing>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -46,8 +51,8 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
   const finishSave = (variable: ChatflowVariable, previous?: ChatflowVariable) => {
     let next = config;
     if (previous && previous.name !== variable.name) next = renameVariable(next, previous.name, variable.name);
-    const updated = upsertVariable(next.workflow as ChatflowWorkflow, variable, previous ? variable.name : undefined);
-    onConfigChange({ ...next, workflow: updated });
+    const view = isRenderableChatflow(next.workflow) ? allFlowsView(next.workflow) : EMPTY_WORKFLOW;
+    onConfigChange(writeVariables(next, upsertVariable(view, variable, previous ? variable.name : undefined)));
     if (!previous) editing?.onCreated?.(variable.name);
     setEditing(null);
   };
@@ -90,7 +95,7 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
         confirmLabel="Xoá biến"
         destructive
         onConfirm={() => {
-          if (pendingDelete) onConfigChange({ ...config, workflow: removeVariable(workflow, pendingDelete) });
+          if (pendingDelete) onConfigChange(writeVariables(config, removeVariable(workflow, pendingDelete)));
           setPendingDelete(null);
         }}
       />

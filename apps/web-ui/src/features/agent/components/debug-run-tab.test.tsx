@@ -2,18 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ApiError } from '@/lib/api/errors';
 import { streamDebugRun, type DebugRunEvent } from '../api/debug-run';
-import type { ChatflowWorkflow, NodeTypeCatalog, WorkflowDebugRunRequest, WorkflowDebugRunResult } from '../types';
+import type { Chatflow, NodeTypeCatalog, WorkflowDebugRunRequest, WorkflowDebugRunResult } from '../types';
 import { DebugRunTab, activeNode } from './debug-run-tab';
 
 vi.mock('../api/debug-run', () => ({ streamDebugRun: vi.fn() }));
 
-const workflow: ChatflowWorkflow = {
-  entry: 'start',
-  nodes: [
-    { id: 'start', type: 'start', ui: { position: { x: 0, y: 0 } } },
-    { id: 'answer', type: 'answer', ui: { position: { x: 240, y: 0 } } },
+const chat: Chatflow = {
+  router: { default_flow: 'main' },
+  flows: [
+    {
+      id: 'main', title: 'Chính', description: 'mọi thứ', entry: 'start',
+      nodes: [
+        { id: 'start', type: 'start', ui: { position: { x: 0, y: 0 } } },
+        { id: 'answer', type: 'answer', ui: { position: { x: 240, y: 0 } } },
+      ],
+      edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'answer' }],
+    },
+    {
+      id: 'fee', title: 'Học phí', description: 'học phí', entry: 'fee_start',
+      nodes: [{ id: 'fee_start', type: 'start' }, { id: 'fee_answer', type: 'answer' }],
+      edges: [{ id: 'e1', source: 'fee_start', source_handle: 'next', target: 'fee_answer' }],
+    },
   ],
-  edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'answer' }],
 };
 
 const catalog: NodeTypeCatalog = {
@@ -65,7 +75,7 @@ describe('DebugRunTab', () => {
       yield { event: 'completed', result: mockResult };
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} beforeRun={beforeRun} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} beforeRun={beforeRun} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => {
@@ -88,7 +98,7 @@ describe('DebugRunTab', () => {
   it('stops before streaming when beforeRun returns false', async () => {
     const beforeRun = vi.fn().mockResolvedValue(false);
     const streamMock = vi.mocked(streamDebugRun);
-    render(<DebugRunTab workflow={workflow} catalog={catalog} beforeRun={beforeRun} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} beforeRun={beforeRun} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
@@ -104,7 +114,7 @@ describe('DebugRunTab', () => {
       yield { event: 'delta', text: 'Xin' };
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => {
@@ -121,7 +131,7 @@ describe('DebugRunTab', () => {
       yield { event: 'completed', result: mockResult };
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => expect(screen.getByLabelText('Trace chạy thử')).toBeInTheDocument());
@@ -135,7 +145,7 @@ describe('DebugRunTab', () => {
       yield { event: 'run_not_saved', reason: 'store_failed' };
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => expect(screen.getByLabelText('Trace chạy thử')).toHaveTextContent('không được lưu (store_failed)'));
@@ -152,7 +162,7 @@ describe('DebugRunTab', () => {
       });
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => {
@@ -169,7 +179,7 @@ describe('DebugRunTab', () => {
       });
     });
 
-    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
     await waitFor(() => {
@@ -208,5 +218,30 @@ describe('activeNode', () => {
     expect(activeNode([started('a', 1), started('b', 2), started('a', 3), finished('a')])).toBe('b');
     expect(activeNode([started('a', 1), finished('a'), started('b', 2), finished('b'), started('a', 3)])).toBe('a');
     expect(activeNode([started('a', 1), finished('a')])).toBeNull();
+  });
+});
+
+describe('DebugRunTab with several flows', () => {
+  afterEach(() => cleanup());
+
+  it('names the flow the router picked and shows that flow on the canvas', async () => {
+    const routed: WorkflowDebugRunResult = {
+      ...mockResult,
+      path: ['router', 'fee_start', 'fee_answer'],
+      route: { flow: 'fee', method: 'classifier', label: 'fee' },
+      node_runs: [
+        { node_id: 'router', type: 'router', flow_id: null, order: 1, handle: 'fee', duration_ms: 1, llm_calls: 1, tokens: { input: 1, output: 1 } },
+        ...mockResult.node_runs,
+      ],
+    };
+    vi.mocked(streamDebugRun).mockImplementation(async function* () {
+      yield { event: 'completed', result: routed } as DebugRunEvent;
+    });
+    render(<DebugRunTab chat={chat} flowId="main" catalog={catalog} />);
+    fireEvent.change(screen.getByLabelText('Nội dung input'), { target: { value: 'học phí' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+    expect(await screen.findByText(/Đã định tuyến tới/)).toHaveTextContent('Đã định tuyến tới Học phí · phân loại theo mô tả');
+    await waitFor(() => expect(screen.getByTestId('workflow-node-fee_answer')).toBeInTheDocument());
+    expect(screen.queryByTestId('workflow-node-answer')).not.toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ import {
   LibraryBig,
   MessageSquareText,
   Play,
+  Shuffle,
   Sparkles,
   Split,
   Tags,
@@ -39,6 +40,7 @@ const VISUALS: Record<string, NodeVisual> = {
   if_else: { icon: Split, ...FLOW },
   intent_classifier: { icon: Tags, ...FLOW },
   assign: { icon: Variable, ...FLOW },
+  goto_flow: { icon: Shuffle, ...FLOW },
   // Model calls.
   llm: { icon: Sparkles, ...AI },
   agent: { icon: Bot, ...AI },

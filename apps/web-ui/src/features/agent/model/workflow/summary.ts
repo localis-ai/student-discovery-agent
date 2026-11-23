@@ -14,6 +14,7 @@ export interface CardSummary {
 export interface SummaryContext {
   knowledgeBaseName?: (id: string) => string | undefined;
   toolLabel?: (name: string) => string | undefined;
+  flowTitle?: (id: string) => string | undefined;
 }
 
 function text(value: unknown): string | undefined {
@@ -109,6 +110,12 @@ export function nodeSummary(node: ChatflowNode, context: SummaryContext = {}): C
         .filter((line): line is string => Boolean(line));
       const shown = lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `+${lines.length - MAX_LINES} phép gán`] : lines;
       summary.lines = shown.map(code);
+      break;
+    }
+    case 'goto_flow': {
+      const target = text(config.flow);
+      if (target) summary.lines = [plain(`→ ${context.flowTitle?.(target) ?? target}`)];
+      else summary.warning = 'Chưa chọn nghiệp vụ đích';
       break;
     }
     case 'answer': {
