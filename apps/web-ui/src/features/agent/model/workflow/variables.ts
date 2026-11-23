@@ -1,4 +1,5 @@
 import type { ChatflowWorkflow, NodeTypeCatalog, VariableConstraints, VariableType } from '../../types';
+import { nodeOutputs } from './node-io';
 
 /** One readable variable as pickers show it: the standard path, plus what Studio knows about its type and meaning. */
 export interface VariableInfo {
@@ -14,7 +15,7 @@ export interface VariableGroup {
   items: VariableInfo[];
 }
 
-const OUTPUT_TYPES: ReadonlySet<string> = new Set(['string', 'number', 'boolean']);
+const VARIABLE_TYPES: ReadonlySet<string> = new Set(['string', 'number', 'boolean', 'enum', 'string_list']);
 
 function ancestors(workflow: ChatflowWorkflow, nodeId: string): Set<string> {
   const parents = new Map<string, string[]>();
@@ -62,19 +63,13 @@ export function readableVariables(
     } else if (namespace.source === 'node_output') {
       const upstream = ancestors(workflow, nodeId);
       for (const node of workflow.nodes) {
-        if (!upstream.has(node.id)) continue;
-        const spec = catalog?.node_types.find((item) => item.type === node.type);
-        const properties = (spec?.output_schema as { properties?: Record<string, { type?: unknown; enum?: unknown }> } | undefined)
-          ?.properties ?? {};
-        for (const [field, schema] of Object.entries(properties)) {
-          const values = Array.isArray(schema?.enum)
-            ? schema.enum.filter((value): value is string => typeof value === 'string' && value !== '')
-            : undefined;
+        if (!upstream.has(node.id) || node.type === 'assign') continue;
+        for (const output of nodeOutputs(node, catalog)) {
           items.push({
-            path: `${node.id}.${field}`,
-            type: typeof schema?.type === 'string' && OUTPUT_TYPES.has(schema.type) ? (schema.type as VariableType) : undefined,
+            path: output.path,
+            type: output.type && VARIABLE_TYPES.has(output.type) ? (output.type as VariableType) : undefined,
             description: node.title ? `Output của "${node.title}"` : undefined,
-            values: values?.length ? values : undefined,
+            values: output.values,
           });
         }
       }
