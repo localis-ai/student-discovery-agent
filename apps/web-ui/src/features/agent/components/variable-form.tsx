@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { Brackets, Hash, List, SquareCheck, Type, X, type LucideIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import {
 import type { ChatflowVariable, VariableConstraints, VariableType } from '../types';
 
 const TYPES: VariableType[] = ['string', 'number', 'boolean', 'enum', 'string_list'];
+const TYPE_ICONS: Record<VariableType, LucideIcon> = { string: Type, number: Hash, boolean: SquareCheck, enum: List, string_list: Brackets };
 const EMPTY_DEFAULT: Record<VariableType, unknown> = { string: '', number: 0, boolean: false, enum: '', string_list: [] };
 type NumericConstraint = Exclude<keyof VariableConstraints, 'integer'>;
 
@@ -89,7 +90,7 @@ export function VariableForm({ initial, others, onSave, onCancel }: {
 
   return (
     <form
-      className="space-y-4 rounded-lg border bg-muted/30 p-3"
+      className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
         setTouched(new Set(['*']));
@@ -132,19 +133,23 @@ export function VariableForm({ initial, others, onSave, onCancel }: {
 
       <fieldset className="space-y-1.5">
         <legend className="text-sm font-medium">Kiểu dữ liệu</legend>
-        <div role="radiogroup" aria-label="Kiểu dữ liệu" className="flex flex-wrap gap-1.5">
-          {TYPES.map((option) => (
-            <label
-              key={option}
-              className={cn(
-                'cursor-pointer rounded-md border px-2.5 py-1 font-mono text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
-                type === option ? 'border-primary bg-primary-subtle text-primary' : 'hover:bg-muted',
-              )}
-            >
-              <input type="radio" name="variable-type" className="sr-only" aria-label={option} checked={type === option} onChange={() => changeType(option)} />
-              {option}
-            </label>
-          ))}
+        <div role="radiogroup" aria-label="Kiểu dữ liệu" className="grid grid-cols-5 gap-1.5">
+          {TYPES.map((option) => {
+            const Icon = TYPE_ICONS[option];
+            return (
+              <label
+                key={option}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[11px] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                  type === option ? 'border-primary bg-primary-subtle text-primary' : 'text-foreground/80 hover:bg-muted',
+                )}
+              >
+                <input type="radio" name="variable-type" className="sr-only" aria-label={option} checked={type === option} onChange={() => changeType(option)} />
+                <Icon aria-hidden className="size-4" />
+                <span className="font-mono">{option}</span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 

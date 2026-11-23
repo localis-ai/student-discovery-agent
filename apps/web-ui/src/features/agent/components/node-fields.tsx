@@ -771,9 +771,9 @@ function AssignVariableField({ name, property, value, required, disabled, variab
         disabled={disabled}
         placeholder="conv.ten_bien"
         onChange={(path) => onChange(path || undefined)}
-        footer={panel ? {
+        footer={panel && !panel.readOnly ? {
           label: '+ Khai báo biến mới…',
-          onSelect: () => panel.openVariables({ create: true, onCreated: (created) => onChange(`conv.${created}`) }),
+          onSelect: () => panel.edit(null, (created) => onChange(`conv.${created}`)),
         } : undefined}
       />
     </FieldShell>

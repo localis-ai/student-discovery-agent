@@ -10,6 +10,7 @@ import { handleLabel, isErrorHandle, nodeHandles } from '../model/workflow/handl
 import { readableVariables } from '../model/workflow/variables';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { ADVANCED_FIELDS, NodeField, type SchemaProperty } from './node-fields';
+import { StartVariables } from './start-variables';
 import { NodeIcon, nodeVisual } from './node-visuals';
 
 export interface NodeFormProps {
@@ -202,7 +203,10 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <Section title="Cấu hình">
+        {node.type === 'start' ? (
+          <StartVariables workflow={workflow} catalog={catalog} />
+        ) : (
+          <Section title="Cấu hình">
           {!definition ? (
             <p className="text-sm text-muted-foreground">Chưa có catalog cho loại node này, chỉ sửa được ở tab JSON.</p>
           ) : mainProperties.length ? (
@@ -212,7 +216,8 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
           ) : (
             <p className="text-sm text-muted-foreground">Node này không có cấu hình.</p>
           )}
-        </Section>
+          </Section>
+        )}
 
         {handles.length ? (
           <Section title="Bước tiếp theo">

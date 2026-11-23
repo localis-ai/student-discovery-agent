@@ -1,7 +1,7 @@
 'use client';
 
 import { Maximize2, Variable } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { errorMessage, useKnowledgeBases } from '@/features/knowledge';
 import type { Path } from '../model/config';
@@ -24,8 +24,7 @@ import { WorkflowJsonTab } from './workflow-json-tab';
 import { NodeForm } from './node-form';
 import { WorkflowCanvas } from './workflow-canvas';
 import { DebugRunTab } from './debug-run-tab';
-import { VariablesPanelContext, type VariablesPanel } from './variables-context';
-import { VariablesSheet } from './variables-sheet';
+import { VariablesProvider } from './variables-provider';
 
 type ChatflowTab = 'canvas' | 'json' | 'debug';
 
@@ -54,14 +53,7 @@ export function ConfigTab({
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [variablesOpen, setVariablesOpen] = useState(false);
-  const [createRequest, setCreateRequest] = useState<{ onCreated: (name: string) => void } | null>(null);
-  const variablesPanel = useMemo<VariablesPanel>(() => ({
-    openVariables: (request) => {
-      setCreateRequest(request ? { onCreated: request.onCreated } : null);
-      setVariablesOpen(true);
-    },
-  }), []);
+  const jumpToNode = useCallback((id: string) => { setChatflowTab('canvas'); setSelectedNodeId(id); }, []);
   const nodeTypes = useAgentNodeTypes(mode === 'chatflow');
   const catalog = nodeTypes.data;
   const knowledgeBases = useKnowledgeBases();
@@ -91,7 +83,7 @@ export function ConfigTab({
         />
       )}
       {mode === 'chatflow' && chatflowOpen && (
-        <VariablesPanelContext.Provider value={variablesPanel}>
+        <VariablesProvider config={config} catalog={catalog} readOnly={!catalog} onConfigChange={onReplace} onJumpToNode={jumpToNode}>
         <ChatflowEditor
           onClose={() => onChatflowOpen(false)}
           closeDisabled={Boolean(jsonError)}
@@ -107,7 +99,8 @@ export function ConfigTab({
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => variablesPanel.openVariables()} disabled={!workflow || Boolean(jsonError)}
+            <button type="button" title="Biến được khai báo ở node Bắt đầu"
+              onClick={() => { if (workflow) jumpToNode(workflow.entry); }} disabled={!workflow || Boolean(jsonError)}
               className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
               <Variable className="size-4" aria-hidden /> Biến ({workflow?.variables?.length ?? 0})
             </button>
@@ -189,18 +182,7 @@ export function ConfigTab({
             </p>
           )}
         </ChatflowEditor>
-        {workflow ? (
-          <VariablesSheet
-            open={variablesOpen}
-            onOpenChange={open => { setVariablesOpen(open); if (!open) setCreateRequest(null); }}
-            config={config}
-            catalog={catalog}
-            createRequest={createRequest}
-            onConfigChange={onReplace}
-            onJumpToNode={id => { setChatflowTab('canvas'); setSelectedNodeId(id); }}
-          />
-        ) : null}
-        </VariablesPanelContext.Provider>
+        </VariablesProvider>
       )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
         {/* min-w-0: the section list scrolls sideways on narrow screens instead of widening the page. */}
