@@ -18,6 +18,7 @@ from agent_runtime.infrastructure.auth.caller import RawRequestContext
 from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
+from agent_runtime.infrastructure.diagnostics import log_unexpected
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
 from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
@@ -99,9 +100,11 @@ def _build_service_verifier(settings: Settings, student_keys: dict[str, bytes]) 
         raw = read_strict_json(settings.RUNTIME_STUDIO_KEYRING.get_secret_value().encode("utf-8"))
         keys = {kid: _decode_key(value) for kid, value in raw.items()}
         if set(keys.values()) & set(student_keys.values()):
+            logger.error("Studio service path disabled: RUNTIME_STUDIO_KEYRING reuses a student key")
             return None
         return ServiceVerifier(keys, SystemClock())
-    except Exception:
+    except Exception as error:
+        log_unexpected(logger, "Studio service path disabled: RUNTIME_STUDIO_KEYRING unreadable", error)
         return None
 
 
@@ -186,7 +189,7 @@ def _build_index_runner(settings: Settings):
 
 
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
-    """No connection/migration at startup; malformed secrets fail closed silently.
+    """No connection/migration at startup; malformed secrets fail closed, logging which setting (never its value).
 
     Keyring: JSON object mapping kid to canonical padded standard base64 bytes.
     Cursor: separate canonical padded standard base64 key, both >=32 decoded bytes.
@@ -194,11 +197,13 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     # Authentication is independent of service configuration and DB readiness.
     try:
         if not settings.RUNTIME_INTERNAL_KEYRING:
+            logger.error("runtime disabled: RUNTIME_INTERNAL_KEYRING is not set")
             return None
         raw_keys = read_strict_json(settings.RUNTIME_INTERNAL_KEYRING.get_secret_value().encode("utf-8"))
         keys = {kid: _decode_key(value) for kid, value in raw_keys.items()}
         verifier = CallerVerifier(keys, SystemClock())
-    except Exception:
+    except Exception as error:
+        log_unexpected(logger, "runtime disabled: RUNTIME_INTERNAL_KEYRING unreadable", error)
         return None
     service_verifier = _build_service_verifier(settings, keys)
     indexer, indexer_engine = _build_index_runner(settings)
@@ -207,6 +212,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     engine = None
     try:
         if not settings.RUNTIME_DATABASE_URL:
+            logger.error("runtime unavailable: RUNTIME_DATABASE_URL is not set")
             return unavailable
         policy = RuntimePolicy(environment=settings.RUNTIME_ENVIRONMENT,
             session_ttl_seconds=settings.RUNTIME_SESSION_TTL_SECONDS,
@@ -217,6 +223,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         if settings.RUNTIME_CURSOR_SIGNING_KEY:
             cursor_key = _decode_key(settings.RUNTIME_CURSOR_SIGNING_KEY.get_secret_value())
             if cursor_key in keys.values():
+                logger.error("runtime unavailable: RUNTIME_CURSOR_SIGNING_KEY reuses an internal key")
                 raise ValueError
             codec = HistoryCursorCodec(cursor_key)
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
@@ -263,7 +270,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             knowledge=knowledge, agent_validation=agent_validation, debug_runs=debug_runs, evaluations=evaluations,
             knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
             product_ready=not isinstance(release_source, ProductUnavailable))
-    except Exception:
+    except Exception as error:  # config or wiring bug: readiness reports down and this line says where it broke
+        log_unexpected(logger, "runtime unavailable: building services failed", error)
         if engine is not None:
             engine.dispose()
         return unavailable

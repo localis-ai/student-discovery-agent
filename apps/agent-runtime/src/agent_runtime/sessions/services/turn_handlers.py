@@ -1,4 +1,5 @@
 """Pure name/option transitions over the pinned release. No DB, Product or LLM; runs outside transactions."""
+import logging
 from uuid import uuid4
 
 from pydantic import TypeAdapter, ValidationError
@@ -7,6 +8,7 @@ from agent_runtime.engine.exceptions import EngineError, UnsupportedDefinitionEr
 from agent_runtime.engine.schemas.selector import SelectionResult, SelectionStatus
 from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 from agent_runtime.evaluations.services.compatibility import DEFAULT_ENGINE_REGISTRY, EngineProfile
+from agent_runtime.infrastructure.diagnostics import log_unexpected
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import AssessmentEngine, CompletionPort
 from agent_runtime.sessions.schemas.activity import ActivityAnswer, ActivityState, AssessmentQuestion
@@ -18,6 +20,7 @@ from agent_runtime.sessions.services.turn_input import validate_display_name
 
 MAX_COUNTER = 9007199254740991
 _STATE = TypeAdapter(ActivityState)
+logger = logging.getLogger(__name__)
 
 
 def _engine_failure():
@@ -45,7 +48,8 @@ class PinnedAssessmentEngine:
             raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA") from None
         except (EngineError, ValidationError):
             raise _engine_failure() from None
-        except Exception:
+        except Exception as error:  # the client sees a plain 500; the log keeps where it broke
+            log_unexpected(logger, "question selection failed", error)
             raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
 
 
@@ -68,7 +72,8 @@ def _prepare_completion(port: CompletionPort, context: CompletionContext) -> Com
         raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA") from None
     except (EngineError, ValidationError):
         raise _engine_failure() from None
-    except Exception:
+    except Exception as error:
+        log_unexpected(logger, "assessment completion failed", error)
         raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
 
 
