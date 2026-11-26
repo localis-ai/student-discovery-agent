@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../../types';
-import { describeInput, nodeInputs, nodeOutputs } from './node-io';
+import { describeInput, nodeInputs, nodeOutputs, nodeReferences } from './node-io';
 
 const catalog = {
   catalog_version: 't',
@@ -68,5 +68,16 @@ describe('nodeOutputs', () => {
     ]);
     expect(nodeOutputs(node('set'), catalog).map((o) => o.path)).toEqual(['conv.stage']);
     expect(nodeOutputs(node('start'), catalog)).toEqual([]);
+  });
+
+  it('lists the nodes that still read a node before it is deleted', () => {
+    const graph = { nodes: [
+      { id: 'ask', type: 'llm', config: { prompt: 'x' } },
+      { id: 'say', type: 'answer', config: { text: 'Kết quả: {{ask.text}}' } },
+      { id: 'check', type: 'if_else', config: { condition: { '==': [{ var: 'ask.json.ok' }, true] } } },
+      { id: 'asker', type: 'answer', config: { text: '{{asker_x.text}} {{conv.ask}}' } },
+    ] } as Pick<ChatflowWorkflow, 'nodes'>;
+    expect(nodeReferences(graph, 'ask')).toEqual(['say', 'check']);
+    expect(nodeReferences(graph, 'say')).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { parsePath, type Path } from '../config';
 import type { AgentIssue, Chatflow, ChatflowWorkflow } from '../../types';
-import { flowView } from './flows';
+import { flowViewOf } from './flows';
 
 /** `flowId`: the flow (nghiệp vụ) a node or edge lives in, when the path came from a whole chatflow. */
 export type WorkflowIssueTarget =
@@ -36,14 +36,14 @@ export function parseChatflowIssuePath(path: string, chat: Chatflow): WorkflowIs
   const match = FLOW_PATH.exec(path);
   if (!match) {
     if (path.startsWith('workflow.router')) return { kind: 'workflow', configPath: parsePath(path).slice(1) };
-    return chat.flows.length ? parseWorkflowIssuePath(path, flowView(chat, chat.flows[0]!.id)) : { kind: 'workflow' };
+    return chat.flows.length ? parseWorkflowIssuePath(path, flowViewOf(chat, chat.flows[0]!)) : { kind: 'workflow' };
   }
   const index = Number(match[1]);
   const rest = match[2] ?? '';
   const flow = chat.flows[index];
   if (!flow) return { kind: 'workflow' };
   if (rest.startsWith('.nodes') || rest.startsWith('.edges') || rest === '.entry') {
-    const target = parseWorkflowIssuePath(`workflow${rest}`, flowView(chat, flow.id));
+    const target = parseWorkflowIssuePath(`workflow${rest}`, flowViewOf(chat, flow));
     // An index past the flow's nodes (a report on an older draft) points at nothing in particular.
     return target.kind === 'node' || target.kind === 'edge' ? { ...target, flowId: flow.id } : target;
   }

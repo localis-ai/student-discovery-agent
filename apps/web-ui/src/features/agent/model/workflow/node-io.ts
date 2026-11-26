@@ -30,6 +30,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** Ids of the other nodes whose config reads an output of `nodeId` (`{{nodeId.…}}` or a `nodeId.…` operand). */
+export function nodeReferences(workflow: Pick<ChatflowWorkflow, 'nodes'>, nodeId: string): string[] {
+  const prefix = `${nodeId}.`;
+  return workflow.nodes
+    .filter((node) => node.id !== nodeId && nodeInputs(node).some((path) => path.startsWith(prefix)))
+    .map((node) => node.id);
+}
+
 /** Variable paths a node reads: `{{…}}` placeholders, `var`/`missing` operands and filter_from_vars, in order, once. */
 export function nodeInputs(node: ChatflowNode): string[] {
   const found = new Set<string>();

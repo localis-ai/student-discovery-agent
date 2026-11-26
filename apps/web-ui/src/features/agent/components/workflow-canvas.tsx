@@ -42,7 +42,7 @@ import { validTargets } from '../model/workflow/graph';
 import { handleLabel, isErrorHandle, nodeHandles, type NodeHandle } from '../model/workflow/handles';
 import { parseWorkflowIssuePath, type WorkflowIssueTarget } from '../model/workflow/issue-path';
 import { arrangeWorkflow, computeWorkflowLayout, type WorkflowLayoutOptions } from '../model/workflow/layout';
-import { describeInput, nodeInputs, type InputSource } from '../model/workflow/node-io';
+import { describeInput, nodeInputs, nodeReferences, type InputSource } from '../model/workflow/node-io';
 import { nodeSummary, summaryHeightLines, type CardSummary, type SummaryContext } from '../model/workflow/summary';
 import type {
   AgentIssue,
@@ -840,6 +840,8 @@ export function WorkflowCanvas({
   const pendingDeleteLabel = pendingDeleteNode
     ? pendingDeleteNode.title || catalogType(catalog, pendingDeleteNode)?.title || pendingDeleteNode.id
     : '';
+  // Deleting drops edges only; a node that reads this one's output would fail validation later, so say so now.
+  const pendingReferences = pendingDeleteNode ? nodeReferences(workflow, pendingDeleteNode.id) : [];
   const connectedEdgeCount = pendingDeleteNode
     ? (workflow.edges ?? []).filter(
         (edge) => edge.source === pendingDeleteNode.id || edge.target === pendingDeleteNode.id,
@@ -919,9 +921,12 @@ export function WorkflowCanvas({
         }}
         title="Xoá node?"
         description={
-          connectedEdgeCount > 0
+          (connectedEdgeCount > 0
             ? `Xoá node "${pendingDeleteLabel}" và gỡ ${connectedEdgeCount} cạnh liên quan?`
-            : `Xoá node "${pendingDeleteLabel}" khỏi workflow?`
+            : `Xoá node "${pendingDeleteLabel}" khỏi workflow?`)
+          + (pendingReferences.length
+            ? ` Node ${pendingReferences.join(', ')} vẫn đọc output của node này và sẽ báo lỗi khi kiểm tra.`
+            : '')
         }
         confirmLabel="Xoá node"
         destructive

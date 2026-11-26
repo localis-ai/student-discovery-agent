@@ -69,17 +69,46 @@ function renameKey(record: unknown, from: string, to: string): unknown {
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key === from ? to : key, value]));
 }
 
-/** Persona cases set and check conv values by bare name: their keys follow a rename too. */
-function renameInPersonaCase(raw: unknown, from: string, to: string): unknown {
+function dropKey(record: unknown, name: string): unknown {
+  if (!isRecord(record) || !(name in record)) return record;
+  return Object.fromEntries(Object.entries(record).filter(([key]) => key !== name));
+}
+
+/** Applies `edit` to the conv maps a persona case sets (initial_state.conv) and checks (turns[].expect.conv). */
+function mapPersonaConv(raw: unknown, edit: (conv: unknown) => unknown): unknown {
   if (!isRecord(raw)) return raw;
   const next: Record<string, unknown> = { ...raw };
-  if (isRecord(raw.initial_state)) next.initial_state = { ...raw.initial_state, conv: renameKey(raw.initial_state.conv, from, to) };
+  if (isRecord(raw.initial_state)) next.initial_state = { ...raw.initial_state, conv: edit(raw.initial_state.conv) };
   if (Array.isArray(raw.turns)) {
     next.turns = raw.turns.map((turn) => (isRecord(turn) && isRecord(turn.expect)
-      ? { ...turn, expect: { ...turn.expect, conv: renameKey(turn.expect.conv, from, to) } }
+      ? { ...turn, expect: { ...turn.expect, conv: edit(turn.expect.conv) } }
       : turn));
   }
   return next;
+}
+
+/** Persona cases set and check conv values by bare name: their keys follow a rename too. */
+function renameInPersonaCase(raw: unknown, from: string, to: string): unknown {
+  return mapPersonaConv(raw, (conv) => renameKey(conv, from, to));
+}
+
+/** Ids (or titles) of the persona cases that set or check `conv.<name>`. */
+export function personaCaseUsage(personaCases: unknown, name: string): string[] {
+  if (!Array.isArray(personaCases)) return [];
+  const has = (conv: unknown) => isRecord(conv) && name in conv;
+  return personaCases.filter((raw) => isRecord(raw) && (
+    (isRecord(raw.initial_state) && has(raw.initial_state.conv))
+    || (Array.isArray(raw.turns) && raw.turns.some((turn) => isRecord(turn) && isRecord(turn.expect) && has(turn.expect.conv)))
+  )).map((raw) => String((raw as Record<string, unknown>).title || (raw as Record<string, unknown>).id));
+}
+
+/**
+ * Drops `conv.<name>` from every persona case, the counterpart of a rename: the runtime rejects a persona case that
+ * sets or checks an undeclared variable, so a removed variable must not stay behind in them.
+ */
+export function removeFromPersonaCases(config: AgentConfig, name: string): AgentConfig {
+  if (!Array.isArray(config.persona_cases)) return config;
+  return { ...config, persona_cases: config.persona_cases.map((item) => mapPersonaConv(item, (conv) => dropKey(conv, name))) };
 }
 
 /**
@@ -103,9 +132,12 @@ export function renameVariable(config: AgentConfig, from: string, to: string): A
       nodes: renameNodes(flow.nodes),
       ...(flow.trigger ? { trigger: mapStrings(flow.trigger, rewrite) as Record<string, unknown> } : {}),
     })) };
-  } else {
-    const single = config.workflow as ChatflowWorkflow;
+  } else if (isRecord(config.workflow) && Array.isArray(config.workflow.nodes)) {
+    const single = config.workflow as unknown as ChatflowWorkflow;  // the one-graph shape: nodes is all a rename reads
     workflow = { ...single, variables: renameDeclared(single.variables), nodes: renameNodes(single.nodes) };
+  } else {
+    // Neither shape (e.g. a chatflow with no flows, mid-edit in the JSON tab): renaming would guess at the graph.
+    throw new Error('Workflow chưa đúng dạng; sửa ở tab JSON trước khi đổi tên biến.');
   }
   const next: AgentConfig = { ...config, workflow };
   if (Array.isArray(config.persona_cases)) {
