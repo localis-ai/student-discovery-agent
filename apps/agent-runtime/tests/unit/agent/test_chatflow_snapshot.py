@@ -10,8 +10,8 @@ from agent_runtime.agent.validation import AgentSnapshotValidator
 from agent_runtime.evaluations.services.validator import ExperienceValidator, calculate_content_hash
 from agent_runtime.sessions.schemas.activity import CapabilitySnapshot
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
-from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_NODE_IDS
 from agent_runtime.sessions.services.releases import validate_release
+from agent_runtime.workflow.rules import NODE_TYPES, RESERVED_NODE_IDS
 from agent_runtime.workflow.scope import _STATIC, Scope
 from tests.helpers.builders import agent_release
 

@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from agent_runtime.sessions.schemas import workflow as schema
+from agent_runtime.workflow import rules
 from agent_runtime.workflow.nodes.goto_flow import MAX_FLOW_SWITCHES
 from agent_runtime.workflow.templates import placeholders
 
@@ -27,9 +28,9 @@ def _bounds(field: dict) -> dict:
 
 
 def test_identifier_and_reserved_ids():
-    assert RULES["identifier_pattern"] == schema.IDENT_PATTERN == OPENAPI["ChatflowIdentifier"]["pattern"]
-    assert set(RULES["reserved_node_ids"]) == schema.RESERVED_NODE_IDS
-    assert set(RULES["reserved_flow_ids"]) == schema.RESERVED_FLOW_IDS
+    assert RULES["identifier_pattern"] == rules.IDENT_PATTERN == OPENAPI["ChatflowIdentifier"]["pattern"]
+    assert set(RULES["reserved_node_ids"]) == rules.RESERVED_NODE_IDS
+    assert set(RULES["reserved_flow_ids"]) == rules.RESERVED_FLOW_IDS
 
 
 def test_fixture_limits_match_openapi():
@@ -48,7 +49,7 @@ def test_fixture_limits_match_openapi():
 
 def test_runtime_limits_match_fixture():
     limits = RULES["limits"]
-    assert (schema.MAX_FLOWS, schema.MAX_VARIABLES, schema.MAX_NODES, schema.MAX_EDGES, schema.MAX_ENUM_VALUES) == (
+    assert (rules.MAX_FLOWS, rules.MAX_VARIABLES, rules.MAX_NODES, rules.MAX_EDGES, rules.MAX_ENUM_VALUES) == (
         limits["flows"], limits["variables"], limits["nodes_per_flow"], limits["edges_per_flow"], limits["enum_values"])
     assert MAX_FLOW_SWITCHES == limits["max_flow_switches"]
     # The pydantic models must enforce what the constants say, not a stale literal.
@@ -68,7 +69,7 @@ def test_runtime_limits_match_fixture():
 
 
 def test_node_types_match_openapi():
-    assert set(OPENAPI["ChatflowNodeType"]["enum"]) == schema.NODE_TYPES
+    assert set(OPENAPI["ChatflowNodeType"]["enum"]) == rules.NODE_TYPES
 
 
 @pytest.mark.parametrize("case", RULES["placeholder_cases"], ids=lambda case: case["text"])

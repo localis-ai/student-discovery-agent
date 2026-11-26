@@ -3,7 +3,8 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any
 
-from agent_runtime.sessions.schemas.workflow import ConvVariable, value_fits
+from agent_runtime.sessions.schemas.workflow import ConvVariable
+from agent_runtime.workflow.variables import value_fits
 
 _STATIC = ("sys", "profile", "result")
 

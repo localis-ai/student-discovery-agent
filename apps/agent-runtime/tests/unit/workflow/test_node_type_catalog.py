@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from agent_runtime.sessions.schemas.workflow import INTERNAL_NODE_TYPES, NODE_TYPES
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.catalog import HANDLE_SPECS, ORDER, TITLES, node_type_catalog
+from agent_runtime.workflow.rules import INTERNAL_NODE_TYPES, NODE_TYPES
 
 GOLDEN = Path(__file__).resolve().parents[5] / "contracts/fixtures/workflow-node-types.json"
 

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from agent_runtime.sessions.schemas.workflow import PersonaCase
+from agent_runtime.sessions.schemas.persona import PersonaCase
 
 
 def case(**turn):
