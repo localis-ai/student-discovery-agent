@@ -35,7 +35,7 @@ from agent_runtime.workflow.executor import WorkflowRun, run_workflow
 from agent_runtime.workflow.flows import ROUTER_ID, RunGraph, compile_chatflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports
 from agent_runtime.workflow.scope import Scope
-from agent_runtime.workflow.trace import NodeRunTrace, Redaction
+from agent_runtime.workflow.trace import NodeRunTrace, Redaction, fallback_at_view
 
 KEEP_SECONDS = 24 * 3600
 _OUTCOMES = {**INTERACTION_OUTCOMES, "explain_result": EXPLAIN_OUTCOME}
@@ -169,6 +169,7 @@ class DebugRunService:
             if self._strict_knowledge:
                 logger.error("debug run: knowledge store unavailable (%s)", type(error).__name__)  # type only: no DB URL
                 raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+            logger.warning("debug run: knowledge fields unavailable (%s)", type(error).__name__)
             return {}  # an unreachable knowledge store degrades the run, as in a real turn
 
     def _execute(self, agent: AgentSnapshotV1, request: DebugRequest, view, emit: Emit | None,
@@ -254,8 +255,8 @@ class DebugRunService:
         if route is None and run.records and run.records[0].node_id == ROUTER_ID and run.records[0].error is None:
             route = dict(run.records[0].reason)
         return {"run_id": "dbg_" + uuid4().hex[:24],
-                "status": "completed" if run.status == "completed" else "fallback",
-                "fallback_reason": run.fallback if run.fallback in {"workflow_budget", "workflow_node_error"} else None,
+                "status": run.status, "fallback_reason": run.fallback, "fallback_at": fallback_at_view(run),
+                "conv_reset": list(run.conv_reset), "conv_dropped": list(run.conv_dropped),
                 "path": list(run.path), "node_runs": node_runs, "route": route,
                 "blocks": [block.model_dump(mode="json") for block in run.blocks],
                 "effects": [_effect(effect) for effect in run.effects], "llm_calls": run.llm_calls,
