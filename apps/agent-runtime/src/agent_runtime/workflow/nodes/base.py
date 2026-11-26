@@ -75,3 +75,9 @@ class NodeSpec:
     handles: Callable[[Any], tuple[str, ...]]
     output_schema: Mapping[str, Any]
     run: Callable[[NodeContext, Any], NodeResult]
+    # False for a node that only reads the scope and makes no external call: a late but finished agent reply must
+    # still be answered, so such a node runs after the deadline (a model call is still refused by start_llm_call).
+    checks_deadline: bool = True
+    # True for a model node whose reply may stream straight to the student, when its every non-error edge leads to
+    # an answer that only repeats its text (executor._live_nodes).
+    streams_reply: bool = False

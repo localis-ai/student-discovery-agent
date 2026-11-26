@@ -28,4 +28,5 @@ def run(ctx: NodeContext, config: IfElseConfig) -> NodeResult:
 
 
 register(NodeSpec("if_else", IfElseConfig, lambda config: ("true", "false"),
-                  {"type": "object", "properties": {"matched": {"type": "boolean"}}}, run))
+                  {"type": "object", "properties": {"matched": {"type": "boolean"}}}, run,
+                  checks_deadline=False))

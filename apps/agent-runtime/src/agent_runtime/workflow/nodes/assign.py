@@ -71,4 +71,5 @@ def run(ctx: NodeContext, config: AssignConfig) -> NodeResult:
     return NodeResult("next", effects=tuple(effects), reason={"assigned": [effect.variable for effect in effects]})
 
 
-register(NodeSpec("assign", AssignConfig, lambda config: ("next",), {"type": "object", "properties": {}}, run))
+register(NodeSpec("assign", AssignConfig, lambda config: ("next",), {"type": "object", "properties": {}}, run,
+                  checks_deadline=False))

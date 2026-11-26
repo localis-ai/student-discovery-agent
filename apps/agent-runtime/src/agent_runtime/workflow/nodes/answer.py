@@ -65,4 +65,4 @@ def run(ctx: NodeContext, config: AnswerConfig) -> NodeResult:
 
 
 register(NodeSpec("answer", AnswerConfig, lambda config: (), {"type": "object", "properties": {"text": {"type": "string"}}},
-                  run))
+                  run, checks_deadline=False))

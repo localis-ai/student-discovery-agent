@@ -8,4 +8,4 @@ class StartConfig(ContractModel):
 
 
 register(NodeSpec("start", StartConfig, lambda config: ("next",), {"type": "object", "properties": {}},
-                  lambda ctx, config: NodeResult("next")))
+                  lambda ctx, config: NodeResult("next"), checks_deadline=False))
