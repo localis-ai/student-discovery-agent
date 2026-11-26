@@ -87,7 +87,7 @@ describe('defaultExperienceRuntimeClient', () => {
     });
 
     it.each(['CONFLICT_IDEMPOTENCY_KEY', 'IDEMPOTENCY_KEY_COLLISION'])(
-      'maps runtime %s to IDEMPOTENCY_KEY_COLLISION, not a revision conflict',
+      'maps runtime %s to CONFLICT_IDEMPOTENCY_KEY, not a revision conflict',
       async (runtimeCode) => {
         respond(409, { success: false, error: { code: runtimeCode, message: 'Key reused' } });
         await expect(
@@ -101,7 +101,7 @@ describe('defaultExperienceRuntimeClient', () => {
             },
             ctx,
           ),
-        ).rejects.toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_COLLISION' });
+        ).rejects.toMatchObject({ status: 409, code: 'CONFLICT_IDEMPOTENCY_KEY' });
       },
     );
 

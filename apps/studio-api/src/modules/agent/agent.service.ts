@@ -1,4 +1,5 @@
-import type { ProductDatabase } from '@/infrastructure/db/client';
+import type { ProductDatabase, ProductExecutor } from '@/infrastructure/db/client';
+import { idempotent, replayRecorded, type IdempotentResult } from '@/infrastructure/db/idempotency';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
 import { computeContentHash } from '@/shared/canonical';
@@ -63,37 +64,7 @@ export async function validateDraft(db: ProductDatabase, ctx: RequestContext): P
   return { ...(await getAgentValidator()(draft.content, ctx)), draft_revision: draft.revision };
 }
 
-export interface ServiceResult<T> { status: number; data: T; replayed?: boolean }
 export type AgentReleaseDTO = ReturnType<typeof toReleaseDTO>;
-
-function replayOf<T>(existing: { request_hash: string; response_status: number; response_body: unknown } | undefined, requestHash: string): ServiceResult<T> | undefined {
-  if (!existing) return undefined;
-  if (existing.request_hash !== requestHash) {
-    throw new ProductError(409, 'CONFLICT_IDEMPOTENCY_KEY', 'Idempotency key reused with different request payload');
-  }
-  return { status: existing.response_status, data: existing.response_body as T, replayed: true };
-}
-
-/** Unlocked early lookup so a retry replays the stored result regardless of current state. */
-async function earlyReplay<T>(db: ProductDatabase, scope: string, key: string, payload: unknown): Promise<ServiceResult<T> | undefined> {
-  return replayOf<T>(await repo.findIdempotencyRecordForAgent(db, scope, key), computeContentHash(payload));
-}
-
-async function idempotent<T>(
-  db: ProductDatabase, scope: string, key: string, payload: unknown, status: number,
-  work: (tx: repo.ProductExecutorLike) => Promise<T>,
-): Promise<ServiceResult<T>> {
-  const requestHash = computeContentHash(payload);
-  return repo.withAgentLock(db, scope, key, async tx => {
-    const replay = replayOf<T>(await repo.findIdempotencyRecordForAgent(tx, scope, key), requestHash);
-    if (replay) return replay;
-    const data = await work(tx);
-    await repo.saveIdempotencyRecordForAgent(tx, {
-      scope, key, request_hash: requestHash, response_status: status, response_body: data as unknown as Record<string, unknown>,
-    });
-    return { status, data };
-  });
-}
 
 function gateFailed(issues: unknown[]): ProductError {
   return new ProductError(422, 'PUBLISH_GATE_FAILED', 'Agent config failed validation', false, { kind: 'validation', issues });
@@ -108,7 +79,7 @@ function requirePassingReport(report: AgentValidation, contentHash: string): voi
   }
 }
 
-async function lockedPointer(tx: repo.ProductExecutorLike, expected: number) {
+async function lockedPointer(tx: ProductExecutor, expected: number) {
   const pointer = await repo.lockActive(tx);
   if (!pointer) throw new ProductError(422, 'RES_EXPERIENCE_NOT_CONFIGURED', 'No active agent release');
   if (pointer.revision !== expected) {
@@ -120,8 +91,10 @@ async function lockedPointer(tx: repo.ProductExecutorLike, expected: number) {
 
 export async function publish(
   db: ProductDatabase, input: PublishInput, actor: string, ctx: RequestContext,
-): Promise<ServiceResult<AgentReleaseDTO>> {
-  const replay = await earlyReplay<AgentReleaseDTO>(db, 'agent:publish', input.idempotency_key, input);
+): Promise<IdempotentResult<AgentReleaseDTO>> {
+  // Unlocked early replay so a retry returns the stored result regardless of current state.
+  const payloadHash = computeContentHash(input);
+  const replay = await replayRecorded<AgentReleaseDTO>(db, 'agent:publish', input.idempotency_key, payloadHash);
   if (replay) return replay;
   const draft = await repo.getDraft(db);
   if (!draft) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent draft not found');
@@ -131,7 +104,7 @@ export async function publish(
   }
   // Validate outside the transaction (network call); the hash check inside binds the report to this content.
   requirePassingReport(await getAgentValidator()(draft.content, ctx), draft.content_hash);
-  return idempotent(db, 'agent:publish', input.idempotency_key, input, 201, async tx => {
+  return idempotent(db, 'agent:publish', input.idempotency_key, payloadHash, 201, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     const current = await repo.getDraft(tx);
     if (!current || current.revision !== input.expected_draft_revision || current.content_hash !== draft.content_hash) {
@@ -157,14 +130,14 @@ export async function publish(
 
 export async function restore(
   db: ProductDatabase, releaseId: string, input: RestoreInput, actor: string, ctx: RequestContext,
-): Promise<ServiceResult<AgentActiveDTO>> {
-  const payload = { ...input, release_id: releaseId };
-  const replay = await earlyReplay<AgentActiveDTO>(db, 'agent:restore', input.idempotency_key, payload);
+): Promise<IdempotentResult<AgentActiveDTO>> {
+  const payloadHash = computeContentHash({ ...input, release_id: releaseId });
+  const replay = await replayRecorded<AgentActiveDTO>(db, 'agent:restore', input.idempotency_key, payloadHash);
   if (replay) return replay;
   const target = await repo.findRelease(db, releaseId);
   if (!target) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent release not found');
   requirePassingReport(await getAgentValidator()(target.content, ctx), target.content_hash);
-  return idempotent(db, 'agent:restore', input.idempotency_key, payload, 200, async tx => {
+  return idempotent(db, 'agent:restore', input.idempotency_key, payloadHash, 200, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     if (pointer.release_id === releaseId) {
       throw new ProductError(409, 'CONFLICT_INVALID_STATE', 'Release is already active', false, { kind: 'no_changes' });

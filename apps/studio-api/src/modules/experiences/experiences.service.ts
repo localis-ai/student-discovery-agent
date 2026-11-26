@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { ProductDatabase, ProductExecutor } from '@/infrastructure/db/client';
-import { findIdempotencyRecord, saveIdempotencyRecord, withIdempotencyLock } from '@/infrastructure/db/idempotency';
+import { idempotent, replayRecorded, type IdempotentOptions, type IdempotentResult } from '@/infrastructure/db/idempotency';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
 import { computeContentHash } from '@/shared/canonical';
@@ -39,12 +39,6 @@ import {
   type SnapshotCommandInput,
 } from '@/modules/experiences/experiences.schemas';
 
-export interface ServiceResult<T> {
-  status: number;
-  data: T;
-  replayed?: boolean;
-}
-
 /** Keep the persisted semantic fingerprint independent of public revision field names. */
 function revisionPayloadHashes(
   payload: Record<string, unknown>,
@@ -75,69 +69,16 @@ function replayResponse(scope: string, stored: Record<string, unknown>): Record<
   return scope.startsWith('draft:') ? rename(stored, 'draft_revision') : stored;
 }
 
-/**
- * Handles idempotency check before write operations.
- * If record exists with matching request hash, returns the cached response.
- * If record exists with mismatching request hash, throws 409 IDEMPOTENCY_KEY_COLLISION.
- */
-async function checkIdempotency<T>(
-  db: ProductExecutor,
-  scope: string,
-  key: string,
-  payloadHashes: readonly string[],
-): Promise<ServiceResult<T> | undefined> {
-  const existing = await findIdempotencyRecord(db, scope, key);
-  if (!existing) return undefined;
-
-  if (!payloadHashes.includes(existing.request_hash)) {
-    throw new ProductError(
-      409,
-      'IDEMPOTENCY_KEY_COLLISION',
-      'Idempotency key reused with different request payload',
-    );
-  }
-
-  return {
-    status: existing.response_status,
-    data: replayResponse(scope, existing.response_body) as T,
-    replayed: true,
-  };
-}
-
-/**
- * One transaction per idempotent write: lock (scope, key), replay or reject a reused key, run the
- * business write, then store the response. A crash or error anywhere rolls back both the write and
- * the record, so a retry with the same key and payload re-executes instead of duplicating.
- */
-export async function idempotent<T>(
-  db: ProductDatabase,
-  scope: string,
-  key: string,
-  payloadHash: string | readonly string[],
-  status: number,
-  work: (tx: ProductExecutor) => Promise<T>,
-): Promise<ServiceResult<T>> {
-  const payloadHashes = typeof payloadHash === 'string' ? [payloadHash] : payloadHash;
-  return withIdempotencyLock(db, scope, key, async (tx) => {
-    const replayed = await checkIdempotency<T>(tx, scope, key, payloadHashes);
-    if (replayed) return replayed;
-    const data = await work(tx);
-    await saveIdempotencyRecord(tx, {
-      scope,
-      key,
-      request_hash: payloadHashes[0]!,
-      response_status: status,
-      response_body: data as unknown as Record<string, unknown>,
-    });
-    return { status, data };
-  });
-}
+/** Replay each stored record in the DTO shape of its own scope, including records written before the rename. */
+const replayOptions = (scope: string): IdempotentOptions => ({
+  adaptReplay: (stored) => replayResponse(scope, stored),
+});
 
 export async function createExperience(
   db: ProductDatabase,
   input: CreateExperienceInput,
   user: { sub: string },
-): Promise<ServiceResult<ExperienceMetadataDTO>> {
+): Promise<IdempotentResult<ExperienceMetadataDTO>> {
   const scope = 'create_experience';
   const payloadHash = computeContentHash({
     name: input.name,
@@ -161,7 +102,7 @@ export async function createExperience(
       draft_revision: draft.revision,
       content_hash: draft.content_hash,
     });
-  });
+  }, replayOptions(scope));
 }
 
 export async function getExperience(
@@ -203,7 +144,7 @@ export async function patchExperience(
   db: ProductDatabase,
   id: string,
   input: PatchExperienceInput,
-): Promise<ServiceResult<ExperienceMetadataDTO>> {
+): Promise<IdempotentResult<ExperienceMetadataDTO>> {
   const scope = `patch:${id}`;
   const payloadHash = revisionPayloadHashes({
     expected_revision: input.expected_metadata_revision,
@@ -230,7 +171,7 @@ export async function patchExperience(
     }
 
     return toExperienceMetadataDTO(result.experience, result.draftRef ? { draft_id: result.draftRef.draft_id, draft_revision: result.draftRef.revision, content_hash: result.draftRef.content_hash } : null);
-  });
+  }, replayOptions(scope));
 }
 
 export async function readExperienceDraft(
@@ -254,7 +195,7 @@ export async function saveExperienceDraft(
     content: Record<string, unknown>;
   },
   user: { sub: string },
-): Promise<ServiceResult<ExperienceDraftDTO>> {
+): Promise<IdempotentResult<ExperienceDraftDTO>> {
   const scope = `draft:${experienceId}`;
   const newHash = computeContentHash(input.content);
   const payloadHash = revisionPayloadHashes({
@@ -286,7 +227,7 @@ export async function saveExperienceDraft(
     }
 
     return toExperienceDraftDTO(result.draft);
-  });
+  }, replayOptions(scope));
 }
 
 /** The draft the caller looked at: 404 when gone, 409 when its revision or content moved on. */
@@ -343,7 +284,7 @@ export async function publishExperienceRelease(
   user: { sub: string },
   reports: PublishReportVerifier = getPublishReportVerifier(),
   ctx?: RequestContext,
-): Promise<ServiceResult<ExperienceReleaseDTO>> {
+): Promise<IdempotentResult<ExperienceReleaseDTO>> {
   const scope = `publish:${experienceId}`;
   const payloadHash = revisionPayloadHashes({
     expected_revision: input.expected_draft_revision,
@@ -353,7 +294,7 @@ export async function publishExperienceRelease(
     approval_refs: input.approval_refs,
   }, 'expected_draft_revision');
 
-  const replayed = await checkIdempotency<ExperienceReleaseDTO>(db, scope, input.idempotency_key, payloadHash);
+  const replayed = await replayRecorded<ExperienceReleaseDTO>(db, scope, input.idempotency_key, payloadHash, replayOptions(scope));
   if (replayed) return replayed;
 
   const draft = await requireDraftSnapshot(db, experienceId, input.expected_draft_revision, input.content_hash);
@@ -443,7 +384,7 @@ export async function publishExperienceRelease(
     }
 
     return toExperienceReleaseDTO(insertResult.release);
-  });
+  }, replayOptions(scope));
 }
 
 export async function getExperienceRelease(
@@ -512,14 +453,14 @@ async function runSnapshotCommand<R extends SnapshotReport>(
     kind: 'validation' | 'evaluation';
     run: (cmd: ExperienceSnapshotCommandInput, ctx: RequestContext) => Promise<R>;
   },
-): Promise<ServiceResult<R>> {
+): Promise<IdempotentResult<R>> {
   const scope = `${command.scope}:${experienceId}`;
   const payloadHash = computeContentHash({
     expected_revision: input.expected_revision,
     content_hash: input.content_hash,
   });
 
-  const replayed = await checkIdempotency<R>(db, scope, input.idempotency_key, [payloadHash]);
+  const replayed = await replayRecorded<R>(db, scope, input.idempotency_key, [payloadHash], replayOptions(scope));
   if (replayed) return replayed;
 
   const draft = await requireDraftSnapshot(db, experienceId, input.expected_revision, input.content_hash);
@@ -551,7 +492,7 @@ async function runSnapshotCommand<R extends SnapshotReport>(
       report: report as unknown as Record<string, unknown>,
     });
     return report;
-  });
+  }, replayOptions(scope));
 }
 
 export function validateExperienceDraft(
@@ -559,7 +500,7 @@ export function validateExperienceDraft(
   experienceId: string,
   input: SnapshotCommandInput,
   ctx: RequestContext,
-): Promise<ServiceResult<ValidationReport>> {
+): Promise<IdempotentResult<ValidationReport>> {
   return runSnapshotCommand(db, experienceId, input, ctx, {
     scope: 'validate',
     kind: 'validation',
@@ -572,7 +513,7 @@ export function evaluateExperienceDraft(
   experienceId: string,
   input: SnapshotCommandInput,
   ctx: RequestContext,
-): Promise<ServiceResult<EvaluationReport>> {
+): Promise<IdempotentResult<EvaluationReport>> {
   return runSnapshotCommand(db, experienceId, input, ctx, {
     scope: 'evaluate',
     kind: 'evaluation',
