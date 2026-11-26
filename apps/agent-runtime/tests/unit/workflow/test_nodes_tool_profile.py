@@ -69,10 +69,17 @@ def test_profile_propose_turns_a_valid_extraction_into_a_proposal_effect():
     assert result.effects == (ProfileProposal((("entry_level", "thpt_grade_10"),), "level"),)
 
 
-@pytest.mark.parametrize("said", ["{}", '{"entry_level": "tiến sĩ"}', '{"phone": "0900"}', "không rõ"])
+@pytest.mark.parametrize("said", ["{}", '{"entry_level": "tiến sĩ"}', '{"phone": "0900"}'])
 def test_profile_propose_with_nothing_valid_goes_to_none_and_never_writes(said):
     _, result, _, _ = run_node(PROPOSE, model=FakeModel(ModelReply(text=said)), profile=Profile())
     assert result.handle == "none" and result.effects == ()
+
+
+@pytest.mark.parametrize("said", ["không rõ", "[]", '"entry_level"'])
+def test_profile_propose_with_unreadable_output_is_a_node_error_not_none(said):
+    with pytest.raises(NodeError) as error:
+        run_node(PROPOSE, model=FakeModel(ModelReply(text=said)), profile=Profile())
+    assert error.value.error_type == "invalid_output"
 
 
 def test_profile_propose_with_the_null_port_always_goes_to_none():
