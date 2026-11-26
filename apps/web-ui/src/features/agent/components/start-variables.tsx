@@ -1,11 +1,12 @@
 'use client';
 
 import { Plus, Trash2, Variable } from 'lucide-react';
+import { CHATFLOW_LIMITS } from '../model/workflow/rules';
 import { triggerUsage, variableUsage } from '../model/workflow/variable-usage';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { useVariablesPanel } from './variables-context';
 
-const MAX_VARIABLES = 60;
+const MAX_VARIABLES = CHATFLOW_LIMITS.variables;
 
 function TypeTag({ type }: { type: string }) {
   return <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{type}</span>;

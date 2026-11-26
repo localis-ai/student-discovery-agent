@@ -5,12 +5,12 @@ import { readRequestCookie, setAuthCookiesOn } from '@/modules/auth/cookies';
 import { getProductDatabase } from '@/infrastructure/db/client';
 import { requireSameOrigin } from '../csrf';
 import { ProductError } from '@/http/errors';
-import { readJsonBody } from '@/http/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import { withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 export const handlePost = withHandler(async (req, ctx) => {
   requireSameOrigin(req);
-  refreshSchema.parse(await readJsonBody(req, { optional: true }));
+  refreshSchema.parse(await readStrictJsonBody(req, { optional: true }));
   const token = readRequestCookie(req, getAuthEnv().AUTH_COOKIE_REFRESH);
   if (!token) throw new ProductError(401, 'AUTH_TOKEN_MISSING', 'Refresh cookie is required');
   const result = await refreshAccessToken(getProductDatabase(), token);

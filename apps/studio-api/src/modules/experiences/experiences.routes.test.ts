@@ -304,6 +304,8 @@ describe('experiences.routes', () => {
         'exp_1',
         expect.objectContaining({ expected_draft_revision: 1 }),
         expect.objectContaining({ sub: 'admin' }),
+        undefined,
+        expect.objectContaining({ requestId: expect.any(String), traceId: expect.any(String) }),
       );
     });
 

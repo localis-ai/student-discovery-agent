@@ -8,7 +8,7 @@ import { fieldsToSchema, JSON_FIELD_NAME, JSON_FIELD_TYPES, schemaToFields, type
 
 function rowErrors(rows: readonly JsonField[]): Array<string | null> {
   return rows.map((row, index) => {
-    if (!JSON_FIELD_NAME.test(row.name)) return 'Tên chỉ gồm chữ, số, gạch dưới; không bắt đầu bằng số.';
+    if (!JSON_FIELD_NAME.test(row.name)) return 'Tên chỉ gồm chữ thường, số, gạch dưới; bắt đầu bằng chữ.';
     if (rows.findIndex((other) => other.name === row.name) !== index) return 'Tên trường bị trùng.';
     return null;
   });

@@ -11,6 +11,7 @@ from agent_runtime.api import health
 from agent_runtime.api.internal.dependencies import InternalBoundary, RuntimeContainer, build_runtime
 from agent_runtime.api.internal.envelopes import failure
 from agent_runtime.api.internal.routes import router
+from agent_runtime.infrastructure.diagnostics import log_unexpected
 from agent_runtime.sessions.errors import RuntimeSessionError
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def create_app(
             from agent_runtime.config.settings import Settings
 
             runtime = build_runtime(Settings())
-        except Exception:
+        except Exception as error:  # readiness reports down; the log says why
+            log_unexpected(logger, "runtime not built", error)
             runtime = None
     @asynccontextmanager
     async def lifespan(_app: FastAPI):

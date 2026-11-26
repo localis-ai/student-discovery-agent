@@ -139,6 +139,56 @@ describe('defaultExperienceRuntimeClient', () => {
     });
   });
 
+  describe('runtime rejections', () => {
+    const command = {
+      experience_id: 'exp_1',
+      definition: {},
+      expected_revision: 1,
+      content_hash: 'sha256:abc',
+      idempotency_key: 'k1',
+    };
+    const issues = [{ path: 'nodes.0.id', code: 'required', message: 'id is required', rule_id: null }];
+
+    it('reports a runtime 4xx as 502 SYS_UNAVAILABLE, keeping the runtime code and issues in details', async () => {
+      respond(422, { success: false, error: { code: 'INVALID_INPUT', message: 'bad', details: { kind: 'validation', issues } } });
+      await expect(defaultExperienceRuntimeClient.validate(command, ctx)).rejects.toMatchObject({
+        status: 502,
+        code: 'SYS_UNAVAILABLE',
+        details: { kind: 'runtime_rejected', runtimeCode: 'INVALID_INPUT', issues },
+      });
+    });
+
+    it('logs the runtime code and issues, never the runtime URL or the caller token', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      respond(422, { success: false, error: { code: 'INVALID_INPUT', message: 'bad', details: { kind: 'validation', issues } } });
+      await defaultExperienceRuntimeClient.validate(command, ctx).catch(() => {});
+
+      const [, line] = error.mock.calls[0]!;
+      expect(line).toMatchObject({ status: 422, runtimeCode: 'INVALID_INPUT', issues, kind: 'runtime_error' });
+      const token = (vi.mocked(fetch).mock.calls[0]![1]!.headers as Record<string, string>)['x-caller-context']!;
+      const logged = JSON.stringify(error.mock.calls);
+      expect(logged).not.toContain('runtime:8000');
+      expect(logged).not.toContain(token);
+      error.mockRestore();
+    });
+
+    it('marks a non-JSON runtime body as malformed_body in the log and keeps details empty', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>proxy</html>', { status: 400 })));
+      await expect(defaultExperienceRuntimeClient.validate(command, ctx)).rejects.toMatchObject({
+        status: 502,
+        details: { kind: 'runtime_rejected', runtimeCode: null, issues: [] },
+      });
+      expect(error).toHaveBeenCalledWith('[experience-runtime] request failed', expect.objectContaining({ kind: 'malformed_body' }));
+      error.mockRestore();
+    });
+
+    it('keeps 409 mapping and still reports a 5xx outage as 503', async () => {
+      respond(500, { success: false, error: { code: 'INTERNAL_ERROR' } });
+      await expect(defaultExperienceRuntimeClient.validate(command, ctx)).rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE' });
+    });
+  });
+
   describe('evaluate', () => {
     it('signs with purpose experience.evaluate and returns the evaluation report', async () => {
       const mockReport = {

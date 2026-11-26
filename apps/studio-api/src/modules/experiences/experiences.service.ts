@@ -342,6 +342,7 @@ export async function publishExperienceRelease(
   input: PublishReleaseInput,
   user: { sub: string },
   reports: PublishReportVerifier = getPublishReportVerifier(),
+  ctx?: RequestContext,
 ): Promise<ServiceResult<ExperienceReleaseDTO>> {
   const scope = `publish:${experienceId}`;
   const payloadHash = revisionPayloadHashes({
@@ -387,6 +388,7 @@ export async function publishExperienceRelease(
       evaluation_id: input.evaluation_id,
     },
     db,
+    ctx,
   );
   const verdict = typeof reportResult === 'boolean' ? { verified: reportResult } : reportResult;
   if (!verdict.verified) {

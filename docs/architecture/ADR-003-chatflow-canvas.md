@@ -20,7 +20,8 @@ for node and edge interaction. The workflow model remains the source of truth: c
 components will map it to React Flow nodes and edges, and all changes go back through the pure
 helpers in `model/workflow/edit.ts`.
 
-These helpers mirror the runtime's limits and graph rules. They keep the top-level workflow and
+These helpers apply the runtime's limits and graph rules. The limits and grammars come from
+`contracts/fixtures/chatflow-rules.json` (see [ADR-004](ADR-004-chatflow-rules-and-evolution.md)). They keep the top-level workflow and
 node fields they do not edit, but build edges from the contract fields only
 (`id`, `source`, `source_handle`, `target`). The runtime schema forbids extra fields, so React
 Flow state such as `selected` must never reach the draft.

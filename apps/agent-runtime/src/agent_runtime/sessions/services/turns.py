@@ -9,6 +9,7 @@ from typing import Literal
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
+from agent_runtime.infrastructure.diagnostics import log_unexpected
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
@@ -122,7 +123,8 @@ class TurnService:
             return self.responses.read_model(caller, begun.response.id)
         except RuntimeSessionError as error:
             return self.store.fail(begun, error.code)
-        except Exception:
+        except Exception as error:  # a bug in a turn (chatflow, tools, engine): the Response says INTERNAL_ERROR
+            log_unexpected(logger, "turn failed", error)
             return self.store.fail(begun, "INTERNAL_ERROR")
 
     def _should_stop(self, caller: VerifiedCaller, response_id: str) -> Callable[[], bool]:

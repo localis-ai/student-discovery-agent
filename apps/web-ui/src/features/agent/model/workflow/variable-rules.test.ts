@@ -41,4 +41,21 @@ describe('variable rules (mirror of agent_runtime value_fits)', () => {
       .toBe('Giá trị bị trùng.');
     expect(variableDeclarationErrors({ ...score, description: 'x'.repeat(301) }, []).description).toBe('Tối đa 300 ký tự.');
   });
+
+  it('rejects constraint values outside the contract bounds, as publish would', () => {
+    const text: ChatflowVariable = { name: 'note', type: 'string', default: '' };
+    const list: ChatflowVariable = { name: 'picks', type: 'string_list', default: [] };
+    expect(variableDeclarationErrors({ ...text, constraints: { max_length: 4001 } }, [])['constraints.max_length'])
+      .toBe('Phải là số nguyên từ 0 đến 4000.');
+    expect(variableDeclarationErrors({ ...text, constraints: { min_length: 1.5 } }, [])['constraints.min_length'])
+      .toBe('Phải là số nguyên từ 0 đến 4000.');
+    expect(variableDeclarationErrors({ ...list, constraints: { max_items: 0 } }, [])['constraints.max_items'])
+      .toBe('Phải là số nguyên từ 1 đến 100.');
+    expect(variableDeclarationErrors({ ...list, constraints: { item_max_length: 1001 } }, [])['constraints.item_max_length'])
+      .toBe('Phải là số nguyên từ 1 đến 1000.');
+    expect(variableDeclarationErrors({ ...list, constraints: { max_items: 100, item_max_length: 1000 } }, [])).toEqual({});
+    // A key that does not belong to the type keeps its own message.
+    expect(variableDeclarationErrors({ ...score, constraints: { max_length: 9999 } }, [])['constraints.max_length'])
+      .toBe('Ràng buộc này không dùng cho kiểu number.');
+  });
 });

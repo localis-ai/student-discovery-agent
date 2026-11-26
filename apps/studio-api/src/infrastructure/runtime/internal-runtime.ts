@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { getKnowledgeEnv } from '@/config/env';
 import { signingKey, signServiceRequest } from '@/infrastructure/runtime/signing';
 
@@ -71,13 +72,13 @@ export async function callRuntimeAsStudio(req: RuntimeRequest & { purpose: strin
 export interface RuntimeEnvelope {
   success: boolean;
   data?: unknown;
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; details?: unknown };
 }
 
-/** The runtime's ApiResponse envelope, or null when the body is not a JSON object. */
+/** The runtime's ApiResponse envelope, or null when the body is not a JSON object (malformed or absent). */
 export async function readEnvelope(response: Response): Promise<RuntimeEnvelope | null> {
   const raw = await response.json().catch(() => null) as
-    { success?: unknown; data?: unknown; error?: { code?: unknown; message?: unknown } } | null;
+    { success?: unknown; data?: unknown; error?: { code?: unknown; message?: unknown; details?: unknown } } | null;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const error = raw.error;
   return {
@@ -87,9 +88,26 @@ export async function readEnvelope(response: Response): Promise<RuntimeEnvelope 
       error: {
         ...(typeof error.code === 'string' ? { code: error.code } : {}),
         ...(typeof error.message === 'string' ? { message: error.message } : {}),
+        ...(error.details !== undefined ? { details: error.details } : {}),
       },
     } : {}),
   };
+}
+
+export const runtimeIssueSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+  rule_id: z.string().nullable().optional(),
+});
+export type RuntimeIssue = z.infer<typeof runtimeIssueSchema>;
+
+const runtimeIssuesDetailsSchema = z.object({ issues: z.array(runtimeIssueSchema) });
+
+/** Validation issues the runtime attached as `error.details.issues`; [] when absent or not in that shape. */
+export function runtimeIssues(envelope: RuntimeEnvelope | null): RuntimeIssue[] {
+  const parsed = runtimeIssuesDetailsSchema.safeParse(envelope?.error?.details);
+  return parsed.success ? parsed.data.issues : [];
 }
 
 /** 401/403: the runtime rejected studio's key, kid or purpose. Other 4xx: studio sent a request it refuses. */

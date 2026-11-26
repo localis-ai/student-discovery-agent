@@ -208,7 +208,7 @@ describe('Experience Validation Gate AT-03 / AT-04 Requirements', () => {
     });
   });
 
-  it('fails closed when remote runtime verify encounters an outage or returns 5xx', async () => {
+  it('does not turn an unexpected runtime client error into a PUBLISH_GATE_FAILED verdict', async () => {
     vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
       draft_id: 'd_1',
       experience_id: 'exp_1',
@@ -240,6 +240,7 @@ describe('Experience Validation Gate AT-03 / AT-04 Requirements', () => {
       verify: vi.fn().mockRejectedValue(new Error('Connection refused by runtime')),
     });
 
+    // The real client reports outages as ProductError 5xx; an unexpected error is a bug and must reach the 500 handler.
     await expect(
       publishExperienceRelease(
         mockDb,
@@ -254,18 +255,7 @@ describe('Experience Validation Gate AT-03 / AT-04 Requirements', () => {
         },
         mockAdmin,
       ),
-    ).rejects.toMatchObject({
-      status: 422,
-      code: 'PUBLISH_GATE_FAILED',
-      details: {
-        issues: [
-          expect.objectContaining({
-            // The raw error message is not echoed back to the client.
-            message: 'Runtime verification failed',
-          }),
-        ],
-      },
-    });
+    ).rejects.toThrow('Connection refused by runtime');
   });
 
   it('keeps a runtime outage during verify retryable instead of reporting invalid reports', async () => {
