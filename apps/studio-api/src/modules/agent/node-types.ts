@@ -8,13 +8,15 @@ import {
 export const NODE_TYPES_TARGET = '/api/v1/internal/workflow/node-types';
 const TIMEOUT_MS = 5_000;
 
+// Response schemas strip unknown keys (zod's default) so an additive runtime field does not turn into a 503.
+// Every field Studio reads stays required; only the extra keys are dropped before anything is forwarded.
 const namespaceVariableSchema = z.object({
   name: z.string(),
   type: z.enum(['string', 'number', 'boolean', 'enum', 'string_list']),
   nullable: z.boolean().optional(),
   description: z.string().optional(),
   values: z.array(z.string()).optional(),
-}).strict();
+});
 
 const namespaceSchema = z.object({
   name: z.enum(['sys', 'conv', 'profile', 'result', 'node']),
@@ -22,15 +24,15 @@ const namespaceSchema = z.object({
   access: z.enum(['read_only', 'assign_only']),
   source: z.enum(['static', 'workflow_variables', 'profile_catalog', 'node_output']),
   variables: z.array(namespaceVariableSchema).optional(),
-}).strict();
+});
 
 const handleSpecSchema = z.object({
   static: z.array(z.string()),
   from_config: z.object({
     array: z.string(),
     id_field: z.string(),
-  }).strict().optional(),
-}).strict();
+  }).optional(),
+});
 
 const nodeTypeSchema = z.object({
   type: z.string().min(1),
@@ -39,13 +41,13 @@ const nodeTypeSchema = z.object({
   config_schema: z.record(z.unknown()),
   handles: handleSpecSchema,
   output_schema: z.record(z.unknown()),
-}).strict();
+});
 
 export const workflowNodeTypeCatalogSchema = z.object({
   catalog_version: z.string().min(1),
   namespaces: z.array(namespaceSchema),
   node_types: z.array(nodeTypeSchema).min(1),
-}).strict();
+});
 
 export type WorkflowNodeTypeCatalog = z.infer<typeof workflowNodeTypeCatalogSchema>;
 

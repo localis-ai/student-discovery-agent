@@ -128,4 +128,26 @@ describe('workflowNodeTypeCatalogSchema', () => {
     const parsed = workflowNodeTypeCatalogSchema.safeParse(catalogFixture);
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
+
+  it('accepts additive fields at every level and does not forward them', async () => {
+    const extended = structuredClone(catalogFixture);
+    extended.future_field = 'added by a newer runtime';
+    extended.namespaces[0].future_field = 1;
+    extended.node_types[0].future_field = true;
+    extended.node_types[0].handles.future_field = [];
+    respond(200, { success: true, data: extended });
+    const catalog = await fetchWorkflowNodeTypes(ctx);
+    expect(catalog).toEqual(catalogFixture);
+    expect(JSON.stringify(catalog)).not.toContain('future_field');
+  });
+
+  it('still rejects a catalog that lacks a field Studio reads', async () => {
+    const broken = structuredClone(catalogFixture);
+    delete broken.node_types[0].title;
+    respond(200, { success: true, data: broken });
+    await expect(fetchWorkflowNodeTypes(ctx)).rejects.toMatchObject({
+      status: 503, code: 'SYS_UNAVAILABLE', details: { kind: 'bad_runtime_response' },
+    });
+    expect(workflowNodeTypeCatalogSchema.safeParse(broken).success).toBe(false);
+  });
 });
