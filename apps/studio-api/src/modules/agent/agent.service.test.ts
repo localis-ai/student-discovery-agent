@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductDatabase } from '@/infrastructure/db/client';
+import { fakeIdempotencyDb } from '@/infrastructure/db/idempotency.testing';
 import * as repo from '@/modules/agent/agent.repository';
 import { activeDescriptor, publish, readDraft, restore, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 import { computeContentHash } from '@/shared/canonical';
 
 vi.mock('@/modules/agent/agent.repository');
-const db = { transaction: (work: (tx: unknown) => unknown) => work(db) } as unknown as ProductDatabase;
+const { db } = fakeIdempotencyDb();
 const at = new Date('2026-10-28T00:00:00Z');
 const draftRow = (content: Record<string, unknown>, revision = 1) =>
   ({ id: 'default', content, revision, content_hash: computeContentHash(content), updated_by: 'admin', updated_at: at });
@@ -60,8 +61,6 @@ const active = (releaseId: string, revision = 1) => ({ id: 'default', release_id
 
 describe('publish', () => {
   beforeEach(() => {
-    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
-    vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
     setAgentValidator(async content => ({ valid: true, content_hash: computeContentHash(content), issues: [] }));
   });
 
@@ -101,7 +100,7 @@ describe('publish', () => {
     setAgentValidator(async () => ({ valid: true, content_hash: computeContentHash({ greeting_text: 'other' }), issues: [] }));
     await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0005' }, 'admin', ctx))
       .rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE', details: { kind: 'hash_mismatch' } });
-    expect(repo.withAgentLock).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
     expect(repo.insertRelease).not.toHaveBeenCalled();
   });
 
@@ -126,8 +125,6 @@ describe('activeDescriptor', () => {
 
 describe('restore', () => {
   beforeEach(() => {
-    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
-    vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
     setAgentValidator(async content => ({ valid: true, content_hash: computeContentHash(content), issues: [] }));
   });
 
@@ -154,17 +151,17 @@ describe('restore', () => {
     setAgentValidator(async () => ({ valid: true, content_hash: computeContentHash({ greeting_text: 'other' }), issues: [] }));
     await expect(restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0004' }, 'admin', ctx))
       .rejects.toMatchObject({ status: 503, details: { kind: 'hash_mismatch' } });
-    expect(repo.withAgentLock).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 
   it('replays a stored result without touching state, and rejects a reused key for another release', async () => {
     const stored = { request_hash: computeContentHash({ expected_active_revision: 2, idempotency_key: 'restore-0002', release_id: 'agr_1' }),
       response_status: 200, response_body: { release_id: 'agr_1' } };
-    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(stored as never);
-    const res = await restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx);
+    const replayDb = fakeIdempotencyDb(stored).db;
+    const res = await restore(replayDb, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx);
     expect(res).toMatchObject({ status: 200, replayed: true, data: { release_id: 'agr_1' } });
     expect(repo.findRelease).not.toHaveBeenCalled();
-    await expect(restore(db, 'agr_2', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx))
+    await expect(restore(replayDb, 'agr_2', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx))
       .rejects.toMatchObject({ status: 409, code: 'CONFLICT_IDEMPOTENCY_KEY' });
   });
 });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductError } from '@/http/errors';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { computeContentHash } from '@/shared/canonical';
-import * as idem from '@/infrastructure/db/idempotency';
+import { fakeIdempotencyDb } from '@/infrastructure/db/idempotency.testing';
 import * as repo from '@/modules/experiences/experiences.repository';
 import { RuntimeReportVerifier, setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
 import { setExperienceRuntimeClient } from '@/modules/experiences/runtime-client';
@@ -20,22 +20,21 @@ import {
   validateExperienceDraft,
 } from '@/modules/experiences/experiences.service';
 
-vi.mock('@/infrastructure/db/idempotency');
 vi.mock('@/modules/experiences/experiences.repository');
 
-const mockDb = {} as ProductDatabase;
+let mockDb: ProductDatabase;
+let inserted: Record<string, unknown>[];
 const mockAdmin = { sub: 'admin-user' };
 
 describe('experiences.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The real lock opens a transaction; unit tests run the work directly against the mock DB.
-    vi.mocked(idem.withIdempotencyLock).mockImplementation((db, _scope, _key, work) => work(db));
+    // Real lock, replay and save run against an in-memory DB fake; `inserted` holds the saved records.
+    ({ db: mockDb, inserted } = fakeIdempotencyDb());
   });
 
   describe('createExperience', () => {
     it('creates experience and returns 201 with metadata and draft_ref', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.insertExperienceWithDraft).mockResolvedValue({
         experience: {
           id: 'exp_1',
@@ -71,7 +70,7 @@ describe('experiences.service', () => {
       expect(res.status).toBe(201);
       expect(res.data.id).toBe('exp_1');
       expect(res.data.draft_ref?.draft_id).toBe('draft_exp_1');
-      expect(idem.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
+      expect(inserted).toHaveLength(1);
     });
 
     it('replays identical request if idempotency key exists with same hash', async () => {
@@ -80,14 +79,14 @@ describe('experiences.service', () => {
         description: '',
         activity_type: 'personality_assessment',
       });
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue({
+      ({ db: mockDb, inserted } = fakeIdempotencyDb({
         scope: 'create_experience',
         key: 'key-1',
         request_hash: payloadHash,
         response_status: 201,
         response_body: { id: 'exp_cached', name: 'Cached' },
         created_at: new Date(),
-      });
+      }));
 
       const res = await createExperience(
         mockDb,
@@ -106,15 +105,15 @@ describe('experiences.service', () => {
       expect(repo.insertExperienceWithDraft).not.toHaveBeenCalled();
     });
 
-    it('throws 409 IDEMPOTENCY_KEY_COLLISION if idempotency key reused with different payload', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue({
+    it('throws 409 CONFLICT_IDEMPOTENCY_KEY if idempotency key reused with different payload', async () => {
+      ({ db: mockDb, inserted } = fakeIdempotencyDb({
         scope: 'create_experience',
         key: 'key-1',
         request_hash: 'sha256:different_hash',
         response_status: 201,
         response_body: {},
         created_at: new Date(),
-      });
+      }));
 
       await expect(
         createExperience(
@@ -129,7 +128,7 @@ describe('experiences.service', () => {
         ),
       ).rejects.toMatchObject({
         status: 409,
-        code: 'IDEMPOTENCY_KEY_COLLISION',
+        code: 'CONFLICT_IDEMPOTENCY_KEY',
       });
     });
   });
@@ -204,7 +203,6 @@ describe('experiences.service', () => {
 
   describe('patchExperience', () => {
     it('patches metadata and increments revision', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.patchExperienceMetadata).mockResolvedValue({
         status: 'ok',
         experience: {
@@ -227,11 +225,10 @@ describe('experiences.service', () => {
 
       expect(res.status).toBe(200);
       expect(res.data.metadata_revision).toBe(1);
-      expect(idem.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
+      expect(inserted).toHaveLength(1);
     });
 
     it('throws 409 REVISION_CONFLICT on stale revision with current state in details', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.patchExperienceMetadata).mockResolvedValue({
         status: 'conflict',
         current: {
@@ -262,7 +259,6 @@ describe('experiences.service', () => {
     });
 
     it('throws 404 RESOURCE_NOT_FOUND when experience does not exist', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.patchExperienceMetadata).mockResolvedValue({ status: 'not_found' });
 
       await expect(
@@ -307,7 +303,6 @@ describe('experiences.service', () => {
 
   describe('saveExperienceDraft', () => {
     it('saves draft atomically and updates hash and revision', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.updateDraftContent).mockResolvedValue({
         status: 'ok',
         draft: {
@@ -334,11 +329,10 @@ describe('experiences.service', () => {
 
       expect(res.status).toBe(200);
       expect(res.data.draft_revision).toBe(2);
-      expect(idem.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
+      expect(inserted).toHaveLength(1);
     });
 
     it('throws 409 REVISION_CONFLICT on stale revision with current revision and hash', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.updateDraftContent).mockResolvedValue({
         status: 'conflict',
         current: {
@@ -403,7 +397,6 @@ describe('experiences.service', () => {
 
     it('fails closed with 422 PUBLISH_GATE_FAILED when reports cannot be verified', async () => {
       setPublishReportVerifier(null);
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -434,11 +427,10 @@ describe('experiences.service', () => {
         details: { kind: 'validation', issues: [expect.objectContaining({ code: 'report_unverified' })] },
       });
       expect(repo.insertExperienceRelease).not.toHaveBeenCalled();
-      expect(idem.saveIdempotencyRecord).not.toHaveBeenCalled();
+      expect(inserted).toHaveLength(0);
     });
 
     it('publishes valid draft and returns 201 release DTO', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -484,11 +476,10 @@ describe('experiences.service', () => {
       expect(res.status).toBe(201);
       expect(res.data.id).toBe('exp_rel_1');
       expect(res.data.definition_version).toBe('1.0.0');
-      expect(idem.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
+      expect(inserted).toHaveLength(1);
     });
 
     it('rejects with 409 REVISION_CONFLICT if draft revision differs from expected_draft_revision', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -520,7 +511,6 @@ describe('experiences.service', () => {
     });
 
     it('rejects with 409 STALE_REPORT if draft hash differs from input content_hash', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -552,7 +542,6 @@ describe('experiences.service', () => {
     });
 
     it('rejects with 422 PUBLISH_GATE_FAILED if draft fails structural definition schema', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -584,7 +573,6 @@ describe('experiences.service', () => {
     });
 
     it('rejects with 409 REVISION_CONFLICT if definition version already published', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -727,7 +715,6 @@ describe('experiences.service', () => {
     });
 
     it('returns 404 when experience draft is not found', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue(undefined);
 
       await expect(
@@ -741,7 +728,6 @@ describe('experiences.service', () => {
     });
 
     it('returns 409 REVISION_CONFLICT when draft revision does not match', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -763,7 +749,6 @@ describe('experiences.service', () => {
     });
 
     it('returns 409 STALE_REPORT when content hash does not match current draft', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -785,7 +770,6 @@ describe('experiences.service', () => {
     });
 
     it('validates snapshot, stores report, and returns 201 report', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -827,14 +811,9 @@ describe('experiences.service', () => {
           content_hash: 'sha256:def_hash',
         }),
       );
-      expect(idem.saveIdempotencyRecord).toHaveBeenCalledWith(
-        mockDb,
-        expect.objectContaining({
-          scope: 'validate:exp_1',
-          key: 'key_v1',
-          response_status: 201,
-        }),
-      );
+      expect(inserted).toEqual([
+        expect.objectContaining({ scope: 'validate:exp_1', key: 'key_v1', response_status: 201 }),
+      ]);
     });
 
     it('replays identical validation request when idempotency key matches', async () => {
@@ -842,14 +821,14 @@ describe('experiences.service', () => {
         expected_revision: 2,
         content_hash: 'sha256:def_hash',
       });
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue({
+      ({ db: mockDb, inserted } = fakeIdempotencyDb({
         scope: 'validate:exp_1',
         key: 'key_v1',
         request_hash: payloadHash,
         response_status: 201,
         response_body: mockReport,
         created_at: new Date(),
-      });
+      }));
 
       const res = await validateExperienceDraft(
         mockDb,
@@ -902,7 +881,6 @@ describe('experiences.service', () => {
     });
 
     it('evaluates snapshot, stores report, and returns 201 report', async () => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -1226,7 +1204,6 @@ describe('experiences.service', () => {
     };
 
     beforeEach(() => {
-      vi.mocked(idem.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
         experience_id: 'exp_1',
@@ -1254,7 +1231,7 @@ describe('experiences.service', () => {
         details: { kind: 'report_mismatch' },
       });
       expect(repo.insertExperienceReport).not.toHaveBeenCalled();
-      expect(idem.saveIdempotencyRecord).not.toHaveBeenCalled();
+      expect(inserted).toHaveLength(0);
     });
 
     it.each([
@@ -1269,7 +1246,7 @@ describe('experiences.service', () => {
         details: { kind: 'report_mismatch' },
       });
       expect(repo.insertExperienceReport).not.toHaveBeenCalled();
-      expect(idem.saveIdempotencyRecord).not.toHaveBeenCalled();
+      expect(inserted).toHaveLength(0);
     });
   });
 });

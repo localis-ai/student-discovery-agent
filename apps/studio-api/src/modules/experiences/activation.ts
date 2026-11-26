@@ -12,7 +12,7 @@ import {
 } from '@/modules/experiences/activation.repository';
 import { findExperienceById, findReleaseById, type ExperienceReleaseRow } from '@/modules/experiences/experiences.repository';
 import { toIsoZ, type ActivateReleaseInput, type RollbackInput } from '@/modules/experiences/experiences.schemas';
-import { idempotent, type ServiceResult } from '@/modules/experiences/experiences.service';
+import { idempotent, type IdempotentResult } from '@/infrastructure/db/idempotency';
 
 export interface ActivePointerDTO {
   experience_id: string;
@@ -43,7 +43,7 @@ export async function readActivePointer(
 
 export async function activateRelease(
   db: ProductDatabase, releaseId: string, input: ActivateReleaseInput, actor: string,
-): Promise<ServiceResult<ActivePointerDTO>> {
+): Promise<IdempotentResult<ActivePointerDTO>> {
   const release = await findReleaseById(db, releaseId);
   if (!release) throw notFound('Experience release');
   return movePointer(db, release, input, actor, 'activate');
@@ -51,7 +51,7 @@ export async function activateRelease(
 
 export async function rollbackRelease(
   db: ProductDatabase, experienceId: string, input: RollbackInput, actor: string,
-): Promise<ServiceResult<ActivePointerDTO>> {
+): Promise<IdempotentResult<ActivePointerDTO>> {
   const { target_release_id: targetId, ...move } = input;
   const release = await findReleaseById(db, targetId);
   if (!release || release.experience_id !== experienceId) throw notFound('Experience release');
@@ -69,7 +69,7 @@ function checkPolicy(release: ExperienceReleaseRow, environment: DeliveryEnviron
 async function movePointer(
   db: ProductDatabase, release: ExperienceReleaseRow, input: ActivateReleaseInput, actor: string,
   action: 'activate' | 'rollback',
-): Promise<ServiceResult<ActivePointerDTO>> {
+): Promise<IdempotentResult<ActivePointerDTO>> {
   checkPolicy(release, input.environment);
   const { idempotency_key: key, ...rest } = input;
   const payloadHash = computeContentHash({ ...rest, release_id: release.id, action });

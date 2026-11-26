@@ -3,8 +3,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { ProductError } from '@/http/errors';
 import { agentActive, agentDraft, agentReleases, auditEvents } from '@/infrastructure/db/schema';
 import { decodeCursor, encodeCursor } from '@/http/cursor';
-import { findIdempotencyRecord, saveIdempotencyRecord, withIdempotencyLock } from '@/infrastructure/db/idempotency';
-import type { ProductDatabase, ProductExecutor } from '@/infrastructure/db/client';
+import type { ProductExecutor } from '@/infrastructure/db/client';
 
 export type AgentDraftRow = typeof agentDraft.$inferSelect;
 export type AgentReleaseRow = typeof agentReleases.$inferSelect;
@@ -150,10 +149,3 @@ export async function listAudit(db: ProductExecutor, opts: { limit: number; curs
   };
 }
 
-export type ProductExecutorLike = ProductExecutor;
-
-// Wrappers let unit tests mock this module alone, without mocking the experiences repository.
-export const withAgentLock = <T>(db: ProductDatabase, scope: string, key: string, work: (tx: ProductExecutor) => Promise<T>) =>
-  withIdempotencyLock(db, scope, key, work);
-export const findIdempotencyRecordForAgent = findIdempotencyRecord;
-export const saveIdempotencyRecordForAgent = saveIdempotencyRecord;

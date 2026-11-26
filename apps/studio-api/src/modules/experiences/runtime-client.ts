@@ -138,7 +138,7 @@ async function callRuntime<T>(
   if (response.status === 409) {
     // The runtime exposes CONFLICT_IDEMPOTENCY_KEY on the wire (error_codes.py); the internal name is kept for older runtimes.
     const isCollision = runtimeCode === 'CONFLICT_IDEMPOTENCY_KEY' || runtimeCode === 'IDEMPOTENCY_KEY_COLLISION';
-    const code = isCollision ? 'IDEMPOTENCY_KEY_COLLISION' : 'REVISION_CONFLICT';
+    const code = isCollision ? 'CONFLICT_IDEMPOTENCY_KEY' : 'REVISION_CONFLICT';
     throw new ProductError(409, code, envelope?.error?.message ?? 'Runtime reported conflict');
   }
   const failure = classifyRuntimeStatus(response.status);

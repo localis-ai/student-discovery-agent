@@ -4,7 +4,7 @@ import {
   decodeReleaseCursor,
   encodeExperienceCursor,
   encodeReleaseCursor,
-} from '@/modules/experiences/experiences.repository';
+} from '@/modules/experiences/experiences.cursor';
 
 describe('experiences.repository cursor helpers', () => {
   it('encodes and decodes experience cursor correctly', () => {

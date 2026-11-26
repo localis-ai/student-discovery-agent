@@ -695,7 +695,7 @@ it('release cursors cannot be reused across experiences', async () => {
   await dispatch(call('POST', `/admin/experiences/${expId}/releases`, admin, {
     expected_draft_revision: 1, content_hash: hash, validation_id: 'v', evaluation_id: 'e', approval_refs: [], idempotency_key: 'cursorbound_rel',
   }));
-  const { encodeReleaseCursor } = await import('@/modules/experiences/experiences.repository');
+  const { encodeReleaseCursor } = await import('@/modules/experiences/experiences.cursor');
   const cursor = encodeReleaseCursor({ published_at: new Date(), id: 'rel_1' }, 'exp_different');
   expect((await dispatch(call('GET', `/admin/experiences/${expId}/releases?cursor=${encodeURIComponent(cursor)}`, admin))).status).toBe(400);
 });

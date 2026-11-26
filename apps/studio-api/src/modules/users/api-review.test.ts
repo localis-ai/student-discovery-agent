@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminToPublic, toAdminProfile, toUserProfile } from './users.profile';
 import { userQuerySchema } from './users.schemas';
 import { handleGet } from './routes/download';
-import { encodeExperienceCursor, decodeExperienceCursor } from '../experiences/experiences.repository';
+import { encodeExperienceCursor, decodeExperienceCursor } from '../experiences/experiences.cursor';
 import { patchExperienceSchema, saveDraftSchema, toExperienceMetadataDTO, toExperienceDraftDTO } from '../experiences/experiences.schemas';
 vi.mock('@/infrastructure/storage/objects', () => ({ getObject: vi.fn() }));
 import { getObject } from '@/infrastructure/storage/objects';
