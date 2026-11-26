@@ -1,5 +1,6 @@
 import type { ChatflowNode, ChatflowWorkflow, NodeTypeCatalog } from '../../types';
 import { schemaToFields } from './json-fields';
+import { placeholderPaths } from './rules';
 
 /** Output and input types as Studio shows them: variable types plus the shapes node outputs can have. */
 export type IoType = 'string' | 'number' | 'boolean' | 'enum' | 'string_list' | 'object' | 'array';
@@ -24,8 +25,6 @@ export interface InputSource {
   nodeType?: string;
 }
 
-// Same placeholder grammar as agent_runtime/workflow/templates.py PLACEHOLDER.
-const PLACEHOLDER = /\{\{\s*([a-z][a-z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\s*\}\}/g;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -36,7 +35,7 @@ export function nodeInputs(node: ChatflowNode): string[] {
   const found = new Set<string>();
   const walk = (value: unknown): void => {
     if (typeof value === 'string') {
-      for (const match of value.matchAll(PLACEHOLDER)) found.add(match[1]!);
+      for (const path of placeholderPaths(value)) found.add(path);
     } else if (Array.isArray(value)) {
       value.forEach(walk);
     } else if (isRecord(value)) {

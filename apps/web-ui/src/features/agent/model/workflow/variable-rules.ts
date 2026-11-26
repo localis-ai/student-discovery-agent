@@ -1,5 +1,5 @@
 import type { ChatflowVariable, VariableConstraints, VariableType } from '../../types';
-import { CHATFLOW_IDENTIFIER_RE } from './edit';
+import { CHATFLOW_IDENTIFIER_RE, CHATFLOW_LIMITS, CONSTRAINT_BOUNDS, type BoundedConstraint } from './rules';
 
 // Mirror of agent_runtime/sessions/schemas/workflow.py (_fits, _within, ConvVariable.consistent): keep in sync.
 export const CONSTRAINT_KEYS: Record<VariableType, ReadonlyArray<keyof VariableConstraints>> = {
@@ -9,8 +9,8 @@ export const CONSTRAINT_KEYS: Record<VariableType, ReadonlyArray<keyof VariableC
   enum: [],
   string_list: ['max_items', 'item_max_length'],
 };
-export const MAX_VARIABLE_DESCRIPTION = 300;
-export const MAX_ENUM_VALUES = 30;
+export const MAX_VARIABLE_DESCRIPTION = CHATFLOW_LIMITS.variable_description;
+export const MAX_ENUM_VALUES = CHATFLOW_LIMITS.enum_values;
 
 export function typeFits(type: VariableType, value: unknown, values?: readonly string[]): boolean {
   switch (type) {
@@ -72,6 +72,14 @@ export function variableDeclarationErrors(
   for (const key of Object.keys(limits) as Array<keyof VariableConstraints>) {
     if (limits[key] !== undefined && !CONSTRAINT_KEYS[variable.type].includes(key)) {
       errors[`constraints.${key}`] = `Ràng buộc này không dùng cho kiểu ${variable.type}.`;
+    }
+  }
+  for (const key of Object.keys(CONSTRAINT_BOUNDS) as BoundedConstraint[]) {
+    const value = limits[key];
+    if (value === undefined || errors[`constraints.${key}`]) continue;
+    const { minimum, maximum } = CONSTRAINT_BOUNDS[key];
+    if (!Number.isInteger(value) || value < minimum || value > maximum) {
+      errors[`constraints.${key}`] = `Phải là số nguyên từ ${minimum} đến ${maximum}.`;
     }
   }
   if (limits.min_length !== undefined && limits.max_length !== undefined && limits.min_length > limits.max_length) {

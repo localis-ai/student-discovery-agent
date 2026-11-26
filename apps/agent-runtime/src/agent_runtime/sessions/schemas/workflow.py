@@ -18,11 +18,13 @@ INTERNAL_NODE_TYPES = frozenset({"router"})
 RESERVED_NODE_IDS = frozenset({"sys", "conv", "profile", "result", "router"})
 # The router classifies with these as handles of its own, so no flow may take them as an id.
 RESERVED_FLOW_IDS = frozenset({"other", "error"})
-MAX_VARIABLES, MAX_FLOWS = 60, 10
+# One home for the chatflow limits; contracts/fixtures/chatflow-rules.json pins them to the OpenAPI schema and Studio.
+MAX_VARIABLES, MAX_FLOWS, MAX_NODES, MAX_EDGES, MAX_ENUM_VALUES = 60, 10, 50, 100, 30
+IDENT_PATTERN = r"^[a-z][a-z0-9_]{0,39}$"
 
 _JSON_SAFE_INT = 9007199254740991  # same bound as JsonSafeInt in common.py
 
-Ident = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
+Ident = Annotated[str, StringConstraints(pattern=IDENT_PATTERN)]
 Title = Annotated[str, StringConstraints(min_length=1, max_length=100, pattern=r"\S")]
 
 
@@ -106,7 +108,7 @@ class ConvVariable(ContractModel):
     name: Ident
     description: Description | None = None
     type: Literal["string", "number", "boolean", "enum", "string_list"]
-    values: Annotated[tuple[NonEmptyText, ...], Field(min_length=1, max_length=30)] | None = None
+    values: Annotated[tuple[NonEmptyText, ...], Field(min_length=1, max_length=MAX_ENUM_VALUES)] | None = None
     default: Any
     constraints: VariableConstraints | None = None
 
@@ -190,8 +192,8 @@ class Workflow(ContractModel):
     """One graph: a flow as the executor and the node tests see it (entry, nodes, edges, variables, budget)."""
     entry: Ident
     variables: Annotated[tuple[ConvVariable, ...], Field(max_length=MAX_VARIABLES)] = ()
-    nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=50)]
-    edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=100)] = ()
+    nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=MAX_NODES)]
+    edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=MAX_EDGES)] = ()
     budget: WorkflowBudget = WorkflowBudget()
 
     @model_validator(mode="after")
@@ -217,8 +219,8 @@ class Flow(ContractModel):
     trigger: JsonObject | None = None  # DEC-23 condition, checked by the graph validator; a match wins the turn
     routable: bool = True  # False: only reached through a trigger or goto_flow
     entry: Ident
-    nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=50)]
-    edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=100)] = ()
+    nodes: Annotated[tuple[WorkflowNode, ...], Field(min_length=1, max_length=MAX_NODES)]
+    edges: Annotated[tuple[WorkflowEdge, ...], Field(max_length=MAX_EDGES)] = ()
 
     @model_validator(mode="after")
     def consistent(self) -> "Flow":

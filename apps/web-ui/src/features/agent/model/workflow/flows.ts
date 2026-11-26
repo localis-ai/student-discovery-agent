@@ -1,10 +1,10 @@
 import type { Chatflow, ChatflowFlow, ChatflowRouter, ChatflowWorkflow } from '../../types';
-import { RESERVED_NODE_IDS, nextUniqueId } from './edit';
+import { nextUniqueId } from './edit';
+import { CHATFLOW_IDENTIFIER_RE, CHATFLOW_LIMITS, RESERVED_FLOW_IDS, RESERVED_NODE_IDS } from './rules';
 
-// Mirror of agent_runtime/sessions/schemas/workflow.py (MAX_FLOWS, RESERVED_FLOW_IDS).
-export const MAX_FLOWS = 10;
-export const RESERVED_FLOW_IDS: ReadonlySet<string> = new Set(['other', 'error']);
-export const MAX_FLOW_EXAMPLES = 5;
+export const MAX_FLOWS = CHATFLOW_LIMITS.flows;
+export const MAX_FLOW_EXAMPLES = CHATFLOW_LIMITS.flow_examples;
+export { RESERVED_FLOW_IDS };
 /** How the runtime router picked a flow (the debug run's route.method), in words. */
 export const ROUTE_METHODS: Record<string, string> = {
   trigger: 'điều kiện kích hoạt', single: 'chỉ một nghiệp vụ định tuyến được', classifier: 'phân loại theo mô tả',
@@ -153,7 +153,7 @@ export function moveFlow(chat: Chatflow, flowId: string, delta: -1 | 1): Chatflo
 
 /** Problems with a flow id typed in the form; null when it can be used. */
 export function flowIdProblem(chat: Chatflow, id: string, currentId?: string): string | null {
-  if (!/^[a-z][a-z0-9_]{0,39}$/.test(id)) return 'Chỉ chữ thường, số và dấu _, bắt đầu bằng chữ, tối đa 40 ký tự.';
+  if (!CHATFLOW_IDENTIFIER_RE.test(id)) return 'Chỉ chữ thường, số và dấu _, bắt đầu bằng chữ, tối đa 40 ký tự.';
   if (RESERVED_FLOW_IDS.has(id)) return 'Không dùng other hoặc error.';
   if (id !== currentId && chat.flows.some(flow => flow.id === id)) return 'Id này đã có nghiệp vụ khác dùng.';
   return null;

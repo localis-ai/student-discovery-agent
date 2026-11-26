@@ -12,7 +12,17 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_FLOW_IDS, RESERVED_NODE_IDS, value_fits
+from agent_runtime.sessions.schemas.workflow import (
+    IDENT_PATTERN,
+    MAX_EDGES,
+    MAX_FLOWS,
+    MAX_NODES,
+    MAX_VARIABLES,
+    NODE_TYPES,
+    RESERVED_FLOW_IDS,
+    RESERVED_NODE_IDS,
+    value_fits,
+)
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import HARD_CEILING
 from agent_runtime.workflow.catalog import HANDLE_SPECS, NAMESPACES
@@ -22,8 +32,7 @@ from agent_runtime.workflow.templates import placeholders
 
 logger = logging.getLogger(__name__)
 
-MAX_NODES, MAX_EDGES, MAX_VARIABLES, MAX_FLOWS = 50, 100, 60, 10
-IDENT = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+IDENT = re.compile(IDENT_PATTERN)
 VARIABLE_KINDS = {"string": "string", "enum": "string", "number": "number", "boolean": "boolean",
                   "string_list": "string_list"}
 ASSIGN_SCOPE = "assign chỉ được ghi biến conv.* đã khai báo."

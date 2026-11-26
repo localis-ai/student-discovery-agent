@@ -1,12 +1,11 @@
 import type { ChatflowEdge, ChatflowNode, ChatflowWorkflow } from '../../types';
 import { wouldCreateCycle } from './graph';
+import { CHATFLOW_IDENTIFIER_RE, CHATFLOW_LIMITS, RESERVED_NODE_IDS } from './rules';
 
-// Client-side pre-checks; keep in sync with the runtime source of truth in
-// apps/agent-runtime/src/agent_runtime/sessions/schemas/workflow.py and workflow/validator.py.
-export const MAX_WORKFLOW_NODES = 50;
-export const MAX_WORKFLOW_EDGES = 100;
-export const CHATFLOW_IDENTIFIER_RE = /^[a-z][a-z0-9_]{0,39}$/;
-export const RESERVED_NODE_IDS: ReadonlySet<string> = new Set(['sys', 'conv', 'profile', 'result', 'router']);
+// Client-side pre-checks of the limits in contracts/fixtures/chatflow-rules.json (see ./rules).
+export const MAX_WORKFLOW_NODES = CHATFLOW_LIMITS.nodes_per_flow;
+export const MAX_WORKFLOW_EDGES = CHATFLOW_LIMITS.edges_per_flow;
+export { CHATFLOW_IDENTIFIER_RE, RESERVED_NODE_IDS };
 
 export type WorkflowEditErrorCode =
   | 'MAX_NODES'

@@ -13,7 +13,8 @@ export interface JsonField {
 }
 
 export const JSON_FIELD_TYPES: JsonFieldType[] = ['string', 'number', 'boolean', 'string_list', 'object'];
-export const JSON_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// A field is read as `{{node.json.<name>}}` or in a condition, so it takes the runtime's path-segment grammar.
+export const JSON_FIELD_NAME = /^[a-z][a-z0-9_]*$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
