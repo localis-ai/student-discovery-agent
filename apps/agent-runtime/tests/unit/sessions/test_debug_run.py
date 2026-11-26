@@ -88,7 +88,7 @@ def test_the_admins_run_shows_node_inputs_in_full_and_stops_when_asked():
 
 
 def test_a_stub_that_is_not_text_is_a_json_reply():
-    from agent_runtime.sessions.services.debug_runs import StubModel
+    from agent_runtime.sessions.services.debug.stub import StubModel
 
     reply = StubModel({"a": "ă"}).invoke([], (), None)
     assert reply.text == '{"a": "ă"}'

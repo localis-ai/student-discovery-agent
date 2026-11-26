@@ -3,24 +3,25 @@
 The run is the Admin's own: the request carries a draft and a made-up state, the result goes back to Studio and
 is never stored here, so its node runs use the ``full`` redaction. The production trace path is not involved.
 """
-import json
 import logging
 import time
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
-from typing import Annotated, Any, Literal
-from uuid import uuid4
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import Field, ValidationError, model_validator
 
 from agent_runtime.agent.loop import TextDelta
-from agent_runtime.agent.model import ModelReply, ModelUnavailable, UnconfiguredModel
+from agent_runtime.agent.model import UnconfiguredModel
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.errors import RuntimeSessionError
-from agent_runtime.sessions.schemas.common import ContractModel, JsonObject
+from agent_runtime.sessions.schemas.common import BlockType, ContractModel, JsonObject
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.chatflow_turns import knowledge_base_ids_of
+from agent_runtime.sessions.services.debug.activity import activity_view
+from agent_runtime.sessions.services.debug.result import build_result, iso
+from agent_runtime.sessions.services.debug.stub import StubModel
 
 # The button-press summary is shared with real turns so a debug run behaves like one.
 from agent_runtime.sessions.services.message_turns import interaction_summary
@@ -29,18 +30,14 @@ from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.constants import EXPLAIN_OUTCOME, INTERACTION_OUTCOMES
-from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
-from agent_runtime.workflow.flows import ROUTER_ID, RunGraph, compile_chatflow
+from agent_runtime.workflow.flows import ROUTER_ID, compile_chatflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports
 from agent_runtime.workflow.scope import Scope
-from agent_runtime.workflow.trace import NodeRunTrace, Redaction, fallback_at_view
 
-KEEP_SECONDS = 24 * 3600
 _OUTCOMES = {**INTERACTION_OUTCOMES, "explain_result": EXPLAIN_OUTCOME}
-_BLOCK_TYPES = ["text", "markdown", "suggestions", "assessment_question", "assessment_clarification",
-                "personality_card", "knowledge_card"]
+_BLOCK_TYPES = list(get_args(BlockType))  # a debug run's client supports every block type
 
 Emit = Callable[[str, dict], None]
 StopCheck = Callable[[], bool]
@@ -77,64 +74,6 @@ class DebugRequest(ContractModel):
         return self
 
 
-class StubModel:
-    """A fixed answer for a model node: a string is the reply text, anything else a JSON reply; no tokens spent."""
-
-    def __init__(self, stub: Any):
-        self._stub = stub
-
-    def invoke(self, messages, tools, settings, on_text_delta=None):
-        text = self._stub if isinstance(self._stub, str) else json.dumps(self._stub, ensure_ascii=False)
-        if on_text_delta is not None and text and on_text_delta(text) is False:
-            return ModelUnavailable("cancelled")
-        return ModelReply(text=text)
-
-
-def _text_or_none(value: Any) -> bool:
-    return value is None or isinstance(value, str)
-
-
-def _activity_view(activity: dict | None):
-    """(duck-typed activity for the tool executor, phase, display name, AgentContext question) of the fake state."""
-    if not activity:
-        return None, "not_started", None, None
-    question = activity.get("current_question")
-    if question is not None and not isinstance(question, dict):
-        raise RuntimeSessionError(422, "INVALID_INPUT")
-    options = question.get("options", []) if question else []
-    if not isinstance(options, list) or not all(isinstance(item, dict) and isinstance(item.get("id"), str)
-                                                and _text_or_none(item.get("label")) for item in options):
-        raise RuntimeSessionError(422, "INVALID_INPUT")
-    status, display_name = activity.get("status"), activity.get("display_name")
-    if not (_text_or_none(status) and _text_or_none(display_name)
-            and _text_or_none(question.get("title") if question else None)):
-        raise RuntimeSessionError(422, "INVALID_INPUT")
-    state = SimpleNamespace(
-        status=status or "not_started", display_name=display_name,
-        current_question=SimpleNamespace(options=[SimpleNamespace(id=item["id"]) for item in options])
-        if question else None)
-    context_question = ({"title": question.get("title") or "", "options": [
-        {"id": item["id"], "label": item.get("label") or item["id"]} for item in options]} if question else None)
-    phase = state.status if state.status in {"collecting_name", "in_progress", "completed"} else "not_started"
-    return SimpleNamespace(state=state), phase, state.display_name, context_question
-
-
-def _effect(effect) -> dict[str, Any]:
-    if isinstance(effect, AssignConv):
-        return {"kind": "assign_conv", "variable": effect.variable, "value": effect.value, "operation": effect.operation}
-    if isinstance(effect, ActivityChange):
-        return {"kind": "activity_change", "tool": effect.handoff.name}
-    if isinstance(effect, ProfileProposal):
-        return {"kind": "profile_proposal", "fields": dict(effect.fields), "target_step": effect.target_step}
-    if isinstance(effect, KbRefsUsed):
-        return {"kind": "kb_refs_used", "kb_id": effect.kb_id, "refs": list(effect.refs)}
-    return {"kind": type(effect).__name__}
-
-
-def _iso(moment: datetime) -> str:
-    return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
 class DebugRunService:
     def __init__(self, models: Callable[[str], Any], knowledge=None, *, clock: Callable[[], float] = time.monotonic,
                  now: Callable[[], datetime] = lambda: datetime.now(UTC), strict_knowledge: bool = False):
@@ -154,7 +93,7 @@ class DebugRunService:
             raise RuntimeSessionError(422, "INVALID_INPUT") from None
         if agent.mode != "chatflow" or agent.workflow is None:
             raise RuntimeSessionError(422, "INVALID_INPUT")
-        view = _activity_view(parsed.state.activity)
+        view = activity_view(parsed.state.activity)
 
         def work(emit: Emit | None = None, should_stop: StopCheck | None = None) -> dict:
             return self._execute(agent, parsed, view, emit, should_stop)
@@ -213,7 +152,7 @@ class DebugRunService:
                 current.update(type=event.type, held=[])
                 sink("workflow.node_started", {"event": "workflow.node_started", "node_id": event.node_id,
                                                "type": event.type, "order": event.order,
-                                               "started_at": _iso(self._now())})
+                                               "started_at": iso(self._now())})
             elif isinstance(event, NodeFinished):
                 sink("workflow.node_finished", {"event": "workflow.node_finished", "node_id": event.node_id,
                                                 "handle": event.handle, "duration_ms": event.duration_ms,
@@ -232,34 +171,8 @@ class DebugRunService:
         if request.stop_after == "route" and workflow.entry != ROUTER_ID:  # one flow: nothing to route, no model call
             only = agent.workflow.flows[0].id
             empty = WorkflowRun("completed", (), (), (), scope.conv_values())
-            return self._result(empty, workflow, created, stubs, route={"flow": only, "method": "single"})
+            return build_result(empty, workflow, created, stubs, route={"flow": only, "method": "single"})
         run = run_workflow(workflow, scope, ports, budget=budget, on_event=on_event, should_stop=should_stop,
                            reply_required=interaction is None,
                            halt_after=ROUTER_ID if request.stop_after == "route" else None)
-        return self._result(run, workflow, created, stubs)
-
-    def _result(self, run: WorkflowRun, workflow: RunGraph, created: datetime, stubs: dict[str, Any],
-                route: dict[str, Any] | None = None) -> dict:
-        # The Admin's own run, never persisted by the runtime: node inputs and values are shown in full.
-        full = Redaction("full", {variable.name: variable for variable in workflow.variables})
-        node_runs = []
-        for record in run.records:
-            item = NodeRunTrace(node_id=record.node_id, type=record.type, flow_id=workflow.flow_of.get(record.node_id),
-                                order=record.order, handle=record.handle,
-                                duration_ms=record.duration_ms, reason=full.reason(record),
-                                input=full.input(record.input), output=full.io(record.type, record.output),
-                                llm_calls=record.llm_calls, tokens={"input": record.tokens[0], "output": record.tokens[1]},
-                                refs=record.refs, error=record.error).model_dump(mode="json")
-            node_runs.append({key: value for key, value in item.items()
-                              if value is not None or key in {"handle", "error", "flow_id"}})
-        if route is None and run.records and run.records[0].node_id == ROUTER_ID and run.records[0].error is None:
-            route = dict(run.records[0].reason)
-        return {"run_id": "dbg_" + uuid4().hex[:24],
-                "status": run.status, "fallback_reason": run.fallback, "fallback_at": fallback_at_view(run),
-                "conv_reset": list(run.conv_reset), "conv_dropped": list(run.conv_dropped),
-                "path": list(run.path), "node_runs": node_runs, "route": route,
-                "blocks": [block.model_dump(mode="json") for block in run.blocks],
-                "effects": [_effect(effect) for effect in run.effects], "llm_calls": run.llm_calls,
-                "live_llm_calls": sum(record.llm_calls for record in run.records if record.node_id not in stubs),
-                "tokens": {"input": run.usage.input_tokens, "output": run.usage.output_tokens},
-                "created_at": _iso(created), "expires_at": _iso(created + timedelta(seconds=KEEP_SECONDS))}
+        return build_result(run, workflow, created, stubs)
