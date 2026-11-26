@@ -56,8 +56,11 @@ def run(ctx: NodeContext, config: ClassifierConfig) -> NodeResult:
     reply = invoke(ctx, messages, node_settings(ctx, config.model, temperature=0.0, max_output_tokens=32))
     words = reply.text.strip().strip("`'\" .").split()
     said = words[0] if words else ""
-    label = said if said in {item.id for item in config.labels} else "other"
-    return NodeResult(label, {"label": label}, reason={"label": label}, input=text)
+    known = said in {item.id for item in config.labels}
+    label = said if known else "other"
+    # A reply that is no label still routes as "other", but the trace tells it apart from a real "other".
+    reason = {"label": label} if known or said == "other" else {"label": label, "unrecognized": True}
+    return NodeResult(label, {"label": label}, reason=reason, input=text)
 
 
 register(NodeSpec("intent_classifier", ClassifierConfig,

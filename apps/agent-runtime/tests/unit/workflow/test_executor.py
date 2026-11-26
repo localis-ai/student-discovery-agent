@@ -9,7 +9,7 @@ from agent_runtime.workflow.budget import Budget, BudgetExceeded
 from agent_runtime.workflow.constants import stage_variable
 from agent_runtime.workflow.effects import AssignConv
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
-from agent_runtime.workflow.executor import _live_nodes, run_workflow
+from agent_runtime.workflow.executor import FallbackAt, _live_nodes, run_workflow
 from agent_runtime.workflow.flows import compile_chatflow
 from agent_runtime.workflow.nodes.answer import AnswerConfig
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeError, NodeSpec
@@ -69,6 +69,7 @@ def test_exceeding_max_nodes_falls_back_and_drops_graph_effects():
     assert result.path == ("start", "in_test", "begin")  # the assign ran; reply is the node over budget
     assert (result.status, result.fallback, result.effects) == ("fallback", "workflow_budget", ())
     assert result.conv == {"stage": "welcome"}  # what the assign did is not returned for commit
+    assert result.fallback_at == FallbackAt("budget", "reply")
     assert result.blocks[0].content == AgentSnapshotV1.model_validate(MIN).templates.busy_message
 
 
@@ -88,6 +89,7 @@ def test_a_node_error_without_an_error_edge_falls_back(monkeypatch):
     result = run(wf)
     assert (result.status, result.fallback) == ("fallback", "workflow_node_error")
     assert [r.error for r in result.records] == [None, "model_unavailable"]
+    assert result.fallback_at == FallbackAt("node_error", "m")
 
 
 def test_a_node_error_follows_the_error_edge_and_exposes_error_type(monkeypatch):
@@ -103,7 +105,9 @@ def test_a_node_error_follows_the_error_edge_and_exposes_error_type(monkeypatch)
 def test_a_handle_without_an_edge_falls_back():
     wf = workflow(chain().model_dump()["nodes"], [("start", "next", "in_test"), ("in_test", "true", "reply")],
                   variables=[STAGE])
-    assert run(wf).fallback == "workflow_node_error"  # in_test went false; nothing is wired there
+    result = run(wf)
+    assert result.fallback == "workflow_node_error"  # in_test went false; nothing is wired there
+    assert result.fallback_at == FallbackAt("missing_edge", "in_test", "false")  # tells it apart from a node error
 
 
 def test_a_node_streams_live_only_when_the_next_answer_passes_its_text_through():
@@ -161,6 +165,7 @@ def test_an_unexpected_exception_falls_back_and_is_logged_with_traceback_and_nod
     with caplog.at_level(logging.ERROR, logger="agent_runtime.workflow.executor"):
         result = run(wf)
     assert (result.status, result.fallback) == ("fallback", "workflow_node_error")
+    assert result.fallback_at == FallbackAt("unexpected", "m")
     assert result.blocks[0].content == BUSY
     [record] = [r for r in caplog.records if r.name == "agent_runtime.workflow.executor"]
     assert record.exc_info is not None and " m " in record.getMessage()
@@ -259,3 +264,11 @@ def test_a_validation_error_inside_a_node_never_logs_the_input_it_rejected(monke
     formatted = logging.Formatter().format(record)
     assert "XQ-7731" not in formatted and "ValidationError" in formatted
     assert "Traceback" in formatted and "boom" in formatted  # the frames are kept, the message is not
+
+
+def test_stored_conv_that_breaks_its_declaration_or_is_undeclared_is_named_in_the_run():
+    result = run(chain(), conv={"stage": "not_a_stage", "old_key": 1, "another": "x"})
+    assert result.status == "completed" and result.conv == {"stage": "assessment"}
+    assert (result.conv_reset, result.conv_dropped) == (("stage",), ("another", "old_key"))
+    clean = run(chain(), conv={"stage": "assessment"})
+    assert (clean.conv_reset, clean.conv_dropped, clean.fallback_at) == ((), (), None)

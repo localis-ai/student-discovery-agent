@@ -22,10 +22,16 @@ class Scope:
         self._static = {"sys": dict(sys), "profile": dict(profile), "result": dict(result or {})}
         self._declared = {variable.name: variable for variable in variables}
         self._conv = {}
+        reset = []
         for name, variable in self._declared.items():
             stored = conv.get(name, variable.default)
             fits = value_fits(variable.type, stored, variable.values, variable.limits)
+            if not fits:
+                reset.append(name)
             self._conv[name] = deepcopy(stored if fits else variable.default)
+        # Names only, never values: a trace and a debug run show them so a reset or a lost key is not silent.
+        self.conv_reset: tuple[str, ...] = tuple(reset)
+        self.conv_dropped: tuple[str, ...] = tuple(sorted(name for name in conv if name not in self._declared))
         self._outputs: dict[str, Any] = {}
 
     def get(self, path: str) -> Any:
