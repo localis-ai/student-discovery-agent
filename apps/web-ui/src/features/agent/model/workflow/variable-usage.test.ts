@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentConfig, ChatflowWorkflow } from '../../types';
-import { enumValueUsage, removeVariable, renameVariable, upsertVariable, variableUsage } from './variable-usage';
+import {
+  enumValueUsage, personaCaseUsage, removeFromPersonaCases, removeVariable, renameVariable, upsertVariable, variableUsage,
+} from './variable-usage';
 
 const workflow: ChatflowWorkflow = {
   entry: 'start',
@@ -53,5 +55,28 @@ describe('variable usage', () => {
     expect(edited.variables).toHaveLength(3);
     expect(removeVariable(edited, 'score').variables!.some((variable) => variable.name === 'score')).toBe(false);
     expect(() => removeVariable(workflow, 'stage')).toThrow(/đang dùng/);
+  });
+
+  it('finds and drops a removed variable in persona cases, the counterpart of a rename', () => {
+    const config: AgentConfig = {
+      workflow,
+      persona_cases: [
+        { id: 'p1', title: 'Đặt sẵn', initial_state: { conv: { score: 3, stage: 'a' } }, turns: [{ input: { text: 'x' } }] },
+        { id: 'p2', title: 'Kiểm tra', turns: [{ input: { text: 'x' }, expect: { conv: { score: 4 } } }] },
+        { id: 'p3', title: 'Không dùng', turns: [{ input: { text: 'x' } }] },
+      ],
+    };
+    expect(personaCaseUsage(config.persona_cases, 'score')).toEqual(['Đặt sẵn', 'Kiểm tra']);
+    type Case = { initial_state?: { conv: object }; turns: Array<{ expect?: { conv: object } }> };
+    const cases = removeFromPersonaCases(config, 'score').persona_cases as Case[];
+    expect(cases[0]!.initial_state!.conv).toEqual({ stage: 'a' });
+    expect(cases[1]!.turns[0]!.expect!.conv).toEqual({});
+    expect(cases[2]).toEqual((config.persona_cases as Case[])[2]);
+    expect(personaCaseUsage(undefined, 'score')).toEqual([]);
+  });
+
+  it('refuses to rename in a workflow of neither shape instead of crashing on it', () => {
+    const broken: AgentConfig = { workflow: { router: { default_flow: 'main' }, flows: [] } as never };
+    expect(() => renameVariable(broken, 'stage', 'journey')).toThrow('Workflow chưa đúng dạng');
   });
 });

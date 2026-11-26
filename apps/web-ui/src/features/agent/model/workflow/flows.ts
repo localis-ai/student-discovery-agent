@@ -35,9 +35,17 @@ export function flowOfNode(chat: Chatflow, nodeId: string): string | undefined {
   return chat.flows.find(flow => flow.nodes.some(node => node.id === nodeId))?.id;
 }
 
-/** One flow as the graph editors see it: its graph plus the chatflow's shared variables and budget. */
-export function flowView(chat: Chatflow, flowId: string): ChatflowWorkflow {
-  const flow = findFlow(chat, flowId) ?? chat.flows[0]!;
+/**
+ * One flow as the graph editors see it, or undefined when no flow has that id. Never falls back to another flow:
+ * edits made on a substituted view would be written back under the wrong id (see withFlowView).
+ */
+export function flowView(chat: Chatflow, flowId: string): ChatflowWorkflow | undefined {
+  const flow = findFlow(chat, flowId);
+  return flow && flowViewOf(chat, flow);
+}
+
+/** A flow of `chat` as the graph editors see it: its graph plus the chatflow's shared variables and budget. */
+export function flowViewOf(chat: Chatflow, flow: ChatflowFlow): ChatflowWorkflow {
   return {
     entry: flow.entry,
     nodes: flow.nodes,
@@ -71,6 +79,8 @@ export function allFlowsView(chat: Chatflow): FlowsView {
 
 /** Writes an edited view back: the graph to its flow, variables and budget to the chatflow. */
 export function withFlowView(chat: Chatflow, flowId: string, view: ChatflowWorkflow): Chatflow {
+  // An unknown id would drop the edit without a trace; fail loudly instead.
+  if (!findFlow(chat, flowId)) throw new Error(`Không tìm thấy nghiệp vụ ${flowId}.`);
   const { variables, budget, entry, nodes, edges } = view;
   return {
     ...chat,

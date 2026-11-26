@@ -45,6 +45,14 @@ def test_a_node_without_a_stub_calls_the_real_model_and_the_budget_still_applies
     tight = {**FLOW, "budget": {"max_nodes": 2, "max_llm_calls": 6, "turn_timeout_ms": 25000}}
     fallback = service().run(chatflow_content(tight), {"message": "x"})
     assert (fallback["status"], fallback["fallback_reason"]) == ("fallback", "workflow_budget")
+    assert fallback["fallback_at"]["cause"] == "budget" and over["fallback_at"] is None
+
+
+def test_a_stored_conv_value_that_breaks_its_declaration_is_named_not_silently_reset():
+    result = service().run(CONTENT, {"message": "x", "llm_stubs": {"ask": "other"},
+                                     "state": {"conv": {"stage": "khong_ton_tai"}}})
+    assert result["conv_reset"] == ["stage"] and result["conv_dropped"] == []
+    assert "khong_ton_tai" not in json.dumps(result["conv_reset"])
 
 
 def test_an_interaction_run_sets_the_outcome_directly_and_never_runs_a_handler():
@@ -76,6 +84,7 @@ def test_the_admins_run_shows_node_inputs_in_full_and_stops_when_asked():
     assert ask["input"] == "học phí MTU" and ask["output"] == {"label": "hoi_hoc_phi", "error_type": ""}
     stopped = service().run(CONTENT, {"message": "x", "llm_stubs": {"ask": "other"}}, should_stop=lambda: True)
     assert stopped["path"] == [] and stopped["effects"] == [] and stopped["blocks"] == []
+    assert (stopped["status"], stopped["fallback_reason"]) == ("cancelled", None)  # no longer reported as a fallback
 
 
 def test_a_stub_that_is_not_text_is_a_json_reply():

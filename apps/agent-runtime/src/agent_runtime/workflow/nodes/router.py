@@ -56,11 +56,12 @@ def run(ctx: NodeContext, config: RouterConfig) -> NodeResult:
     classifier = intent_classifier.ClassifierConfig(labels=labels, instructions=config.instructions,
                                                     model=config.model, history_messages=config.history_messages)
     try:
-        label = intent_classifier.run(ctx, classifier).handle
+        classified = intent_classifier.run(ctx, classifier)
     except NodeError:  # a router that cannot classify still answers: from the default flow
         return _to(config.default_flow, "default", "error")
-    if label == "other":
-        return _to(config.default_flow, "default", "other")
+    label = classified.handle
+    if label == "other":  # "unrecognized": the model named no flow at all, which an author should see
+        return _to(config.default_flow, "default", "unrecognized" if classified.reason.get("unrecognized") else "other")
     return _to(label, "classifier", label)
 
 

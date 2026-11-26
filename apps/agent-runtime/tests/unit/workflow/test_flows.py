@@ -53,9 +53,13 @@ def test_the_classifier_picks_a_flow():
 
 
 def test_other_and_a_model_error_go_to_the_default_flow():
-    other = run(chat(*TWO), model=labels("khong_ro"))
+    other = run(chat(*TWO), model=labels("other"))
     assert other.path[1] == "hp_start" and other.records[0].reason == {"method": "default", "flow": "hoc_phi",
                                                                         "label": "other"}
+    # A reply that names no flow still lands on the default flow, but says so instead of passing for "other".
+    garbled = run(chat(*TWO), model=labels("khong_ro"))
+    assert garbled.path[1] == "hp_start" and garbled.records[0].reason == {"method": "default", "flow": "hoc_phi",
+                                                                          "label": "unrecognized"}
     from agent_runtime.agent.model import ModelUnavailable
     failed = run(chat(*TWO), model=FakeModel(ModelUnavailable("timeout")))
     assert failed.path[1] == "hp_start" and failed.records[0].reason["label"] == "error"

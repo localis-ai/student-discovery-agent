@@ -28,11 +28,11 @@ def run(ctx: NodeContext, config: ProfileProposeConfig) -> NodeResult:
                    node_settings(ctx, temperature=0.0, max_output_tokens=200))
     try:
         found = json.loads(reply.text.strip().removeprefix("```json").removesuffix("```").strip())
-    except ValueError:
-        found = None
-    if found is not None and not isinstance(found, dict):
+    except ValueError:  # unreadable output is a node failure (error handle), not "nothing found" (none)
+        raise NodeError("invalid_output") from None
+    if not isinstance(found, dict):
         raise NodeError("invalid_output")
-    wanted = {key: value for key, value in (found or {}).items() if key in config.fields}
+    wanted = {key: value for key, value in found.items() if key in config.fields}
     accepted = dict(ctx.ports.profile.accept(wanted)) if wanted else {}
     accepted = {key: value for key, value in accepted.items() if key in config.fields}
     if not accepted:

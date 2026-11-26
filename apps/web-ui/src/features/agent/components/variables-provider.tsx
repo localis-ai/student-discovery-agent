@@ -4,7 +4,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/features/knowledge';
 import { allFlowsView, isRenderableChatflow } from '../model/workflow/flows';
-import { removeVariable, renameVariable, triggerUsage, upsertVariable, variableUsage } from '../model/workflow/variable-usage';
+import {
+  personaCaseUsage, removeFromPersonaCases, removeVariable, renameVariable, triggerUsage, upsertVariable, variableUsage,
+} from '../model/workflow/variable-usage';
 import type { AgentConfig, ChatflowVariable, ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { VariableForm } from './variable-form';
 import { VariablesPanelContext, type VariablesPanel } from './variables-context';
@@ -48,6 +50,7 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
     jumpToNode: onJumpToNode,
   }), [workflow, catalog, readOnly, onJumpToNode]);
 
+  const deletingCases = pendingDelete ? personaCaseUsage(config.persona_cases, pendingDelete) : [];
   const finishSave = (variable: ChatflowVariable, previous?: ChatflowVariable) => {
     let next = config;
     if (previous && previous.name !== variable.name) next = renameVariable(next, previous.name, variable.name);
@@ -92,11 +95,16 @@ export function VariablesProvider({ config, catalog, readOnly = false, onConfigC
         open={pendingDelete !== null}
         onOpenChange={(value) => { if (!value) setPendingDelete(null); }}
         title={`Xoá conv.${pendingDelete ?? ''}?`}
-        description="Biến chưa được node nào dùng."
+        description={deletingCases.length
+          ? `Biến chưa được node nào dùng. Giá trị của biến trong persona case ${deletingCases.join(', ')} cũng sẽ bị xoá.`
+          : 'Biến chưa được node nào dùng.'}
         confirmLabel="Xoá biến"
         destructive
         onConfirm={() => {
-          if (pendingDelete) onConfigChange(writeVariables(config, removeVariable(workflow, pendingDelete)));
+          if (pendingDelete) {
+            const next = removeFromPersonaCases(config, pendingDelete);
+            onConfigChange(writeVariables(next, removeVariable(workflow, pendingDelete)));
+          }
           setPendingDelete(null);
         }}
       />

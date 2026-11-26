@@ -56,4 +56,23 @@ describe('DebugTrace', () => {
     expect(screen.getByText('Blocks (1)')).toBeInTheDocument();
     expect(screen.getByText('Effects (dry-run) (1)')).toBeInTheDocument();
   });
+
+  it('explains where a run gave up and which conversation variables were adjusted', () => {
+    render(<DebugTrace result={{
+      ...result, status: 'fallback', fallback_reason: 'workflow_node_error',
+      fallback_at: { cause: 'missing_edge', node_id: 'condition', handle: 'false' },
+      conv_reset: ['stage'], conv_dropped: ['old_key'],
+      route: { flow: 'hoc_phi', method: 'default', label: 'unrecognized' },
+    }} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('node condition trả về handle "false" nhưng handle này chưa nối');
+    expect(screen.getByLabelText('Biến hội thoại bị điều chỉnh')).toHaveTextContent('stage');
+    expect(screen.getByLabelText('Biến hội thoại bị điều chỉnh')).toHaveTextContent('old_key');
+    expect(screen.getByText(/model trả nhãn không thuộc nghiệp vụ nào/)).toBeInTheDocument();
+  });
+
+  it('says a cancelled run was cancelled, not that it fell back', () => {
+    render(<DebugTrace result={{ ...result, status: 'cancelled', path: [], node_runs: [] }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('đã bị huỷ');
+  });
 });

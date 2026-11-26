@@ -6,7 +6,7 @@ from agent_runtime.agent.model import FakeModel, ModelReply
 from agent_runtime.knowledge.schemas import Record, RetrievalResult
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.events import NodeFinished
-from agent_runtime.workflow.executor import NodeRecord, WorkflowRun, run_workflow
+from agent_runtime.workflow.executor import FallbackAt, NodeRecord, WorkflowRun, run_workflow
 from agent_runtime.workflow.trace import Redaction, build_trace
 from tests.helpers.toolbox import scripted_toolbox
 from tests.unit.workflow.helpers import agent, ids, ports_for, scope_for, workflow
@@ -297,3 +297,22 @@ def test_a_missing_check_records_which_variables_were_present_but_never_their_va
     known = next(item for item in json.loads(text)["node_runs"] if item["node_id"] == "known")
     assert known["reason"]["parts"] == [{"operator": "missing", "matched": True, "operands": [
         {"path": "profile.phone", "present": True}, {"path": "profile.x", "present": False}]}]
+
+
+def test_production_trace_tells_an_unrecognized_label_from_a_real_other():
+    run, text = traced("production", FLOW, ModelReply(text=SENTINEL), ModelReply(text="ok"))
+    ask = next(record for record in json.loads(text)["node_runs"] if record["node_id"] == "ask")
+    assert ask["handle"] == "other" and ask["reason"] == {"label": "other", "unrecognized": True}
+    assert SENTINEL not in text
+    _, plain = traced("production", FLOW, ModelReply(text="other"), ModelReply(text="ok"))
+    assert next(r for r in json.loads(plain)["node_runs"] if r["node_id"] == "ask")["reason"] == {"label": "other"}
+
+
+def test_production_trace_names_where_a_run_gave_up_and_which_conv_names_changed():
+    run = WorkflowRun("fallback", (), (), (), {}, fallback="workflow_node_error",
+                      fallback_at=FallbackAt("missing_edge", "ask", "lam_bai"), conv_reset=("stage",),
+                      conv_dropped=("old",))
+    trace = build_trace(run, redaction=Redaction("production", {}), agent_release_id=None, content_hash=None,
+                        mode="chatflow", budget=Budget(FLOW.budget))
+    assert trace.fallback_at == {"cause": "missing_edge", "node_id": "ask", "handle": "lam_bai"}
+    assert (trace.conv_reset, trace.conv_dropped) == (("stage",), ("old",))

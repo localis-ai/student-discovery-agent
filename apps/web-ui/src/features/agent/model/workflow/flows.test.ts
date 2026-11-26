@@ -28,15 +28,15 @@ describe('flow lens', () => {
   });
 
   it('views one flow with the shared variables and the other flows ids as taken', () => {
-    const view = flowView(chat, 'fee');
+    const view = flowView(chat, 'fee')!;
     expect(view.entry).toBe('fee_start');
     expect(view.variables).toEqual(chat.variables);
     expect(view.takenNodeIds).toEqual(['start', 'go']);
-    expect(flowView(chat, 'missing').entry).toBe('start');
+    expect(flowView(chat, 'missing')).toBeUndefined();  // never another flow's graph
   });
 
   it('writes a view back: the graph to its flow, variables up, takenNodeIds dropped', () => {
-    const view = flowView(chat, 'fee');
+    const view = flowView(chat, 'fee')!;
     const next = withFlowView(chat, 'fee', { ...view, variables: [], nodes: [...view.nodes, { id: 'x', type: 'answer' }] });
     expect(next.variables).toEqual([]);
     expect(next.flows[1]!.nodes.map(n => n.id)).toEqual(['fee_start', 'x']);
@@ -44,8 +44,13 @@ describe('flow lens', () => {
     expect(JSON.stringify(next)).not.toContain('takenNodeIds');
   });
 
+  it('refuses to write a view back to a flow that does not exist instead of dropping the edit', () => {
+    const view = flowView(chat, 'fee')!;
+    expect(() => withFlowView(chat, 'missing', view)).toThrow('Không tìm thấy nghiệp vụ missing.');
+  });
+
   it('generates node ids unique across flows', () => {
-    expect(generateNodeId(flowView(chat, 'fee'), 'go')).toBe('go_1');
+    expect(generateNodeId(flowView(chat, 'fee')!, 'go')).toBe('go_1');
   });
 
   it('adds a flow with its own start node', () => {

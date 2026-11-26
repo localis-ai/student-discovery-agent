@@ -47,7 +47,7 @@ function Harness({ onConfig, readOnly = false }: { onConfig: (next: AgentConfig)
   return (
     <VariablesProvider config={config} catalog={catalog} readOnly={readOnly} onJumpToNode={() => {}}
       onConfigChange={(next) => { setConfig(next); onConfig(next); }}>
-      <StartVariables workflow={flowView(config.workflow as Chatflow, 'main')} catalog={catalog} />
+      <StartVariables workflow={flowView(config.workflow as Chatflow, 'main')!} catalog={catalog} />
     </VariablesProvider>
   );
 }

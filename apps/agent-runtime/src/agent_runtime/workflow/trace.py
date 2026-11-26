@@ -42,9 +42,13 @@ class WorkflowTrace(ContractModel):
     content_hash: str | None
     budget: dict[str, JsonSafeInt]
     fallback_reason: str | None
+    # Where the run gave up (ids and handles only) and which conv names were reset or dropped (names, never values).
+    fallback_at: dict[str, str | None] | None = None
     last_node: str | None
     node_runs: Annotated[tuple[NodeRunTrace, ...], Field(max_length=50)]
     activity_conflict: bool = False  # an interaction's graph asked for a handoff; the fixed handler won
+    conv_reset: tuple[str, ...] = ()
+    conv_dropped: tuple[str, ...] = ()
 
 
 # Output keys whose values are workflow config or ids, never student text.
@@ -61,7 +65,7 @@ def _handoffs() -> frozenset[str]:
     return frozenset(tool.name for tool in TOOLS.values() if tool.kind == "handoff")
 
 
-_REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded", "method", "flow"}
+_REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded", "method", "flow", "unrecognized"}
 _SAFE_SYS = {"sys.interaction_outcome", "sys.turn_index", "sys.activity_status"}
 
 
@@ -156,6 +160,12 @@ def _shrink(value: Any) -> Any:
     return None if value is None else {"kind": type(value).__name__}
 
 
+def fallback_at_view(run: WorkflowRun) -> dict[str, str | None] | None:
+    """The run's ``FallbackAt`` as JSON (ids and handles are workflow config, so every trace may keep them)."""
+    at = run.fallback_at
+    return None if at is None else {"cause": at.cause, "node_id": at.node_id, "handle": at.handle}
+
+
 def build_trace(run: WorkflowRun, *, redaction: Redaction, agent_release_id: str | None, content_hash: str | None,
                 mode: Literal["agent", "chatflow"], budget: Budget, activity_conflict: bool = False,
                 flow_of: Mapping[str, str] | None = None) -> WorkflowTrace:
@@ -172,5 +182,6 @@ def build_trace(run: WorkflowRun, *, redaction: Redaction, agent_release_id: str
     return WorkflowTrace(mode=mode, agent_release_id=agent_release_id, content_hash=content_hash,
                          budget={"nodes": budget.nodes, "llm_calls": budget.llm_calls, "max_nodes": budget.max_nodes,
                                  "max_llm_calls": budget.max_llm_calls},
-                         fallback_reason=run.fallback, last_node=run.last_node, node_runs=runs,
-                         activity_conflict=activity_conflict)
+                         fallback_reason=run.fallback, fallback_at=fallback_at_view(run), last_node=run.last_node,
+                         node_runs=runs, activity_conflict=activity_conflict, conv_reset=run.conv_reset,
+                         conv_dropped=run.conv_dropped)

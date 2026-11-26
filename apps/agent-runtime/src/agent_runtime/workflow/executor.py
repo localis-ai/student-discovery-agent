@@ -2,7 +2,7 @@
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
@@ -48,6 +48,18 @@ class NodeRecord:
     error: str | None
 
 
+FallbackCause = Literal["node_error", "missing_edge", "unexpected", "budget"]
+
+
+@dataclass(frozen=True)
+class FallbackAt:
+    """Where a run gave up, in workflow terms only (ids and handles, never values): what a trace and a debug run
+    show so an author can tell a broken node from an unwired handle or a runtime bug."""
+    cause: FallbackCause
+    node_id: str | None
+    handle: str | None = None
+
+
 @dataclass(frozen=True)
 class WorkflowRun:
     status: Literal["completed", "fallback", "cancelled"]
@@ -61,6 +73,9 @@ class WorkflowRun:
     llm_calls: int = 0
     usage: ModelUsage = ModelUsage()
     knowledge: tuple[dict[str, Any], ...] = ()  # trace of this run's knowledge searches
+    fallback_at: FallbackAt | None = None
+    conv_reset: tuple[str, ...] = ()  # stored conv values that broke their declaration and were reset to default
+    conv_dropped: tuple[str, ...] = ()  # stored conv keys this chatflow no longer declares
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -80,9 +95,10 @@ class _Redacted(Exception):
 
 
 class _Fallback(Exception):
-    def __init__(self, cause: str | None):
+    def __init__(self, cause: str | None, at: FallbackAt):
         super().__init__(cause)
         self.cause = cause
+        self.at = at
 
 
 def _passes_through(answer, source: str) -> bool:
@@ -124,6 +140,8 @@ def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *,
     effects: list[Effect] = []
     final: tuple[TypedBlock, ...] = ()
     reason: Fallback | None = None
+    at: FallbackAt | None = None
+    notes = {"conv_reset": scope.conv_reset, "conv_dropped": scope.conv_dropped}
     current: str | None = workflow.entry
     try:
         while current is not None:
@@ -170,7 +188,7 @@ def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *,
                                           (tokens_in, tokens_out), (), error.error_type))
                 emit(NodeFinished(node.id, handle, duration, calls, tokens_in, tokens_out, error.error_type))
                 if target is None:
-                    raise _Fallback(error.cause)
+                    raise _Fallback(error.cause, FallbackAt("node_error", node.id))
                 scope.set_output(node.id, {"error_type": error.error_type})
                 current = target
                 continue
@@ -190,15 +208,18 @@ def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *,
                 final, current = result.blocks, None
             else:
                 current = edges.get((node.id, result.handle))
-                if current is None:
-                    raise _Fallback(None)
+                if current is None:  # the validator rejects this; reaching it means a graph the validator missed
+                    logger.warning("workflow handle without edge: node %s handle %s", node.id, result.handle)
+                    raise _Fallback(None, FallbackAt("missing_edge", node.id, result.handle))
     except NodeCancelled:
-        return WorkflowRun("cancelled", tuple(records), (), (), initial_conv, None, None, state.agent_steps,
-                           budget.llm_calls, budget.usage, _searches(state))
+        return replace(WorkflowRun("cancelled", tuple(records), (), (), initial_conv, None, None, state.agent_steps,
+                                   budget.llm_calls, budget.usage, _searches(state)), **notes)
     except BudgetExceeded as exceeded:
         reason = "deadline" if implicit and exceeded.kind == "deadline" else "workflow_budget"
+        at = FallbackAt("budget", current)
     except _Fallback as caught:
         reason = caught.cause if implicit and caught.cause else "workflow_node_error"
+        at = caught.at
     except Exception as unexpected:
         if implicit:
             raise  # mode = agent has always failed the turn (INTERNAL_ERROR) here rather than answer from a template
@@ -208,8 +229,10 @@ def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *,
         logger.error("workflow turn failed at node %s (%s)", current, name,
                      exc_info=(_Redacted, _Redacted(name), unexpected.__traceback__))
         reason = "workflow_node_error"
+        at = FallbackAt("unexpected", current)
     if reason is not None:
-        return WorkflowRun("fallback", tuple(records), fallback_blocks(ports.agent, reason, new_id), (), initial_conv,
-                           None, reason, state.agent_steps, budget.llm_calls, budget.usage, _searches(state))
-    return WorkflowRun("completed", tuple(records), final, tuple(effects), scope.conv_values(), state.handoff, None,
-                       state.agent_steps, budget.llm_calls, budget.usage, _searches(state))
+        return replace(WorkflowRun("fallback", tuple(records), fallback_blocks(ports.agent, reason, new_id), (),
+                                   initial_conv, None, reason, state.agent_steps, budget.llm_calls, budget.usage,
+                                   _searches(state)), fallback_at=at, **notes)
+    return replace(WorkflowRun("completed", tuple(records), final, tuple(effects), scope.conv_values(), state.handoff,
+                               None, state.agent_steps, budget.llm_calls, budget.usage, _searches(state)), **notes)

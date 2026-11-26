@@ -156,11 +156,33 @@ components:
       required: [run_id, status, path, node_runs, blocks, effects, llm_calls, live_llm_calls, tokens, created_at, expires_at]
       properties:
         run_id: {type: string, pattern: '^dbg_[0-9a-f]{24}$'}
-        status: {type: string, enum: [completed, fallback]}
+        status: {type: string, enum: [completed, fallback, cancelled], description: "cancelled khi lượt bị dừng giữa chừng (người dùng huỷ)."}
         fallback_reason:
           type: string
           nullable: true
-          enum: [workflow_budget, workflow_node_error, null]
+          enum: [workflow_budget, workflow_node_error, deadline, max_tool_steps, empty_reply, not_configured, rate_limited, timeout, provider_error, invalid_response, cancelled, null]
+          description: "Lý do rơi về câu trả lời dự phòng; null khi status khác fallback."
+        fallback_at:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [cause, node_id, handle]
+          properties:
+            cause:
+              type: string
+              enum: [node_error, missing_edge, unexpected, budget]
+              description: "node_error: node lỗi mà không nối handle error; missing_edge: node trả về handle chưa nối cạnh; unexpected: lỗi của runtime; budget: hết ngân sách node/LLM/thời gian."
+            node_id: {type: string, nullable: true}
+            handle: {type: string, nullable: true}
+          description: "Nơi lượt chạy dừng lại (chỉ id và handle). null khi không fallback."
+        conv_reset:
+          type: array
+          items: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+          description: "Biến conv.* có giá trị đầu vào không hợp lệ với khai báo nên đã về default (chỉ tên)."
+        conv_dropped:
+          type: array
+          items: {type: string}
+          description: "Khoá conv đầu vào mà chatflow không khai báo nên bị bỏ (chỉ tên)."
         path:
           type: array
           items: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
@@ -173,7 +195,7 @@ components:
           properties:
             flow: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
             method: {type: string, enum: [trigger, single, classifier, default]}
-            label: {type: string, description: "Nhãn classifier trả về; other hoặc error khi rơi về default_flow."}
+            label: {type: string, description: "Nhãn classifier trả về; khi rơi về default_flow là other (không nghiệp vụ nào khớp), unrecognized (model trả nhãn không hợp lệ) hoặc error (không phân loại được)."}
           description: "Nghiệp vụ router đã chọn; null khi chỉ có một nghiệp vụ và không hỏi định tuyến."
         node_runs:
           type: array

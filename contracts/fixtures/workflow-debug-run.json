@@ -17,6 +17,9 @@
     "run_id": "dbg_0123456789abcdef01234567",
     "status": "completed",
     "fallback_reason": null,
+    "fallback_at": null,
+    "conv_reset": [],
+    "conv_dropped": [],
     "path": [
       "start",
       "in_test",

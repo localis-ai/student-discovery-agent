@@ -8,7 +8,28 @@ interface DebugTraceProps {
   notSavedReason?: string | null;
 }
 
+type FallbackAt = NonNullable<WorkflowDebugRunResult['fallback_at']>;
+
+/** Where the run gave up, as a sentence an author can act on. */
+export function fallbackAtText(at: FallbackAt): string {
+  const node = at.node_id ? `node ${at.node_id}` : 'workflow';
+  switch (at.cause) {
+    case 'missing_edge': return `${node} trả về handle "${at.handle}" nhưng handle này chưa nối tới node nào.`;
+    case 'node_error': return `${node} lỗi và chưa nối handle error.`;
+    case 'budget': return `Hết ngân sách (số node, lượt LLM hoặc thời gian) tại ${node}.`;
+    case 'unexpected': return `Lỗi của runtime tại ${node}; xem log runtime.`;
+  }
+}
+
+const ROUTE_LABEL_NOTES: Record<string, string> = {
+  unrecognized: 'model trả nhãn không thuộc nghiệp vụ nào',
+  other: 'không nghiệp vụ nào khớp',
+  error: 'không phân loại được',
+};
+
 export function DebugTrace({ result, notSavedReason = null }: DebugTraceProps) {
+  const convReset = result.conv_reset ?? [];
+  const convDropped = result.conv_dropped ?? [];
   return (
     <section aria-label="Trace chạy thử" className="space-y-4 rounded-md border p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -24,9 +45,21 @@ export function DebugTrace({ result, notSavedReason = null }: DebugTraceProps) {
         </p>
       )}
 
+      {result.status === 'cancelled' && (
+        <p role="status" className="rounded-md border p-2 text-xs">Lượt chạy đã bị huỷ giữa chừng; không có câu trả lời.</p>
+      )}
+
       {result.fallback_reason && (
         <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs">
           Fallback: {result.fallback_reason}
+          {result.fallback_at ? <> · {fallbackAtText(result.fallback_at)}</> : null}
+        </p>
+      )}
+
+      {(convReset.length > 0 || convDropped.length > 0) && (
+        <p aria-label="Biến hội thoại bị điều chỉnh" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs">
+          {convReset.length > 0 && <>Về giá trị mặc định vì không hợp lệ với khai báo: <code>{convReset.join(', ')}</code>. </>}
+          {convDropped.length > 0 && <>Bị bỏ vì chatflow không khai báo: <code>{convDropped.join(', ')}</code>.</>}
         </p>
       )}
 
@@ -34,6 +67,7 @@ export function DebugTrace({ result, notSavedReason = null }: DebugTraceProps) {
         <p className="text-xs">
           Nghiệp vụ: <code>{result.route.flow}</code> · cách chọn: <code>{result.route.method}</code>
           {result.route.label ? <> · nhãn <code>{result.route.label}</code></> : null}
+          {result.route.label && ROUTE_LABEL_NOTES[result.route.label] ? <> ({ROUTE_LABEL_NOTES[result.route.label]})</> : null}
         </p>
       )}
 
