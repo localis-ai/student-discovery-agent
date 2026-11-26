@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { getProductDatabase } from '@/infrastructure/db/client';
-import { readJsonBody } from '@/http/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import { withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { userIdParam } from '@/modules/users/route-helpers';
@@ -23,7 +23,7 @@ export const handleGet = withHandler<P>(async (req, ctx, route) => {
 export const handlePut = withHandler<P>(async (req, ctx, route) => {
   await requireAdmin(req);
   const id = await userIdParam(route);
-  const input = adminUpdateSchema.parse(await readJsonBody(req));
+  const input = adminUpdateSchema.parse(await readStrictJsonBody(req));
   return success(await updateUser(getProductDatabase(), id, await toPatch(input)), ctx);
 });
 

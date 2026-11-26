@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError,
+  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError, runtimeIssues,
 } from '@/infrastructure/runtime/internal-runtime';
 
 const ctx = { requestId: 'req-1', traceId: 'trace-1' };
@@ -77,5 +77,26 @@ describe('classifyRuntimeStatus', () => {
   it('separates a rejected key from a rejected request and an outage', () => {
     expect([401, 403, 404, 422, 429, 500, 503].map(classifyRuntimeStatus))
       .toEqual(['misconfigured', 'misconfigured', 'rejected', 'rejected', 'rejected', 'unavailable', 'unavailable']);
+  });
+});
+
+describe('readEnvelope and runtimeIssues', () => {
+  it('keeps error.details and yields the validation issues from it', async () => {
+    const issues = [{ path: 'a', code: 'x', message: 'm', rule_id: null }];
+    const envelope = await readEnvelope(new Response(JSON.stringify({
+      success: false, error: { code: 'INVALID_INPUT', message: 'bad', details: { kind: 'validation', issues } },
+    })));
+    expect(envelope?.error).toMatchObject({ code: 'INVALID_INPUT', details: { kind: 'validation', issues } });
+    expect(runtimeIssues(envelope)).toEqual(issues);
+  });
+
+  it('returns null for a malformed body and no issues', async () => {
+    const envelope = await readEnvelope(new Response('not json', { status: 500 }));
+    expect(envelope).toBeNull();
+    expect(runtimeIssues(envelope)).toEqual([]);
+  });
+
+  it('ignores details that are not a list of issues', () => {
+    expect(runtimeIssues({ success: false, error: { details: { issues: 'nope' } } })).toEqual([]);
   });
 });

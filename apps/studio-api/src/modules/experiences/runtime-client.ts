@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ProductError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
 import {
-  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError,
+  callRuntimeAsStudio, classifyRuntimeStatus, readEnvelope, RuntimeCallError, runtimeIssues,
 } from '@/infrastructure/runtime/internal-runtime';
 import type { PublishReportInput } from '@/modules/experiences/experiences.reports';
 
@@ -124,10 +124,14 @@ async function callRuntime<T>(
   }
 
   const runtimeCode = envelope?.error?.code ?? null;
+  const issues = runtimeIssues(envelope);
   console.error('[experience-runtime] request failed', {
     target,
     status: response.status,
     runtimeCode,
+    issues,
+    // 'malformed_body' when the runtime answered with something that is not its JSON envelope.
+    kind: envelope === null ? 'malformed_body' : 'runtime_error',
     requestId: ctx.requestId,
   });
 
@@ -140,8 +144,11 @@ async function callRuntime<T>(
   const failure = classifyRuntimeStatus(response.status);
   if (failure === 'misconfigured') throw unavailable('misconfigured');
   if (failure === 'rejected') {
-    throw new ProductError(500, 'SYS_INTERNAL_ERROR', 'Runtime rejected experience request', false, {
+    // Studio sent a request the runtime refuses: contract drift between the two services, a dependency failure.
+    throw new ProductError(502, 'SYS_UNAVAILABLE', 'Runtime rejected experience request', false, {
       kind: 'runtime_rejected',
+      runtimeCode,
+      issues,
     });
   }
   throw unavailable('dependency_down');

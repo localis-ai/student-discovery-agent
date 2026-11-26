@@ -1,4 +1,5 @@
 import { ProductError } from '@/http/errors';
+import type { RequestContext } from '@/http/types';
 import { getProductDatabase, type ProductDatabase } from '@/infrastructure/db/client';
 import type { ProductExecutor } from '@/infrastructure/db/client';
 import { findReportById } from '@/modules/experiences/experiences.repository';
@@ -23,7 +24,7 @@ export interface PublishReportVerdict {
 
 export interface PublishReportVerifier {
   /** True or verdict with reason only when both reports exist, passed, and were computed for this exact hash/schema/engine. */
-  verify(input: PublishReportInput, executor?: ProductExecutor): Promise<boolean | PublishReportVerdict>;
+  verify(input: PublishReportInput, executor?: ProductExecutor, ctx?: RequestContext): Promise<boolean | PublishReportVerdict>;
 }
 
 export class RuntimeReportVerifier implements PublishReportVerifier {
@@ -32,7 +33,7 @@ export class RuntimeReportVerifier implements PublishReportVerifier {
     private readonly getClient: () => ExperienceRuntimeClient = () => getExperienceRuntimeClient(),
   ) {}
 
-  async verify(input: PublishReportInput, executor?: ProductExecutor): Promise<PublishReportVerdict> {
+  async verify(input: PublishReportInput, executor?: ProductExecutor, ctx?: RequestContext): Promise<PublishReportVerdict> {
     let db: ProductExecutor;
     try {
       db = executor ?? this.getDb();
@@ -73,14 +74,16 @@ export class RuntimeReportVerifier implements PublishReportVerifier {
     }
 
     try {
-      const traceCtx = { requestId: `verify-${Date.now()}`, traceId: `verify-${Date.now()}` };
-      const remote = await this.getClient().verify(input, traceCtx);
+      // Keep the caller's ids so the runtime call is traceable to the publish request.
+      const fallbackId = `verify-${Date.now()}`;
+      const remote = await this.getClient().verify(input, ctx ?? { requestId: fallbackId, traceId: fallbackId });
       if (!remote.verified) {
         return { verified: false, reason: remote.reason ?? 'Runtime verification rejected reports' };
       }
     } catch (err: unknown) {
-      // An outage (5xx) must stay retryable instead of being reported as an invalid report.
-      if (err instanceof ProductError && err.status >= 500) {
+      // Only a known refusal (a ProductError below 500) becomes an unverified verdict. An outage (5xx) must stay
+      // retryable, and any other error is a bug that must reach the 500 handler instead of a 422 gate failure.
+      if (!(err instanceof ProductError) || err.status >= 500) {
         throw err;
       }
       console.error('[experience-reports] runtime verification failed', {

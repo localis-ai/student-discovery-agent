@@ -101,7 +101,7 @@ export const handlePublishExperienceRelease = withHandler<IdParams>(async (req, 
   const admin = await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
   const body = publishReleaseSchema.parse(await readStrictJsonBody(req));
-  const res = await publishExperienceRelease(getProductDatabase(), id, body, admin);
+  const res = await publishExperienceRelease(getProductDatabase(), id, body, admin, undefined, ctx);
   return success(res.data, ctx, res.status);
 });
 

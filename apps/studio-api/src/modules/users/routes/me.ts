@@ -1,6 +1,6 @@
 import { requireUser } from '@/modules/auth/auth.service';
 import { getProductDatabase } from '@/infrastructure/db/client';
-import { readJsonBody } from '@/http/body';
+import { readStrictJsonBody } from '@/http/json-body';
 import { withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { adminToSelf, toUserProfile } from '@/modules/users/users.profile';
@@ -16,7 +16,7 @@ export const handleGet = withHandler(async (req, ctx) => {
 export const handlePut = withHandler(async (req, ctx) => {
   const db = getProductDatabase();
   const user = await requireUser(req, db);
-  const input = selfUpdateSchema.parse(await readJsonBody(req));
+  const input = selfUpdateSchema.parse(await readStrictJsonBody(req));
   // Only profile fields: email, id, is_deleted and the password hash are never touched here.
   return success(adminToSelf(await updateUser(db, user.id, input)), ctx);
 });

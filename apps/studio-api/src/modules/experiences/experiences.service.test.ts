@@ -1191,9 +1191,23 @@ describe('experiences.service', () => {
       await expect(verifier.verify(input)).rejects.toBe(outage);
     });
 
-    it('reports an unexpected error as unverified without echoing its message', async () => {
-      const { verifier } = arrange({}, vi.fn().mockRejectedValue(new Error('secret internal detail')));
+    it('rethrows an unexpected error (a bug) so it reaches the 500 handler instead of a 422 gate failure', async () => {
+      const bug = new TypeError('cannot read properties of undefined');
+      const { verifier } = arrange({}, vi.fn().mockRejectedValue(bug));
+      await expect(verifier.verify(input)).rejects.toBe(bug);
+    });
+
+    it('keeps a known runtime refusal (4xx ProductError) as an unverified verdict without echoing its message', async () => {
+      const refusal = new ProductError(400, 'VAL_INVALID_REQUEST', 'secret internal detail');
+      const { verifier } = arrange({}, vi.fn().mockRejectedValue(refusal));
       expect(await verifier.verify(input)).toEqual({ verified: false, reason: 'Runtime verification failed' });
+    });
+
+    it('forwards the caller request and trace ids to the runtime call', async () => {
+      const verify = vi.fn().mockResolvedValue({ verified: true, reason: null });
+      const { verifier } = arrange({}, verify);
+      await verifier.verify(input, undefined, { requestId: 'req_caller', traceId: 'trace_caller' });
+      expect(verify).toHaveBeenCalledWith(input, { requestId: 'req_caller', traceId: 'trace_caller' });
     });
   });
 
