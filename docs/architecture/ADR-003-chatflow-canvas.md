@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | ACCEPTED for T22. Partially implemented: this decision ships with the `@xyflow/react` dependency and the pure model modules (`model/workflow/graph.ts`, `layout.ts`, `edit.ts`). The canvas components follow in T22-T5 to T22-T8. |
 | **Module** | `apps/web-ui` (Studio, Chatflow tab) |
-| **Related** | Runtime workflow schema and validator (`apps/agent-runtime/src/agent_runtime/sessions/schemas/workflow.py`, `workflow/validator.py`) |
+| **Related** | Runtime workflow schema and validator (`apps/agent-runtime/src/agent_runtime/sessions/schemas/workflow.py`, `workflow/rules.py`, `workflow/validator/`) |
 
 ## Context
 

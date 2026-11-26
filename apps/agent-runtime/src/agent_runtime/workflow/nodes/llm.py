@@ -100,4 +100,5 @@ def run(ctx: NodeContext, config: LlmConfig) -> NodeResult:
 
 register(NodeSpec("llm", LlmConfig, lambda config: ("success", "error"),
                   {"type": "object", "properties": {"text": {"type": "string"}, "json": {"type": "object"},
-                                                    "refs": {"type": "array", "items": {"type": "string"}}}}, run))
+                                                    "refs": {"type": "array", "items": {"type": "string"}}}}, run,
+                  streams_reply=True))

@@ -3,11 +3,11 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StringConstraints, model_validator
 
 from agent_runtime.sessions.schemas.common import ContractModel
-from agent_runtime.sessions.schemas.workflow import value_fits
 from agent_runtime.workflow.effects import AssignConv
 from agent_runtime.workflow.nodes.base import NodeContext, NodeError, NodeResult, NodeSpec
 from agent_runtime.workflow.registry import register
 from agent_runtime.workflow.templates import render
+from agent_runtime.workflow.variables import value_fits
 
 
 class Assignment(ContractModel):
@@ -71,4 +71,5 @@ def run(ctx: NodeContext, config: AssignConfig) -> NodeResult:
     return NodeResult("next", effects=tuple(effects), reason={"assigned": [effect.variable for effect in effects]})
 
 
-register(NodeSpec("assign", AssignConfig, lambda config: ("next",), {"type": "object", "properties": {}}, run))
+register(NodeSpec("assign", AssignConfig, lambda config: ("next",), {"type": "object", "properties": {}}, run,
+                  checks_deadline=False))

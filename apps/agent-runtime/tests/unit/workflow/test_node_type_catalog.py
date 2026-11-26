@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from agent_runtime.sessions.schemas.workflow import INTERNAL_NODE_TYPES, NODE_TYPES
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.catalog import HANDLE_SPECS, ORDER, TITLES, node_type_catalog
+from agent_runtime.workflow.rules import INTERNAL_NODE_TYPES, NODE_TYPES
 
 GOLDEN = Path(__file__).resolve().parents[5] / "contracts/fixtures/workflow-node-types.json"
 
@@ -97,3 +97,11 @@ def test_three_node_types_are_renamed():
     assert titles["knowledge_retrieval"] == "Tra cứu Knowledge base"
     assert titles["profile_propose"] == "Đề xuất cập nhật hồ sơ"
     assert titles["if_else"] == "Rẽ nhánh" and titles["assign"] == "Gán biến"
+
+
+def test_executor_flags_are_declared_on_each_node_spec():
+    # A node that makes no external call still runs after the deadline; a new node type declares it, the executor
+    # never lists types by name.
+    no_deadline = {kind for kind, spec in registry.REGISTRY.items() if not spec.checks_deadline}
+    assert no_deadline == {"start", "if_else", "assign", "answer", "goto_flow"}
+    assert {kind for kind, spec in registry.REGISTRY.items() if spec.streams_reply} == {"agent", "llm"}

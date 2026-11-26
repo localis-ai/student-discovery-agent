@@ -18,6 +18,7 @@ from agent_runtime.workflow.effects import Effect
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeContext, NodeError, RunState
 from agent_runtime.workflow.ports import Ports
+from agent_runtime.workflow.registry import REGISTRY
 from agent_runtime.workflow.registry import get as get_spec
 from agent_runtime.workflow.scope import Scope
 
@@ -25,11 +26,6 @@ if TYPE_CHECKING:
     from agent_runtime.workflow.flows import RunGraph
 
 logger = logging.getLogger(__name__)
-
-# Nodes that only read the scope and make no external call: a late but finished agent reply must still be
-# answered, so these run after the deadline; the model call itself is refused by ``start_llm_call``.
-_NO_EXTERNAL_CALL = frozenset({"start", "if_else", "assign", "answer", "goto_flow"})
-
 
 @dataclass(frozen=True)
 class NodeRecord:
@@ -110,11 +106,13 @@ def _passes_through(answer, source: str) -> bool:
 
 
 def _live_nodes(workflow: Workflow) -> set[str]:
-    """agent/llm nodes whose every non-error edge leads to an answer that only repeats their text."""
+    """Model nodes (``NodeSpec.streams_reply``) whose every non-error edge leads to an answer that only repeats
+    their text."""
     by_id = {node.id: node for node in workflow.nodes}
     live = set()
     for node in workflow.nodes:
-        if node.type not in {"agent", "llm"}:
+        spec = REGISTRY.get(node.type)
+        if spec is None or not spec.streams_reply:
             continue
         targets = [edge.target for edge in workflow.edges if edge.source == node.id and edge.source_handle != "error"]
         if targets and all(_passes_through(by_id.get(target), node.id) for target in targets):
@@ -148,8 +146,8 @@ def run_workflow(workflow: "Workflow | RunGraph", scope: Scope, ports: Ports, *,
             if stop():
                 raise NodeCancelled()
             node = nodes[current]
-            budget.start_node(checks_deadline=node.type not in _NO_EXTERNAL_CALL)
             spec = get_spec(node.type)
+            budget.start_node(checks_deadline=spec.checks_deadline)
             order = len(records) + 1
             emit(NodeStarted(node.id, node.type, order))
             started, before = budget.clock(), budget.counters()

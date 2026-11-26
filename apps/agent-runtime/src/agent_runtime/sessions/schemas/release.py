@@ -8,7 +8,8 @@ from agent_runtime.agent.model import ModelSettings, worst_case_ms
 from agent_runtime.agent.placeholders import PLACEHOLDER, PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
-from .workflow import Chatflow, PersonaCase
+from .persona import PersonaCase
+from .workflow import Chatflow
 
 
 def _known_variables(text: str) -> str:

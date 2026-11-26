@@ -26,9 +26,13 @@ review found three risks that get more expensive with every new node type or flo
 - `contracts/openapi/schemas/chatflow.yaml` is the public shape. `contracts/fixtures/chatflow-rules.json` holds
   the rules the OpenAPI schema cannot express (placeholder grammar cases, reserved ids, `max_flow_switches`), plus
   the numeric limits.
-- Runtime: the limits live once in `sessions/schemas/workflow.py`. The validator imports them.
+- Runtime: the limits, reserved ids and node types live once in `workflow/rules.py`. So do the rules both checkers
+  apply (duplicate ids, reserved flow ids, a routable flow needs a description, `default_flow` must be routable),
+  written as predicates over plain values. The pydantic schema and the graph validator (`workflow/validator/`) call
+  them and only word the finding. What a `conv.*` value may hold lives in `workflow/variables.py`.
   `tests/unit/workflow/test_chatflow_rules_parity.py` pins the YAML, the fixture, the constants and the pydantic
   JSON schema to each other, and runs the placeholder cases through `workflow/templates.py`.
+  `tests/unit/workflow/test_chatflow_rules.py` checks that the schema and the validator reject the same cases.
 - Studio: `pnpm gen:api` copies the fixture to `src/generated/`, and `model/workflow/rules.ts` derives every limit
   and pattern from it. `rules.test.ts` reads `contracts/` directly and runs the same placeholder cases.
 - To change a limit, edit `chatflow.yaml`, `chatflow-rules.json` and the runtime constant together. Studio follows

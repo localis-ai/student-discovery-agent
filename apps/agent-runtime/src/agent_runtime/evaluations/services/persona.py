@@ -10,8 +10,8 @@ from typing import Any
 
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ContractModel
+from agent_runtime.sessions.schemas.persona import PersonaCase, PersonaExpect
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
-from agent_runtime.sessions.schemas.workflow import PersonaCase, PersonaExpect
 from agent_runtime.sessions.services.debug_runs import DebugRunService
 from agent_runtime.workflow.flows import ROUTER_ID
 

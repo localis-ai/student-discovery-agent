@@ -220,9 +220,9 @@ def test_hostile_shapes_never_raise():
 
 
 def test_a_checker_bug_reads_as_a_finding_not_an_exception(monkeypatch):
-    from agent_runtime.workflow import validator
+    from agent_runtime.workflow.validator.nodes import NodeChecks
 
-    monkeypatch.setattr(validator._Check, "_semantics", lambda self: 1 / 0)
+    monkeypatch.setattr(NodeChecks, "run", lambda self: 1 / 0)
     content = chatflow_content(FLOW)
     found = validate_workflow(content["workflow"], content, {})
     assert [item.code for item in found] == ["workflow_unverifiable"]

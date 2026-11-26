@@ -5,6 +5,9 @@ from typing import Annotated, Any, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 JsonObject = dict[str, Any]
+# Every block type a client can declare support for; persona expectations and debug runs name the same set.
+BlockType = Literal["text", "markdown", "suggestions", "assessment_question", "assessment_clarification",
+                    "personality_card", "knowledge_card"]
 JsonSafeInt = Annotated[int, Field(strict=True, ge=0, le=9007199254740991)]
 PositiveRevision = Annotated[int, Field(strict=True, ge=1, le=9007199254740991)]
 OpaqueId = Annotated[str, StringConstraints(min_length=1, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")]

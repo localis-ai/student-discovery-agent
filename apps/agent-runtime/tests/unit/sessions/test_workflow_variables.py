@@ -1,7 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from agent_runtime.sessions.schemas.workflow import ConvVariable, WorkflowNode, value_fits
+from agent_runtime.sessions.schemas.workflow import ConvVariable, WorkflowNode
+from agent_runtime.workflow.variables import value_fits
 
 
 def var(**overrides):

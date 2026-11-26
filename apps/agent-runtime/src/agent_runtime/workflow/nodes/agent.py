@@ -80,4 +80,5 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
 
 
 register(NodeSpec("agent", AgentConfig, lambda config: ("success", "handoff", "error"),
-                  {"type": "object", "properties": {"text": {"type": "string"}, "handoff": {"type": "string"}}}, run))
+                  {"type": "object", "properties": {"text": {"type": "string"}, "handoff": {"type": "string"}}}, run,
+                  streams_reply=True))

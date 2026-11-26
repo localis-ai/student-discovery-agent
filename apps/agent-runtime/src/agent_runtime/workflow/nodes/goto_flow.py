@@ -21,4 +21,5 @@ def run(ctx: NodeContext, config: GotoFlowConfig) -> NodeResult:
 
 
 register(NodeSpec("goto_flow", GotoFlowConfig, lambda config: (),
-                  {"type": "object", "properties": {"flow": {"type": "string"}}}, run))
+                  {"type": "object", "properties": {"flow": {"type": "string"}}}, run,
+                  checks_deadline=False))

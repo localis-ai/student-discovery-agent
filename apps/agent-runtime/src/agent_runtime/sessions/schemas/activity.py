@@ -6,6 +6,7 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from .common import (
+    BlockType,
     ContentHash,
     ContractModel,
     JsonObject,
@@ -41,10 +42,7 @@ class BlockCapabilityInput(ContractModel):
 
 
 class SupportedBlock(BlockCapabilityInput):
-    type: Literal[
-        "text", "markdown", "suggestions", "assessment_question", "assessment_clarification", "personality_card",
-        "knowledge_card",
-    ]
+    type: BlockType
 
     @model_validator(mode="after")
     def supported_version_set(self) -> "SupportedBlock":

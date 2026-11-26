@@ -1,28 +1,32 @@
-"""Chatflow schema carried by agent.snapshot.v1 (mode=chatflow). Shape only: graph semantics are the T14 validator."""
-import math
-from collections.abc import Iterator, Mapping
+"""Chatflow schema carried by agent.snapshot.v1 (mode=chatflow). Shape only: graph semantics are the T14 validator.
+
+The limits, reserved ids and the rules both checkers apply live in ``workflow/rules.py``; what a variable value may
+hold lives in ``workflow/variables.py``.
+"""
+from collections.abc import Iterator
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
+from agent_runtime.workflow.rules import (
+    IDENT_PATTERN,
+    MAX_EDGES,
+    MAX_ENUM_VALUES,
+    MAX_FLOWS,
+    MAX_NODES,
+    MAX_VARIABLES,
+    NODE_TYPES,
+    cross_flow_duplicates,
+    default_flow_routable,
+    duplicates,
+    flow_id_reserved,
+    flow_needs_description,
+    node_id_reserved,
+)
+from agent_runtime.workflow.variables import CONSTRAINT_KEYS, fits_type, within_constraints
+
 from .common import ContractModel, JsonObject, NonEmptyText
-
-NODE_TYPES = frozenset({"start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval",
-                        "tool", "profile_propose", "assign", "answer", "goto_flow"})
-# Registered node types the runtime builds itself and an author can never use (not in the catalog).
-INTERNAL_NODE_TYPES = frozenset({"router"})
-
-# Scope routes the first four path heads to a namespace, so a node with such an id could never have its output read;
-# "router" is the runtime's own routing node of a multi-flow chatflow.
-RESERVED_NODE_IDS = frozenset({"sys", "conv", "profile", "result", "router"})
-# The router classifies with these as handles of its own, so no flow may take them as an id.
-RESERVED_FLOW_IDS = frozenset({"other", "error"})
-# One home for the chatflow limits; contracts/fixtures/chatflow-rules.json pins them to the OpenAPI schema and Studio.
-MAX_VARIABLES, MAX_FLOWS, MAX_NODES, MAX_EDGES, MAX_ENUM_VALUES = 60, 10, 50, 100, 30
-IDENT_PATTERN = r"^[a-z][a-z0-9_]{0,39}$"
-
-_JSON_SAFE_INT = 9007199254740991  # same bound as JsonSafeInt in common.py
 
 Ident = Annotated[str, StringConstraints(pattern=IDENT_PATTERN)]
 Title = Annotated[str, StringConstraints(min_length=1, max_length=100, pattern=r"\S")]
@@ -36,58 +40,8 @@ def _supported_type(value: str) -> str:
 
 NodeType = Annotated[str, AfterValidator(_supported_type)]
 
-
-def _fits(kind: str, value: Any, values: tuple[str, ...] | None) -> bool:
-    if kind == "string":
-        return isinstance(value, str)
-    if kind == "number":
-        if isinstance(value, bool):
-            return False
-        if isinstance(value, int):  # never float() an int: huge JSON integers raise OverflowError
-            return abs(value) <= _JSON_SAFE_INT
-        return isinstance(value, float) and math.isfinite(value)
-    if kind == "boolean":
-        return isinstance(value, bool)
-    if kind == "enum":
-        return isinstance(value, str) and value in (values or ())
-    return isinstance(value, list) and all(isinstance(item, str) for item in value)
-
-
 Description = Annotated[str, StringConstraints(max_length=300)]
 FiniteNumber = Annotated[float, Field(allow_inf_nan=False)]
-
-# Which constraint keys each variable type accepts; anything else is workflow_variable_invalid.
-CONSTRAINT_KEYS: dict[str, frozenset[str]] = {
-    "string": frozenset({"min_length", "max_length"}),
-    "number": frozenset({"minimum", "maximum", "integer"}),
-    "boolean": frozenset(),
-    "enum": frozenset(),
-    "string_list": frozenset({"max_items", "item_max_length"}),
-}
-
-
-def _within(value: Any, limits: Mapping[str, Any] | None) -> bool:
-    """Constraint check on a value that already fits its type."""
-    if not limits:
-        return True
-    if isinstance(value, str):
-        return limits.get("min_length", 0) <= len(value) <= limits.get("max_length", len(value))
-    if isinstance(value, list):
-        if len(value) > limits.get("max_items", len(value)):
-            return False
-        longest = limits.get("item_max_length")
-        return longest is None or all(len(item) <= longest for item in value)
-    if isinstance(value, int | float) and not isinstance(value, bool):
-        if limits.get("integer") and not float(value).is_integer():
-            return False
-        return limits.get("minimum", value) <= value <= limits.get("maximum", value)
-    return True
-
-
-def value_fits(kind: str, value: Any, values: tuple[str, ...] | None = None,
-               constraints: Mapping[str, Any] | None = None) -> bool:
-    """Public form of the variable type and constraint check, shared with the chatflow runtime."""
-    return _fits(kind, value, values) and _within(value, constraints)
 
 
 class VariableConstraints(ContractModel):
@@ -131,9 +85,9 @@ class ConvVariable(ContractModel):
         for low, high in (("min_length", "max_length"), ("minimum", "maximum")):
             if low in limits and high in limits and limits[low] > limits[high]:
                 raise _invalid(f"{low} is above {high}", f"constraints.{low}")
-        if not _fits(self.type, self.default, self.values):
+        if not fits_type(self.type, self.default, self.values):
             raise _invalid("default does not fit the variable type", "default")
-        if not _within(self.default, limits):
+        if not within_constraints(self.default, limits):
             raise _invalid("default breaks the variable constraints", "default")
         return self
 
@@ -172,20 +126,16 @@ class WorkflowBudget(ContractModel):
 
 def _check_reserved(nodes: tuple[WorkflowNode, ...], prefix: str = "") -> None:
     for index, node in enumerate(nodes):
-        if node.id in RESERVED_NODE_IDS:
+        if node_id_reserved(node.id):
             raise PydanticCustomError("workflow_node_id_reserved", "node id is a reserved namespace",
                                       {"field": f"{prefix}nodes.{index}.id"})
 
 
 def _check_unique(owner: Any, collections: tuple[tuple[str, str], ...]) -> None:
     for collection, key in collections:
-        seen: set[str] = set()
-        for index, item in enumerate(getattr(owner, collection)):
-            value = getattr(item, key)
-            if value in seen:  # first duplicate only; reporting every one is the T14 validator's job
-                raise PydanticCustomError("duplicate_items", "ids must be unique",
-                                          {"field": f"{collection}.{index}.{key}"})
-            seen.add(value)
+        found = next(duplicates(getattr(item, key) for item in getattr(owner, collection)), None)
+        if found is not None:  # first duplicate only; reporting every one is the T14 validator's job
+            raise PydanticCustomError("duplicate_items", "ids must be unique", {"field": f"{collection}.{found[0]}.{key}"})
 
 
 class Workflow(ContractModel):
@@ -224,9 +174,9 @@ class Flow(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self) -> "Flow":
-        if self.id in RESERVED_FLOW_IDS:
+        if flow_id_reserved(self.id):
             raise _flow_invalid("flow id cannot be other or error", "id")
-        if self.routable and not self.description.strip():
+        if flow_needs_description(self.routable, self.description):
             raise _flow_invalid("a routable flow needs a description", "description")
         _check_reserved(self.nodes)
         _check_unique(self, (("nodes", "id"), ("edges", "id")))
@@ -261,65 +211,11 @@ class Chatflow(ContractModel):
         if not self.flows:
             raise _flow_invalid("a chatflow needs at least one flow", "flows")
         _check_unique(self, (("variables", "name"), ("flows", "id")))
-        seen: set[str] = set()
-        for k, flow in enumerate(self.flows):  # agent-wide: stubs, persona paths and traces name a node by id alone
-            for i, node in enumerate(flow.nodes):
-                if node.id in seen:
-                    raise PydanticCustomError("workflow_node_id_duplicate", "node ids are unique across flows",
-                                              {"field": f"flows.{k}.nodes.{i}.id"})
-                seen.add(node.id)
-        default = self.flow(self.router.default_flow)
-        if default is None or not default.routable:
+        # agent-wide: stubs, persona paths and traces name a node by id alone
+        found = next(cross_flow_duplicates((flow.id, (node.id for node in flow.nodes)) for flow in self.flows), None)
+        if found is not None:
+            raise PydanticCustomError("workflow_node_id_duplicate", "node ids are unique across flows",
+                                      {"field": f"flows.{found[0]}.nodes.{found[1]}.id"})
+        if not default_flow_routable(self.router.default_flow, {flow.id: flow.routable for flow in self.flows}):
             raise _flow_invalid("default_flow must name a routable flow", "router.default_flow")
         return self
-
-
-BlockType = Literal["text", "markdown", "suggestions", "assessment_question", "assessment_clarification",
-                    "personality_card", "knowledge_card"]
-
-
-class PersonaInteraction(ContractModel):
-    action: NonEmptyText
-    outcome: NonEmptyText | None = None
-    option_id: NonEmptyText | None = None
-
-
-class PersonaInput(ContractModel):
-    text: Annotated[str, Field(min_length=1, max_length=4000)] | None = None
-    interaction: PersonaInteraction | None = None
-
-    @model_validator(mode="after")
-    def exactly_one(self) -> "PersonaInput":
-        if (self.text is None) == (self.interaction is None):
-            raise PydanticCustomError("persona_input_invalid", "exactly one of text or interaction")
-        return self
-
-
-class PersonaExpect(ContractModel):
-    path: tuple[Ident, ...] | None = None  # the nodes that ran, exactly and in order
-    blocks_present: tuple[BlockType, ...] = ()
-    blocks_absent: tuple[BlockType, ...] = ()
-    conv: dict[str, Any] = Field(default_factory=dict)  # only these keys are checked, after the turn
-    proposals: Annotated[int, Field(strict=True, ge=0)] | None = None
-    status: Literal["completed", "fallback"] | None = None
-
-
-class PersonaState(ContractModel):
-    profile: JsonObject = Field(default_factory=dict)
-    result: JsonObject | None = None
-    conv: JsonObject = Field(default_factory=dict)
-    activity: JsonObject | None = None
-
-
-class PersonaTurn(ContractModel):
-    input: PersonaInput
-    llm_stubs: dict[str, Any] = Field(default_factory=dict)
-    expect: PersonaExpect = PersonaExpect()
-
-
-class PersonaCase(ContractModel):
-    id: Ident
-    title: Title
-    mandatory: bool = False
-    initial_state: PersonaState = PersonaState()
-    turns: Annotated[tuple[PersonaTurn, ...], Field(min_length=1, max_length=20)]
