@@ -3,10 +3,10 @@ import { createMockTransport } from './mock-transport';
 import { httpTransport } from './transport';
 
 /**
- * Chọn nguồn dữ liệu chat. Mặc định dùng mock để UI chạy khi backend chat chưa có.
- * Đặt NEXT_PUBLIC_CHAT_MOCK=false lúc build để gọi BFF thật (studio-api /api/v1/conversations).
+ * Chọn nguồn dữ liệu chat. Mặc định gọi BFF thật (studio-api /api/v1/conversations); mock chỉ bật khi build với
+ * NEXT_PUBLIC_CHAT_MOCK=true, để một bản build quên đặt biến không âm thầm chạy dữ liệu giả.
  */
-export const CHAT_MOCK_ENABLED = process.env.NEXT_PUBLIC_CHAT_MOCK !== 'false';
+export const CHAT_MOCK_ENABLED = process.env.NEXT_PUBLIC_CHAT_MOCK === 'true';
 
 let instance: ChatApi | null = null;
 

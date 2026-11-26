@@ -6,6 +6,8 @@ export default defineWorkspace([
     extends: './vitest.config.ts',
     test: {
       name: 'client', environment: 'jsdom', setupFiles: ['./vitest.setup.ts'],
+      // Chat component tests drive the in-memory transport; real builds default to the BFF.
+      env: { NEXT_PUBLIC_CHAT_MOCK: 'true' },
       include: ['src/**/*.test.{ts,tsx}'],
       exclude: ['src/config/**', 'src/**/*.server.test.ts', 'node_modules/**'],
     },
